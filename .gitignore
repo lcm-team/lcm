@@ -1,0 +1,22 @@
+# Fortran
+*.mod
+*.o
+*.a
+
+# Build directories
+build/
+_build/
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# macOS
+.DS_Store
+
+# Emacs
+*~
+\#*\#
+.\#*
