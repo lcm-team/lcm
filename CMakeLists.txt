@@ -8,6 +8,7 @@ option(LCM_BUILD_ALL_SAM_SOURCES "Attempt to build all SAM-derived LCM source fi
 find_package(MPI REQUIRED COMPONENTS Fortran)
 
 set(CMAKE_Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/mod")
+set(LCM_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 add_library(lcm_sam_compat STATIC)
 
@@ -21,30 +22,30 @@ else()
 endif()
 
 set(LCM_CORE_SOURCES
-  micro_user_vars.f90
-  micro_vars.f90
-  micro_task_util_MPI.f90
-  micro_random.f90
-  micro_restart.f90
-  microphysics.f90
+  "${LCM_SOURCE_DIR}/micro_user_vars.f90"
+  "${LCM_SOURCE_DIR}/micro_vars.f90"
+  "${LCM_SOURCE_DIR}/micro_task_util_MPI.f90"
+  "${LCM_SOURCE_DIR}/micro_random.f90"
+  "${LCM_SOURCE_DIR}/micro_restart.f90"
+  "${LCM_SOURCE_DIR}/microphysics.f90"
 )
 
 set(LCM_SAM_SOURCES
-  micro_ds.f90
-  micro_boundaries.f90
-  micro_coll.f90
-  micro_cond.f90
-  micro_coupling.f90
-  micro_exchange.f90
-  micro_init_particles.f90
-  micro_sedi.f90
-  micro_set.f90
-  micro_sgs_mixing.f90
-  micro_sgs_uvw.f90
-  micro_sort.f90
-  micro_user.f90
-  micro_uvw.f90
-  micro_xyz.f90
+  "${LCM_SOURCE_DIR}/micro_ds.f90"
+  "${LCM_SOURCE_DIR}/micro_boundaries.f90"
+  "${LCM_SOURCE_DIR}/micro_coll.f90"
+  "${LCM_SOURCE_DIR}/micro_cond.f90"
+  "${LCM_SOURCE_DIR}/micro_coupling.f90"
+  "${LCM_SOURCE_DIR}/micro_exchange.f90"
+  "${LCM_SOURCE_DIR}/micro_init_particles.f90"
+  "${LCM_SOURCE_DIR}/micro_sedi.f90"
+  "${LCM_SOURCE_DIR}/micro_set.f90"
+  "${LCM_SOURCE_DIR}/micro_sgs_mixing.f90"
+  "${LCM_SOURCE_DIR}/micro_sgs_uvw.f90"
+  "${LCM_SOURCE_DIR}/micro_sort.f90"
+  "${LCM_SOURCE_DIR}/micro_user.f90"
+  "${LCM_SOURCE_DIR}/micro_uvw.f90"
+  "${LCM_SOURCE_DIR}/micro_xyz.f90"
 )
 
 set(LCM_SOURCES ${LCM_CORE_SOURCES})
