@@ -4,7 +4,7 @@
  MODULE microphysics
 
     USE grid,   ONLY: nx, ny, nz, nzm, dimx1_s, dimx2_s, dimy1_s, dimy2_s,     &
-                     compute_reffc, compute_reffi, z
+                     compute_reffc, compute_reffi, z, NADVS
     USE params, ONLY: doprecip
 
     USE micro_vars
@@ -594,7 +594,7 @@
 !-- Initialize microphysics: this one is guaranteed to be called by SAM at the
 !-- beginning of each run, initial or restart:
     USE micro_vars, ONLY: r_separate_micro, rho_liq, spec_liq, spec_ice, spec_aero
-    USE vars,       ONLY: qsatw, tabs0, q0, nrestart, pres
+    USE vars,       ONLY: qsatw, tabs0, q0, pres
     USE params,     ONLY: docloud, pi
     USE grid,       ONLY: masterproc, rank, nrestart, caseid, case, &
                           nsubdomains_x, nsubdomains_y, dx, dy, dz, dt, zi
@@ -1777,7 +1777,7 @@ USE params,             ONLY: docloud, fac_cond, pi
 ! #endif /*SAMTAK*/
 
     USE grid,   ONLY: dtfactor, masterproc, time, nstep, nstop, ncycle, icycle, &
-                      rank, nsubdomains_x, nsubdomains_y, z
+                      rank, nsubdomains_x, nsubdomains_y, z, case, caseid
     USE params, ONLY: pi, rv, fac_cond, epsv, ggr, cp, fac_sub
 
     USE domain, ONLY: nx_gl, ny_gl
@@ -2141,10 +2141,10 @@ USE params,             ONLY: docloud, fac_cond, pi
                    ENDIF
 
                    IF (track_some_particles) THEN
-                       IF ( MOD(nstep,particle_ntrack) .EQ. 0 .AND. &
-                          & nstep .GE. particle_ntrackstart   .AND. &
-                          & nstep .LE. particle_ntrackstop    .AND. &
-                          & icycle .EQ. ncycle                      ) THEN
+                       IF ( MOD(nstep, particle_ntrack) .EQ. 0 ) THEN
+                       IF ( nstep .GE. particle_ntrackstart ) THEN
+                       IF ( nstep .LE. particle_ntrackstop ) THEN
+                       IF ( icycle .EQ. ncycle ) THEN
 
                          IF (particle(n)%ivar(iTRACK) .GE. 0) THEN
                            !OPEN(UNIT=126,FILE='./OUT_USER/'//TRIM(case)//'_'//TRIM(caseid)//'.tracked_particles',STATUS='OLD',FORM='FORMATTED',POSITION='APPEND')
@@ -2176,6 +2176,9 @@ USE params,             ONLY: docloud, fac_cond, pi
 #endif /*SAMCHEM*/
                            !CLOSE(126)
                          END IF
+                       END IF
+                       END IF
+                       END IF
                        END IF
                    END IF
 
@@ -2907,7 +2910,7 @@ USE params,             ONLY: docloud, fac_cond, pi
 !-- Function that computes total water in the domain. REQUIRED BY SAM.
     USE micro_vars, ONLY: particle, n_particles, iM, dx_LCM, dy_LCM, dz_LCM, rho_air, gpzs
 
-    USE vars,       ONLY: nstep, nprint
+    USE grid,       ONLY: nstep, nprint
 
     IMPLICIT NONE
 

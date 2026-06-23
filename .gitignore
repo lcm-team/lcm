@@ -1,11 +1,15 @@
 # Fortran
 *.mod
+*.smod
 *.o
 *.a
+*.so
+*.dylib
 
 # Build directories
 build/
 _build/
+cmake-build-*/
 
 # CMake
 CMakeFiles/
