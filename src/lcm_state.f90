@@ -6,24 +6,22 @@ module lcm_state
 
    private
 
-   public :: lcm_state_t
-   public :: lcm_state_data
    public :: lcm_set_grid
 
-   type :: lcm_state_t
+   type :: t_lcm_state
       type(lcm_grid_t) :: grid
       logical :: grid_is_set = .false.
-   end type lcm_state_t
+   end type t_lcm_state
 
-   type(lcm_state_t), save :: lcm_state_data
+   type(t_lcm_state), save :: state
 
 contains
 
    subroutine lcm_set_grid(grid)
       type(lcm_grid_t), intent(in) :: grid
 
-      lcm_state_data%grid = grid
-      lcm_state_data%grid_is_set = .true.
+      state%grid = grid
+      state%grid_is_set = .true.
    end subroutine lcm_set_grid
 
 end module lcm_state
