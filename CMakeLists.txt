@@ -23,6 +23,7 @@ endif()
 
 set(LCM_CORE_SOURCES
   "${LCM_SOURCE_DIR}/lcm_types.f90"
+  "${LCM_SOURCE_DIR}/lcm_state.f90"
   "${LCM_SOURCE_DIR}/lcm_host_interface.f90"
   "${LCM_SOURCE_DIR}/micro_user_vars.f90"
   "${LCM_SOURCE_DIR}/micro_vars.f90"
