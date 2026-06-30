@@ -40,6 +40,8 @@ module lcm_types
       integer :: global_i_start = 0
       integer :: global_j_start = 0
 
+      integer :: y_dimension = 1
+
       integer :: west_rank = -1
       integer :: east_rank = -1
       integer :: south_rank = -1
@@ -57,7 +59,7 @@ contains
                             subdomain_x_index, subdomain_y_index,             &
                             n_subdomains_x, n_subdomains_y, global_i_start,   &
                             global_j_start, west_rank, east_rank, south_rank, &
-                            north_rank, periodic_x, periodic_y)
+                            north_rank, periodic_x, periodic_y, y_dimension)
       type(lcm_grid_t), intent(out) :: grid
       integer, intent(in) :: nx_local
       integer, intent(in) :: ny_local
@@ -88,6 +90,7 @@ contains
       integer, intent(in) :: north_rank
       logical, intent(in) :: periodic_x
       logical, intent(in) :: periodic_y
+      integer, intent(in), optional :: y_dimension
 
       grid%nx_local = nx_local
       grid%ny_local = ny_local
@@ -123,6 +126,10 @@ contains
 
       grid%global_i_start = global_i_start
       grid%global_j_start = global_j_start
+
+      if (present(y_dimension)) then
+         grid%y_dimension = y_dimension
+      endif
 
       grid%west_rank = west_rank
       grid%east_rank = east_rank

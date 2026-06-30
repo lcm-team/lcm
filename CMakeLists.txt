@@ -23,9 +23,9 @@ endif()
 
 set(LCM_CORE_SOURCES
   "${LCM_SOURCE_DIR}/lcm_types.f90"
+  "${LCM_SOURCE_DIR}/lcm_grid_state.f90"
   "${LCM_SOURCE_DIR}/micro_user_vars.f90"
   "${LCM_SOURCE_DIR}/micro_vars.f90"
-  "${LCM_SOURCE_DIR}/lcm_state.f90"
   "${LCM_SOURCE_DIR}/lcm_host_interface.f90"
   "${LCM_SOURCE_DIR}/micro_task_util_MPI.f90"
   "${LCM_SOURCE_DIR}/micro_random.f90"
