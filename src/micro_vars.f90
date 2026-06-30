@@ -8,7 +8,7 @@
 #ifdef SAMCHEM
     USE domain,          ONLY: naqspc
 #endif /*SAMCHEM*/
-    USE grid,            ONLY: nx, ny, nz, nzm, nsubdomains, rank
+    USE grid,            ONLY: nsubdomains, rank
 
     IMPLICIT NONE
     PUBLIC
@@ -18,11 +18,11 @@
 !-- Variables and arrays to store SAM variables. Store SAM values so that:
 !--   - no modification will be made in SAM.
 !--   - conflict with different real kind between SAM and LCM is avoided.
-    INTEGER, PARAMETER                  :: nx_LCM = nx, ny_LCM = ny, &
-                                           nz_LCM = nzm
+    INTEGER                             :: nx_LCM = 0, ny_LCM = 0, &
+                                           nz_LCM = 0
     REAL, ALLOCATABLE, DIMENSION(:,:,:) :: u_LCM, v_LCM, w_LCM, tabs_LCM,      &
                                            tke_LCM, diss_LCM, tk_LCM, smix_LCM
-    REAL, DIMENSION(nz_LCM)             :: pres_LCM, rho_air, dz_LCM
+    REAL, ALLOCATABLE, DIMENSION(:)     :: pres_LCM, rho_air, dz_LCM
     REAL                                :: dtn_LCM, dx_LCM, dy_LCM
 !
 !-- Precision of the LCM real variables: either 4 or 8 byte
@@ -49,8 +49,8 @@
 !-- Cloud tracking
     LOGICAL                 :: switch_cloud_tracking = .FALSE.
     REAL                    :: tau_SCLR = 1800.0  ! decay timescale [60.0 s in Dawe and Austin (2012), 1800.0 s in Heus and Seifert (2013)]
-    REAL, DIMENSION(nz_LCM) :: mean_SCLR_prof     ! OUTPUT profile of mean of plume-detecting scalar
-    REAL, DIMENSION(nz_LCM) :: std_SCLR_prof      ! OUTPUT profile of standard deviation of plume-detecting scalar
+    REAL, ALLOCATABLE, DIMENSION(:) :: mean_SCLR_prof     ! OUTPUT profile of mean of plume-detecting scalar
+    REAL, ALLOCATABLE, DIMENSION(:) :: std_SCLR_prof      ! OUTPUT profile of standard deviation of plume-detecting scalar
 !
 !-- Sedimentation
     LOGICAL :: switch_sedimentation = .TRUE. ! Switch for sedimentation of cloud droplets
@@ -170,12 +170,12 @@
 !-- Defaults are -1, meaning that IN spraying will never occur unless set in prm
 !
 !-- Location of source in grid point space
-    INTEGER, DIMENSION(4) :: nz_b_source_aero = (/1,1,1,1/), nz_t_source_aero = (/nzm,nzm,nzm,nzm/),             &
-                             ny_s_source_aero = (/1,1,1,1/), ny_n_source_aero = (/ny_LCM,ny_LCM,ny_LCM,ny_LCM/), &
-                             nx_w_source_aero = (/1,1,1,1/), nx_e_source_aero = (/nx_LCM,nx_LCM,nx_LCM,nx_LCM/), &
-                             nz_b_source_in = (/1,1,1,1/), nz_t_source_in = (/nzm,nzm,nzm,nzm/),                 &
-                             ny_s_source_in = (/1,1,1,1/), ny_n_source_in = (/ny_LCM,ny_LCM,ny_LCM,ny_LCM/),     &
-                             nx_w_source_in = (/1,1,1,1/), nx_e_source_in = (/nx_LCM,nx_LCM,nx_LCM,nx_LCM/)
+    INTEGER, DIMENSION(4) :: nz_b_source_aero = (/1,1,1,1/), nz_t_source_aero = 0, &
+                             ny_s_source_aero = (/1,1,1,1/), ny_n_source_aero = 0, &
+                             nx_w_source_aero = (/1,1,1,1/), nx_e_source_aero = 0, &
+                             nz_b_source_in = (/1,1,1,1/), nz_t_source_in = 0,     &
+                             ny_s_source_in = (/1,1,1,1/), ny_n_source_in = 0,     &
+                             nx_w_source_in = (/1,1,1,1/), nx_e_source_in = 0
 !
 !-- Location of source in physical space
     REAL, DIMENSION(4)    :: z_b_source_aero = (/0.0,0.0,0.0,0.0/), z_t_source_aero = (/1.0,1.0,1.0,1.0/), &
@@ -214,7 +214,7 @@
     INTEGER(8) :: n_ID
 !
 !-- OUTPUT quantities (profiles)
-    REAL, DIMENSION(nz_LCM) :: nsd_prof,   nac_prof,  ncc_prof,   nrc_prof,  cnd_prof,   &
+    REAL, ALLOCATABLE, DIMENSION(:) :: nsd_prof,   nac_prof,  ncc_prof,   nrc_prof,  cnd_prof,   &
                                evp_prof,   aut_prof,  acc_prof,   spm_prof,  sps_prof,   &
                                sfx_prof,   act_prof,  ninc_prof,  ar_prof,   am_prof,    &
                                dea_prof,   T_prof,    qv_prof,    tau_prof,  ref_prof,   &
@@ -320,34 +320,34 @@
 !-- Horizontal indices for u, v, w, and scalar arrays. Index for y direction
 !-- is 1 for 2D run.
        INTEGER, PARAMETER :: x1u =  1 - ux1
-       INTEGER, PARAMETER :: x2u = nx_LCM + ux2
+       INTEGER :: x2u = 0
        INTEGER, PARAMETER :: y1u =  1 - uy1 * YES3D
-       INTEGER, PARAMETER :: y2u = ny_LCM + uy2 * YES3D
+       INTEGER :: y2u = 0
        INTEGER, PARAMETER :: x1v =  1 - vx1
-       INTEGER, PARAMETER :: x2v = nx_LCM + vx2
+       INTEGER :: x2v = 0
        INTEGER, PARAMETER :: y1v =  1 - vy1 * YES3D
-       INTEGER, PARAMETER :: y2v = ny_LCM + vy2 * YES3D
+       INTEGER :: y2v = 0
        INTEGER, PARAMETER :: x1w =  1 - wx1
-       INTEGER, PARAMETER :: x2w = nx_LCM + wx2
+       INTEGER :: x2w = 0
        INTEGER, PARAMETER :: y1w =  1 - wy1 * YES3D
-       INTEGER, PARAMETER :: y2w = ny_LCM + wy2 * YES3D
+       INTEGER :: y2w = 0
        INTEGER, PARAMETER :: x1s =  1 - sx1
-       INTEGER, PARAMETER :: x2s = nx_LCM + sx2
+       INTEGER :: x2s = 0
        INTEGER, PARAMETER :: y1s =  1 - sy1 * YES3D
-       INTEGER, PARAMETER :: y2s = ny_LCM + sy2 * YES3D
+       INTEGER :: y2s = 0
 !
 !-- Subdomain grid position information
     INTEGER :: nx_sb, ny_sb   ! total number of grid point to the current subdomain from (0,0)
 !
 !-- Grid center
-    REAL :: gpxc(-1:nx_LCM+1)
-    REAL :: gpyc(-1:ny_LCM+1)
-    REAL :: gpzc(nz_LCM)
+    REAL, ALLOCATABLE :: gpxc(:)
+    REAL, ALLOCATABLE :: gpyc(:)
+    REAL, ALLOCATABLE :: gpzc(:)
 !
 !-- Grid side (wall)
-    REAL :: gpxs(0:nx_LCM+1)   ! 1 & nx+1 are at subdomain boundary
-    REAL :: gpys(0:ny_LCM+1)
-    REAL :: gpzs(nz_LCM+1)     ! bottom of grid box
+    REAL, ALLOCATABLE :: gpxs(:)   ! 1 & nx+1 are at subdomain boundary
+    REAL, ALLOCATABLE :: gpys(:)
+    REAL, ALLOCATABLE :: gpzs(:)   ! bottom of grid box
 !
 !-- Horizontal width of whole domain
     REAL :: xwidth
@@ -361,7 +361,7 @@
     INTEGER :: i_global_LCM, j_global_LCM
 !
 !-- Volume of a grid box
-    REAL :: dV(nz_LCM)
+    REAL, ALLOCATABLE :: dV(:)
 !
 !-- Limits of the particle domain
     REAL, PARAMETER :: boundary_distance = 0.001 ! standard distance to boundaries below which particles will be deleted, reflected, ...
@@ -488,8 +488,8 @@
 !-- Particles are sorted by their grid box for efficient calculation of
 !-- microphysical processes. The following fields indicate the start/end index
 !-- of particles inside grid box i, j, k
-    INTEGER :: n_start(nx_LCM,ny_LCM,nz_LCM)
-    INTEGER :: n_end(nx_LCM,ny_LCM,nz_LCM)
+    INTEGER, ALLOCATABLE :: n_start(:,:,:)
+    INTEGER, ALLOCATABLE :: n_end(:,:,:)
 !
 !-- flag to indicate initialization of LCM has been carried out
     LOGICAL :: flag_LCM_init  = .FALSE.
