@@ -4,6 +4,7 @@ module lcm_host_interface
    use lcm_config_state, only: lcm_set_config
    use lcm_grid_state, only: lcm_set_grid
    use lcm_advance_mod, only: lcm_advance
+   use lcm_field_state, only: lcm_attach_fields
 
    implicit none
 
@@ -16,5 +17,6 @@ module lcm_host_interface
    public :: lcm_set_config
    public :: lcm_set_grid
    public :: lcm_advance
+   public :: lcm_attach_fields
 
 end module lcm_host_interface

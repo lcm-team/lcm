@@ -7,6 +7,7 @@ module lcm_types
 
    public :: lcm_grid_t
    public :: lcm_config_t
+   public :: lcm_field_state_t
    public :: lcm_init_grid
    public :: lcm_init_config
 
@@ -158,6 +159,28 @@ module lcm_types
       character(len=10) :: ds_param = 'Phillips'
       character(len=8) :: icebreak_param = 'Phillips'
    end type lcm_config_t
+
+   type :: lcm_field_state_t
+      real(real64), pointer :: u(:,:,:) => null()
+      real(real64), pointer :: v(:,:,:) => null()
+      real(real64), pointer :: w(:,:,:) => null()
+      real(real64), pointer :: static_energy(:,:,:) => null()
+      real(real64), pointer :: temperature(:,:,:) => null()
+      real(real64), pointer :: qv(:,:,:) => null()
+      real(real64), pointer :: cloud_liquid(:,:,:) => null()
+      real(real64), pointer :: pressure(:) => null()
+      real(real64), pointer :: density(:) => null()
+
+      logical :: u_is_attached = .false.
+      logical :: v_is_attached = .false.
+      logical :: w_is_attached = .false.
+      logical :: static_energy_is_attached = .false.
+      logical :: temperature_is_attached = .false.
+      logical :: qv_is_attached = .false.
+      logical :: cloud_liquid_is_attached = .false.
+      logical :: pressure_is_attached = .false.
+      logical :: density_is_attached = .false.
+   end type lcm_field_state_t
 
 contains
 
