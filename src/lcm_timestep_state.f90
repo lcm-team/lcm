@@ -24,10 +24,6 @@ contains
    subroutine validate_step_state(time_step)
       real(real64), intent(in) :: time_step
 
-      if (time_step <= 0.0_real64) then
-         error stop 'LCM timestep must be positive'
-      endif
-
       if (.not. config_is_set) then
          error stop 'LCM config must be set before lcm_advance'
       endif
