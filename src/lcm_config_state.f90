@@ -1,5 +1,6 @@
 !> LCM configuration supplied through the standalone host interface.
 module lcm_config_state
+   use lcm_types, only: lcm_config_t
    use micro_vars, only: np_xy, nzl, nstep_LCM_init, n_uvw_iteration, &
                          switch_sgs_velocities, switch_sedimentation, &
                          switch_collection, switch_analytical_micro, &
@@ -13,42 +14,9 @@ module lcm_config_state
 
    private
 
-   public :: lcm_config_t
-   public :: lcm_init_config
    public :: lcm_set_config
 
-   type :: lcm_config_t
-      integer :: np_xy = 50
-      integer :: nzl = 50
-      integer :: nstep_lcm_init = 3
-      integer :: n_uvw_iteration = 1
-      logical :: switch_sgs_velocities = .true.
-      logical :: switch_sedimentation = .true.
-      logical :: switch_collection = .true.
-      logical :: switch_analytical_micro = .false.
-      logical :: switch_radiation_micro = .false.
-      logical :: switch_lem_micro = .true.
-      logical :: switch_koehler_micro = .true.
-      logical :: switch_ffc_micro = .false.
-      logical :: switch_ice = .false.
-      real :: n_aero(4) = [100.0e6, 0.0, 0.0, 0.0]
-      real :: rm_aero(4) = [0.04e-6, 0.0, 0.0, 0.0]
-      real :: sigma_aero(4) = [1.4, 0.0, 0.0, 0.0]
-      real :: shares_aero(4) = [1.0, 1.0, 1.0, 1.0]
-      real :: rho_aero(4) = [2170.0, 0.0, 0.0, 0.0]
-      real :: molecular_weight_aero(4) = [58.443, 0.0, 0.0, 0.0]
-      real :: vanthoff_aero(4) = [2.0, 0.0, 0.0, 0.0]
-      character(len=6) :: init_aero = 'bin'
-      character(len=12) :: unit_aero = '1/kg'
-   end type lcm_config_t
-
 contains
-
-   subroutine lcm_init_config(config)
-      type(lcm_config_t), intent(out) :: config
-
-      config = lcm_config_t()
-   end subroutine lcm_init_config
 
    subroutine lcm_set_config(config)
       type(lcm_config_t), intent(in) :: config
