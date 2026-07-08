@@ -15,6 +15,9 @@ module lcm_config_state
    private
 
    public :: lcm_set_config
+   public :: config_is_set
+
+   logical, protected, save :: config_is_set = .false.
 
 contains
 
@@ -45,6 +48,7 @@ contains
       vanthoff_aero = config%vanthoff_aero
       init_aero = config%init_aero
       unit_aero = config%unit_aero
+      config_is_set = .true.
    end subroutine lcm_set_config
 
    subroutine validate_config(config)
