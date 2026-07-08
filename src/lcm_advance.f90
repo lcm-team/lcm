@@ -1,5 +1,5 @@
-!> Public timestep facade for host-driven LCM advancement.
-module lcm_timestep_state
+!> Public advance facade for host-driven LCM advancement.
+module lcm_advance_mod
    use iso_fortran_env, only: real64
    use lcm_config_state, only: config_is_set
    use lcm_grid_state, only: grid_state
@@ -33,4 +33,4 @@ contains
       endif
    end subroutine validate_step_state
 
-end module lcm_timestep_state
+end module lcm_advance_mod

@@ -3,7 +3,7 @@ module lcm_host_interface
    use lcm_types, only: lcm_grid_t, lcm_config_t, lcm_init_grid, lcm_init_config
    use lcm_config_state, only: lcm_set_config
    use lcm_grid_state, only: lcm_set_grid
-   use lcm_timestep_state, only: lcm_advance
+   use lcm_advance_mod, only: lcm_advance
 
    implicit none
 
