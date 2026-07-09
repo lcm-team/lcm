@@ -57,25 +57,106 @@ module lcm_types
       integer :: np_xy = 50
       integer :: nzl = 50
       integer :: nstep_lcm_init = 3
+      integer :: nstep_cut_supersat = 0
       integer :: n_uvw_iteration = 1
+      integer :: start_sedimentation = 1
+      integer :: start_collection = 1
+      integer :: breakup_conserve_mode = 1
+      integer :: n_start_source_aero = -1
+      integer :: n_end_source_aero = -1
+      integer :: n_start_source_in = -1
+      integer :: n_end_source_in = -1
+      integer :: start_ice = 0
+      integer :: spec_nsave = 30
+      integer :: spec_nsavestart = 30
+      integer :: n_track_particles = 1003
+      integer :: particle_ntrack = 100
+      integer :: particle_ntrackstart = 300
+      integer :: particle_ntrackstop = 999999999
+      integer :: nz_b_source_aero(4) = [1, 1, 1, 1]
+      integer :: nz_t_source_aero(4) = [0, 0, 0, 0]
+      integer :: ny_s_source_aero(4) = [1, 1, 1, 1]
+      integer :: ny_n_source_aero(4) = [0, 0, 0, 0]
+      integer :: nx_w_source_aero(4) = [1, 1, 1, 1]
+      integer :: nx_e_source_aero(4) = [0, 0, 0, 0]
+      integer :: nz_b_source_in(4) = [1, 1, 1, 1]
+      integer :: nz_t_source_in(4) = [0, 0, 0, 0]
+      integer :: ny_s_source_in(4) = [1, 1, 1, 1]
+      integer :: ny_n_source_in(4) = [0, 0, 0, 0]
+      integer :: nx_w_source_in(4) = [1, 1, 1, 1]
+      integer :: nx_e_source_in(4) = [0, 0, 0, 0]
+      integer :: type_source_in(4) = [3, 3, 3, 3]
       logical :: switch_sgs_velocities = .true.
       logical :: switch_sedimentation = .true.
       logical :: switch_collection = .true.
+      logical :: switch_linear_sampling_collection = .true.
+      logical :: switch_breakup = .true.
       logical :: switch_analytical_micro = .false.
       logical :: switch_radiation_micro = .false.
       logical :: switch_lem_micro = .true.
       logical :: switch_koehler_micro = .true.
       logical :: switch_ffc_micro = .false.
+      logical :: switch_steady_pichamber = .false.
+      logical :: switch_cloud_tracking = .false.
+      logical :: switch_phase_sources = .true.
+      logical :: switch_particle_source = .false.
+      logical :: switch_walls_pichamber = .false.
+      logical :: switch_reflective_walls_pichamber = .false.
       logical :: switch_ice = .false.
+      logical :: switch_habit_ice = .true.
+      logical :: switch_icebreak = .true.
+      logical :: switch_rs = .false.
+      logical :: switch_ds = .true.
+      logical :: switch_moving_source = .false.
+      logical :: switch_diskice_sizethresh = .true.
+      logical :: switch_steady_aerosol = .false.
+      logical :: switch_spec_aero = .false.
+      logical :: track_some_particles = .false.
+      logical :: horiz_average_spec = .true.
+      real :: r_separate_micro = 25.0e-6
+      real :: supersat_threshold = 0.0
+      real :: alpha_spec = 0.5
+      real :: r_start_spec = 0.001e-6
+      real :: r_end_spec = 6000.0e-6
+      real :: frac_ice = 0.0
+      real :: salinity_source = 0.037
+      real :: sizethresh_chen = 10.0e-6
+      real :: sizethresh_diskice = 5.0e-6
+      real :: inject_bottom = 300.0
+      real :: inject_top = 500.0
       real :: n_aero(4) = [100.0e6, 0.0, 0.0, 0.0]
       real :: rm_aero(4) = [0.04e-6, 0.0, 0.0, 0.0]
       real :: sigma_aero(4) = [1.4, 0.0, 0.0, 0.0]
       real :: shares_aero(4) = [1.0, 1.0, 1.0, 1.0]
+      real :: n_ice(4) = [0.0, 0.0, 0.001e6, 0.0]
+      real :: rm_in(4) = [1.0e-6, 0.2e-6, 1.0e-6, 0.0]
+      real :: sigma_in(4) = [1.4, 1.4, 1.4, 0.0]
+      real :: n_source_aero(4) = [0.0, 0.0, 0.0, 0.0]
+      real :: n_source_in(4) = [0.0, 0.0, 0.0, 0.0]
+      real :: r_source_aero(4) = [0.0625e-6, 0.0625e-6, 0.0625e-6, 0.0625e-6]
+      real :: r_source_in(4) = [1.0e-6, 0.0, 0.0, 0.0]
+      real :: sigma_source_aero(4) = [2.0, 2.0, 2.0, 2.0]
+      real :: sigma_source_in(4) = [2.0, 2.0, 2.0, 2.0]
+      real :: p_source_aero(4) = [0.0, 0.0, 0.0, 0.0]
+      real :: p_source_in(4) = [0.0, 0.0, 0.0, 0.0]
+      real :: frac_in_source_particles(4) = [0.0, 0.0, 0.0, 0.0]
+      real :: frac_in_source_weight(4) = [0.001, 0.001, 0.001, 0.001]
+      real :: vx_source_aero(4) = [0.0, 0.0, 0.0, 0.0]
+      real :: vy_source_aero(4) = [0.0, 0.0, 0.0, 0.0]
+      real :: vz_source_aero(4) = [0.0, 0.0, 0.0, 0.0]
+      real :: vx_source_in(4) = [0.0, 0.0, 0.0, 0.0]
+      real :: vy_source_in(4) = [0.0, 0.0, 0.0, 0.0]
+      real :: vz_source_in(4) = [0.0, 0.0, 0.0, 0.0]
       real :: rho_aero(4) = [2170.0, 0.0, 0.0, 0.0]
       real :: molecular_weight_aero(4) = [58.443, 0.0, 0.0, 0.0]
       real :: vanthoff_aero(4) = [2.0, 0.0, 0.0, 0.0]
       character(len=6) :: init_aero = 'bin'
       character(len=12) :: unit_aero = '1/kg'
+      character(len=12) :: unit_source = '1/kg/s'
+      character(len=12) :: type_source = 'equilibrium'
+      character(len=10) :: habitparam = 'Chen'
+      character(len=10) :: ds_param = 'Phillips'
+      character(len=8) :: icebreak_param = 'Phillips'
    end type lcm_config_t
 
 contains
