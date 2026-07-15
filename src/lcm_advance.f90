@@ -22,8 +22,7 @@ contains
    subroutine run_lcm_advance_sequence(time_step)
       real(real64), intent(in) :: time_step
 
-      call initialize_lcm_state()
-      call update_lcm_atmospheric_state()
+      call prepare_lcm_atmosphere()
       call advance_lcm_particles(time_step)
       call apply_lcm_microphysics(time_step)
       call exchange_lcm_particles()
@@ -46,14 +45,9 @@ contains
       endif
    end subroutine validate_step_state
 
-   subroutine initialize_lcm_state()
-      ! Future internal initialization point for particle state, restart state,
-      ! and other LCM-owned state that depends on config/grid setup.
-   end subroutine initialize_lcm_state
-
-   subroutine update_lcm_atmospheric_state()
-      ! Future bridge from attached host fields into LCM-owned atmospheric state.
-   end subroutine update_lcm_atmospheric_state
+   subroutine prepare_lcm_atmosphere()
+      ! Future preparation/validation step for attached host atmospheric fields.
+   end subroutine prepare_lcm_atmosphere
 
    subroutine advance_lcm_particles(time_step)
       real(real64), intent(in) :: time_step
