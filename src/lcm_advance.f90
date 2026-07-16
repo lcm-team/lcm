@@ -24,8 +24,10 @@ contains
 
       call prepare_lcm_atmosphere()
       call advance_lcm_particles(time_step)
-      call apply_lcm_microphysics(time_step)
+      call apply_lcm_particle_boundaries()
       call exchange_lcm_particles()
+      call update_lcm_particle_cell_ownership()
+      call apply_lcm_microphysics(time_step)
       call prepare_lcm_feedback()
    end subroutine run_lcm_advance_sequence
 
@@ -55,6 +57,10 @@ contains
       ! Future particle advection step.
    end subroutine advance_lcm_particles
 
+   subroutine apply_lcm_particle_boundaries()
+      ! Future boundary handling for particles outside the local physical domain.
+   end subroutine apply_lcm_particle_boundaries
+
    subroutine apply_lcm_microphysics(time_step)
       real(real64), intent(in) :: time_step
 
@@ -64,6 +70,10 @@ contains
    subroutine exchange_lcm_particles()
       ! Future particle exchange step for particles crossing rank boundaries.
    end subroutine exchange_lcm_particles
+
+   subroutine update_lcm_particle_cell_ownership()
+      ! Future local cell ownership update after particle motion and exchange.
+   end subroutine update_lcm_particle_cell_ownership
 
    subroutine prepare_lcm_feedback()
       ! Future feedback/tendency preparation step for the host model.
