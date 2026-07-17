@@ -1,5 +1,5 @@
 module lcm_types
-   use iso_fortran_env, only: real64
+   use iso_fortran_env, only: int64, real64
 
    implicit none
 
@@ -8,6 +8,8 @@ module lcm_types
    public :: lcm_grid_t
    public :: lcm_config_t
    public :: lcm_field_state_t
+   public :: lcm_particle_t
+   public :: lcm_particle_cell_t
    public :: lcm_init_grid
    public :: lcm_init_config
 
@@ -181,6 +183,30 @@ module lcm_types
       logical :: pressure_is_attached = .false.
       logical :: density_is_attached = .false.
    end type lcm_field_state_t
+
+   type :: lcm_particle_t
+      integer(int64) :: weight = 0_int64
+      integer(int64) :: id = 0_int64
+      integer :: particle_type = 0
+
+      real(real64) :: mass_water = 0.0_real64
+      real(real64) :: mass_aero = 0.0_real64
+      real(real64) :: w_sedi = 0.0_real64
+      real(real64) :: temperature = 0.0_real64
+      real(real64) :: qv = 0.0_real64
+
+      real(real64) :: axis_a = 0.0_real64
+      real(real64) :: axis_c = 0.0_real64
+      real(real64) :: density = 0.0_real64
+      real(real64) :: rimed_mass = 0.0_real64
+      real(real64) :: freezing_temperature = 0.0_real64
+   end type lcm_particle_t
+
+   type :: lcm_particle_cell_t
+      integer :: count = 0
+      integer :: capacity = 0
+      type(lcm_particle_t), allocatable :: particles(:)
+   end type lcm_particle_cell_t
 
 contains
 
