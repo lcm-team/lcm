@@ -26,28 +26,35 @@ module lcm_initialization_state
 
 contains
 
-   subroutine lcm_initialize(from_restart)
-      logical, intent(in), optional :: from_restart
-
+   subroutine lcm_initialize()
       if (lcm_is_initialized) then
          error stop "LCM has already been initialized"
       endif
 
-      if (present(from_restart)) then
-         if (from_restart) then
-            error stop "LCM restart initialization is not implemented"
-         endif
+      call validate_initialization_inputs()
+
+      if (config_state%start_from_restart) then
+         call initialize_lcm_from_restart()
+      else
+         call initialize_lcm_from_config()
       endif
 
-      call validate_initialization_inputs()
+      lcm_is_initialized = .true.
+   end subroutine lcm_initialize
+
+   subroutine initialize_lcm_from_config()
       call initialize_particle_count_state()
       call lcm_allocate_particle_cells(initial_capacity_per_cell=config_state%np_xy)
 
       ! SAM-LCM micro_set also initialized grid-helper geometry. In standalone
       ! LCM that responsibility belongs to lcm_set_grid.
       lcm_initialization_mode = "fresh"
-      lcm_is_initialized = .true.
-   end subroutine lcm_initialize
+   end subroutine initialize_lcm_from_config
+
+   subroutine initialize_lcm_from_restart()
+      lcm_initialization_mode = "restart"
+      error stop "LCM restart initialization is not implemented"
+   end subroutine initialize_lcm_from_restart
 
    subroutine validate_initialization_inputs()
       if (.not. config_is_set) then

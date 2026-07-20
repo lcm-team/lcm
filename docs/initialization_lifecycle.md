@@ -13,6 +13,11 @@ call lcm_initialize()
 call lcm_advance(dt)
 ```
 
+Fresh initialization is the default. A host can request restart initialization
+through `lcm_config_t%start_from_restart`, which should be filled from the host
+namelist. That path currently stops with a clear error until the standalone
+restart lifecycle is implemented.
+
 ## `micro_set` Responsibility Map
 
 | SAM-LCM `micro_set` responsibility | Standalone LCM location | Status |
@@ -30,7 +35,7 @@ call lcm_advance(dt)
 | Fill grid side/center arrays `gpxs`, `gpys`, `gpzs`, `gpxc`, `gpyc`, `gpzc` | `lcm_set_grid` | Covered. |
 | Allocate velocity and atmospheric working arrays | Future atmospheric/internal state refactor | Not implemented in #42. The standalone direction is to use attached host fields and only allocate LCM-owned derived state where needed. |
 | Initialize output/history state | Future diagnostics/output work | Not implemented in #42. |
-| Choose fresh initialization vs restart read | `lcm_initialize` | Partly covered. `lcm_initialize` supports fresh initialization and rejects `from_restart=.true.` with a clear error until restart lifecycle work exists. |
+| Choose fresh initialization vs restart read | `lcm_config_t` / `lcm_initialize` | Covered for lifecycle selection. Fresh initialization is the default; `config_state%start_from_restart` selects restart mode and stops with a clear error until restart lifecycle work exists. |
 | Set `flag_LCM_init` | `lcm_is_initialized` | Partly covered. `lcm_is_initialized` records that host setup and LCM-owned storage initialization are complete before `lcm_advance`. |
 
 ## What #42 Implements
@@ -42,8 +47,9 @@ Issue #42 introduces the explicit lifecycle boundary:
 - `lcm_initialize` allocates LCM-owned cell particle containers with
   `config_state%np_xy` as the initial per-cell capacity.
 - `lcm_initialize` records expected local and global initial particle counts.
-- `lcm_initialize(from_restart=.true.)` fails explicitly because restart
-  initialization is not implemented yet.
+- `lcm_initialize` fails explicitly when
+  `config_state%start_from_restart=.true.` because restart initialization is not
+  implemented yet.
 - `lcm_is_initialized` records that this setup has completed.
 - `lcm_advance` rejects calls before `lcm_initialize`.
 - `lcm_host_interface` exports `lcm_initialize`.
