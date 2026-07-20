@@ -75,6 +75,37 @@ The standalone implementation should not use SAM globals directly. The next
 design step should define an LCM-owned ID strategy using whatever parallel or
 domain metadata the standalone LCM exposes.
 
+## LCM-Owned Particle ID Generation
+
+Standalone LCM uses deterministic IDs derived from the particle's initial
+global grid cell and its within-cell particle index:
+
+```text
+global_cell_id =
+  ((k - 1) * ny_global + (global_j - 1)) * nx_global + global_i
+
+particle_id =
+  (global_cell_id - 1) * particles_per_cell + cell_particle_index
+```
+
+where:
+
+- `global_i = grid_state%grid%global_i_start + i - 1`
+- `global_j = grid_state%grid%global_j_start + j - 1`
+- `cell_particle_index` is the `m` loop index from `1:np_xy`
+- `particles_per_cell` is the configured initial particles per cell
+
+This replaces SAM-LCM's `n_ID = n_step_ID * rank` strategy. It does not require
+a SAM rank or a host-specific process numbering scheme, but it still preserves
+unique IDs across decomposed domains as long as the host supplies correct global
+cell offsets.
+
+The code entry point is:
+
+```fortran
+id = lcm_particle_id_for_cell_member(i, j, k, m, config_state%np_xy)
+```
+
 ## Current Standalone Particle API
 
 The current standalone API already provides the storage operations needed for a
@@ -84,6 +115,7 @@ first implementation slice:
 - `lcm_allocate_particle_cells(initial_capacity_per_cell)`
 - `lcm_add_particle(i,j,k, particle)`
 - `lcm_reset_particle_cells()`
+- `lcm_particle_id_for_cell_member(i,j,k,cell_particle_index,particles_per_cell)`
 
 The current `lcm_particle_t` contains named physical fields such as:
 
@@ -195,11 +227,10 @@ motion/location should remain explicit follow-up tasks.
 After the placement and property audits, the smallest implementation slice
 should be:
 
-1. define an LCM-owned initial particle ID strategy
-2. add a fresh-run population routine that loops over local cells and creates
+1. add a fresh-run population routine that loops over local cells and creates
    `config_state%np_xy` default particles per initialized cell
-3. assign IDs, default type, zero sedimentation velocity, and cell-local counts
-4. add tests for count and ID uniqueness
+2. assign IDs, default type, zero sedimentation velocity, and cell-local counts
+3. add tests for count and ID uniqueness
 
 The aerosol, ice, tracking, particle-source, and continuous motion/location
 details should remain explicit follow-up slices so they can be compared against

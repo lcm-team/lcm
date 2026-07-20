@@ -6,6 +6,7 @@
 !! is full, lcm_add_particle resizes that cell's particle array and preserves
 !! the existing particles.
 module lcm_particle_state
+   use iso_fortran_env, only: int64
    use lcm_grid_state, only: grid_state
    use lcm_types, only: lcm_particle_cell_t, lcm_particle_t
 
@@ -17,6 +18,7 @@ module lcm_particle_state
    public :: lcm_allocate_particle_cells
    public :: lcm_add_particle
    public :: lcm_reset_particle_cells
+   public :: lcm_particle_id_for_cell_member
 
    type(lcm_particle_cell_t), allocatable, protected, save :: cell_particles(:,:,:)
 
@@ -91,11 +93,65 @@ contains
       enddo
    end subroutine lcm_reset_particle_cells
 
+   integer(int64) function lcm_particle_id_for_cell_member( &
+      i, j, k, cell_particle_index, particles_per_cell) result(particle_id)
+      integer, intent(in) :: i
+      integer, intent(in) :: j
+      integer, intent(in) :: k
+      integer, intent(in) :: cell_particle_index
+      integer, intent(in) :: particles_per_cell
+
+      integer(int64) :: global_i
+      integer(int64) :: global_j
+      integer(int64) :: global_cell_id
+
+      call require_grid_set()
+      call validate_grid_cell_index(i, j, k)
+
+      if (particles_per_cell <= 0) then
+         error stop "LCM particles per cell must be positive for particle IDs"
+      endif
+      if (cell_particle_index < 1 .or. &
+          cell_particle_index > particles_per_cell) then
+         error stop "LCM cell particle index is outside the ID range"
+      endif
+
+      global_i = int(grid_state%grid%global_i_start + i - 1, int64)
+      global_j = int(grid_state%grid%global_j_start + j - 1, int64)
+
+      global_cell_id = &
+         (int(k - 1, int64) * int(grid_state%grid%ny_global, int64) + &
+          global_j - 1_int64) * int(grid_state%grid%nx_global, int64) + &
+         global_i
+
+      particle_id = (global_cell_id - 1_int64) * &
+                    int(particles_per_cell, int64) + &
+                    int(cell_particle_index, int64)
+   end function lcm_particle_id_for_cell_member
+
    subroutine require_particle_cells_allocated()
       if (.not. allocated(cell_particles)) then
          error stop "LCM particle cells have not been allocated"
       endif
    end subroutine require_particle_cells_allocated
+
+   subroutine require_grid_set()
+      if (.not. grid_state%is_set) then
+         error stop "LCM grid must be initialized before generating particle IDs"
+      endif
+   end subroutine require_grid_set
+
+   subroutine validate_grid_cell_index(i, j, k)
+      integer, intent(in) :: i
+      integer, intent(in) :: j
+      integer, intent(in) :: k
+
+      if (i < 1 .or. i > grid_state%grid%nx_local .or. &
+          j < 1 .or. j > grid_state%grid%ny_local .or. &
+          k < 1 .or. k > grid_state%grid%nz) then
+         error stop "LCM particle ID cell index is outside the local grid"
+      endif
+   end subroutine validate_grid_cell_index
 
    subroutine validate_cell_index(i, j, k)
       integer, intent(in) :: i
