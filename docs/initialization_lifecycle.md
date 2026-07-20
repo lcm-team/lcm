@@ -17,7 +17,7 @@ call lcm_advance(dt)
 
 | SAM-LCM `micro_set` responsibility | Standalone LCM location | Status |
 | --- | --- | --- |
-| Validate configuration consistency | `lcm_set_config` / `lcm_initialize` | Partly covered. Basic config validation exists in `lcm_set_config`; `lcm_initialize` checks host-field availability and ports the relevant standalone-safe `micro_set` consistency checks. SAM-specific `doprecip`/`docloud` checks are not part of the standalone interface. |
+| Validate configuration consistency | `lcm_set_config` / future config validation work | Partly covered. Basic config validation exists in `lcm_set_config`. Broader physics-mode compatibility checks from SAM-LCM `micro_set` should not live in the initialization lifecycle unless they are required to allocate or initialize LCM-owned state. |
 | Compute initial particle counts `n_init`, `n_total` | `lcm_initialize` | Covered as expected counts through `lcm_initial_particle_count_local` and `lcm_initial_particle_count_global`. Actual particle creation remains follow-up work because the new design stores particles by cell instead of in a global flat array. |
 | Compute domain width `xwidth`, `ywidth` | `lcm_set_grid` | Covered. |
 | Compute inverse grid spacing `idx`, `idy` | `lcm_set_grid` | Covered. |
@@ -40,7 +40,7 @@ Issue #42 introduces the explicit lifecycle boundary:
 - `lcm_initialize` validates that config, grid, and required atmospheric fields
   have been supplied.
 - `lcm_initialize` allocates LCM-owned cell particle containers with
-  `np_xy` as the initial per-cell capacity.
+  `config_state%np_xy` as the initial per-cell capacity.
 - `lcm_initialize` records expected local and global initial particle counts.
 - `lcm_initialize(from_restart=.true.)` fails explicitly because restart
   initialization is not implemented yet.
@@ -54,6 +54,7 @@ The following pieces are intentionally left to focused follow-up work:
 
 - actual initial particle population from config, replacing
   `micro_place_particle` and `micro_init_particles`
+- broader SAM-LCM physics-mode compatibility checks from `micro_set`
 - restart initialization and output/restart file design
 - diagnostics and feedback accumulator initialization
 - MPI particle exchange buffers and particle communication topology
