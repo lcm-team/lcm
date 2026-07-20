@@ -17,8 +17,8 @@ call lcm_advance(dt)
 
 | SAM-LCM `micro_set` responsibility | Standalone LCM location | Status |
 | --- | --- | --- |
-| Validate configuration consistency | `lcm_set_config` / `lcm_initialize` | Partly covered. Basic config validation exists in `lcm_set_config`; host-field availability is checked in `lcm_initialize`. Some SAM-specific checks still need review. |
-| Compute initial particle counts `n_init`, `n_total` | Follow-up particle population work | Not implemented in #42. This belongs with initial particle population because the new design stores particles by cell instead of in a global flat array. |
+| Validate configuration consistency | `lcm_set_config` / `lcm_initialize` | Partly covered. Basic config validation exists in `lcm_set_config`; `lcm_initialize` checks host-field availability and ports the relevant standalone-safe `micro_set` consistency checks. SAM-specific `doprecip`/`docloud` checks are not part of the standalone interface. |
+| Compute initial particle counts `n_init`, `n_total` | `lcm_initialize` | Covered as expected counts through `lcm_initial_particle_count_local` and `lcm_initial_particle_count_global`. Actual particle creation remains follow-up work because the new design stores particles by cell instead of in a global flat array. |
 | Compute domain width `xwidth`, `ywidth` | `lcm_set_grid` | Covered. |
 | Compute inverse grid spacing `idx`, `idy` | `lcm_set_grid` | Covered. |
 | Compute grid-cell volume `dV` | `lcm_set_grid` | Covered. |
@@ -30,7 +30,7 @@ call lcm_advance(dt)
 | Fill grid side/center arrays `gpxs`, `gpys`, `gpzs`, `gpxc`, `gpyc`, `gpzc` | `lcm_set_grid` | Covered. |
 | Allocate velocity and atmospheric working arrays | Future atmospheric/internal state refactor | Not implemented in #42. The standalone direction is to use attached host fields and only allocate LCM-owned derived state where needed. |
 | Initialize output/history state | Future diagnostics/output work | Not implemented in #42. |
-| Choose fresh initialization vs restart read | Future restart lifecycle work | Not implemented in #42. `lcm_initialize` currently represents fresh infrastructure initialization only. |
+| Choose fresh initialization vs restart read | `lcm_initialize` | Partly covered. `lcm_initialize` supports fresh initialization and rejects `from_restart=.true.` with a clear error until restart lifecycle work exists. |
 | Set `flag_LCM_init` | `lcm_is_initialized` | Partly covered. `lcm_is_initialized` records that host setup and LCM-owned storage initialization are complete before `lcm_advance`. |
 
 ## What #42 Implements
@@ -41,6 +41,9 @@ Issue #42 introduces the explicit lifecycle boundary:
   have been supplied.
 - `lcm_initialize` allocates LCM-owned cell particle containers with
   `np_xy` as the initial per-cell capacity.
+- `lcm_initialize` records expected local and global initial particle counts.
+- `lcm_initialize(from_restart=.true.)` fails explicitly because restart
+  initialization is not implemented yet.
 - `lcm_is_initialized` records that this setup has completed.
 - `lcm_advance` rejects calls before `lcm_initialize`.
 - `lcm_host_interface` exports `lcm_initialize`.
@@ -55,4 +58,3 @@ The following pieces are intentionally left to focused follow-up work:
 - diagnostics and feedback accumulator initialization
 - MPI particle exchange buffers and particle communication topology
 - replacement of legacy atmospheric working arrays with `lcm_field_state`
-
