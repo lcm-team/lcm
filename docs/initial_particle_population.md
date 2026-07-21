@@ -151,7 +151,7 @@ do k = 1, min(config_state%nzl, grid_state%grid%nz)
          do n = 1, config_state%np_xy
             particle = lcm_particle_t()
             particle%id = lcm_next_particle_id()
-            particle%w_sedi = 0.0_real64
+            call init_particle_properties(i, j, k, particle)
             call lcm_add_particle(i, j, k, particle)
          enddo
       enddo
@@ -160,9 +160,28 @@ enddo
 ```
 
 This creates the same number of initial computational particles as the
-SAM-LCM compatibility baseline and explicitly initializes sedimentation
-velocity to zero. It does not yet port aerosol, ice, thermodynamic, or
-user-hook initialization.
+SAM-LCM compatibility baseline and initializes the direct physical-property
+baseline for each particle. It does not yet port aerosol, ice, equilibrium
+thermodynamic adjustment, or user-hook initialization.
+
+## Initial Physical Properties
+
+`init_particle_properties` handles the physical fields that have a clear
+first-slice mapping from SAM-LCM `micro_place_particle` and
+`micro_init_particles`:
+
+| SAM-LCM field | Standalone field | First baseline |
+| --- | --- | --- |
+| `ivar(iTYPE)` | `particle_type` | Set to `1`, the SAM-LCM default liquid particle type. |
+| `var(iM)` | `mass_water` | Left at the `lcm_particle_t` default until the aerosol/equilibrium initializer is ported. |
+| `var(iN)` | `mass_aero` | Left at the `lcm_particle_t` default until the aerosol distribution initializer is ported. |
+| `var(iWsedi)` | `w_sedi` | Set explicitly to zero, matching `micro_place_particle`. |
+| `var(iT)` | `temperature` | Read from the attached host temperature field at `(i,j,k)`. |
+| `var(iq)` | `qv` | Read from the attached host water-vapor field at `(i,j,k)`. |
+
+The SAM-LCM multiplicity field `ivar(iA)` is not initialized in this first
+physical-property slice because it is produced by the aerosol distribution
+logic. It belongs with the dedicated aerosol-initialization task.
 
 ## Current Standalone Particle API
 

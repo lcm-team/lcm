@@ -8,6 +8,7 @@
 module lcm_particle_state
    use iso_fortran_env, only: int64, real64
    use lcm_config_state, only: config_state
+   use lcm_field_state, only: field_state
    use lcm_grid_state, only: grid_state
    use lcm_types, only: lcm_particle_cell_t, lcm_particle_t
 
@@ -27,6 +28,8 @@ module lcm_particle_state
    integer(int64), protected, save :: n_step_id = 0_int64
    integer(int64), protected, save :: n_id = 0_int64
    logical, protected, save :: particle_id_counter_is_initialized = .false.
+
+   integer, parameter :: liquid_particle_type = 1
 
 contains
 
@@ -116,7 +119,7 @@ contains
                do n = 1, config_state%np_xy
                   particle = lcm_particle_t()
                   particle%id = lcm_next_particle_id()
-                  particle%w_sedi = 0.0_real64
+                  call init_particle_properties(i, j, k, particle)
                   call lcm_add_particle(i, j, k, particle)
                enddo
             enddo
@@ -150,6 +153,18 @@ contains
       particle_id = n_id
       n_id = n_id + 1_int64
    end function lcm_next_particle_id
+
+   subroutine init_particle_properties(i, j, k, particle)
+      integer, intent(in) :: i
+      integer, intent(in) :: j
+      integer, intent(in) :: k
+      type(lcm_particle_t), intent(inout) :: particle
+
+      particle%particle_type = liquid_particle_type
+      particle%w_sedi = 0.0_real64
+      particle%temperature = field_state%temperature(i,j,k)
+      particle%qv = field_state%qv(i,j,k)
+   end subroutine init_particle_properties
 
    subroutine require_particle_cells_allocated()
       if (.not. allocated(cell_particles)) then
