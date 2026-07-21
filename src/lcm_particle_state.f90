@@ -7,6 +7,7 @@
 !! the existing particles.
 module lcm_particle_state
    use iso_fortran_env, only: int64
+   use lcm_config_state, only: config_state
    use lcm_grid_state, only: grid_state
    use lcm_types, only: lcm_particle_cell_t, lcm_particle_t
 
@@ -20,6 +21,7 @@ module lcm_particle_state
    public :: lcm_reset_particle_cells
    public :: lcm_initialize_particle_id_counter
    public :: lcm_next_particle_id
+   public :: lcm_initialize_computational_particles
 
    type(lcm_particle_cell_t), allocatable, protected, save :: cell_particles(:,:,:)
    integer(int64), protected, save :: n_step_id = 0_int64
@@ -96,6 +98,30 @@ contains
          enddo
       enddo
    end subroutine lcm_reset_particle_cells
+
+   subroutine lcm_initialize_computational_particles()
+      integer :: i, j, k, n
+      integer :: initialization_levels
+      type(lcm_particle_t) :: particle
+
+      call require_particle_cells_allocated()
+      call lcm_reset_particle_cells()
+      call lcm_initialize_particle_id_counter()
+
+      initialization_levels = min(config_state%nzl, grid_state%grid%nz)
+
+      do k = 1, initialization_levels
+         do j = 1, grid_state%grid%ny_local
+            do i = 1, grid_state%grid%nx_local
+               do n = 1, config_state%np_xy
+                  particle = lcm_particle_t()
+                  particle%id = lcm_next_particle_id()
+                  call lcm_add_particle(i, j, k, particle)
+               enddo
+            enddo
+         enddo
+      enddo
+   end subroutine lcm_initialize_computational_particles
 
    subroutine lcm_initialize_particle_id_counter()
       integer(int64) :: n_subdomains

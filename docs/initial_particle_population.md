@@ -130,6 +130,38 @@ call lcm_initialize_particle_id_counter()
 id = lcm_next_particle_id()
 ```
 
+## Initial Placement Baseline
+
+The first standalone implementation preserves the SAM-LCM `np_xy` and `nzl`
+placement structure while storing particles in cell-owned containers:
+
+```fortran
+call lcm_allocate_particle_cells(initial_capacity_per_cell=config_state%np_xy)
+call lcm_initialize_computational_particles()
+```
+
+`lcm_initialize_computational_particles` is the standalone counterpart of the
+placement part of SAM-LCM `micro_place_particle`. It loops over the initialized
+vertical levels and local horizontal cells:
+
+```fortran
+do k = 1, min(config_state%nzl, grid_state%grid%nz)
+   do j = 1, grid_state%grid%ny_local
+      do i = 1, grid_state%grid%nx_local
+         do n = 1, config_state%np_xy
+            particle = lcm_particle_t()
+            particle%id = lcm_next_particle_id()
+            call lcm_add_particle(i, j, k, particle)
+         enddo
+      enddo
+   enddo
+enddo
+```
+
+This creates the same number of initial computational particles as the
+SAM-LCM compatibility baseline, but it does not yet port aerosol, ice,
+thermodynamic, sedimentation, or user-hook initialization.
+
 ## Current Standalone Particle API
 
 The current standalone API already provides the storage operations needed for a
@@ -141,6 +173,7 @@ first implementation slice:
 - `lcm_reset_particle_cells()`
 - `lcm_initialize_particle_id_counter()`
 - `lcm_next_particle_id()`
+- `lcm_initialize_computational_particles()`
 
 The current `lcm_particle_t` contains named physical fields such as:
 
