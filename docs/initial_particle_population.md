@@ -77,33 +77,57 @@ domain metadata the standalone LCM exposes.
 
 ## LCM-Owned Particle ID Generation
 
-Standalone LCM uses deterministic IDs derived from the particle's initial
-global grid cell and its within-cell particle index:
+Standalone LCM follows the SAM-LCM block strategy, but derives the subdomain
+identity from `lcm_grid_t` instead of reading SAM globals directly:
 
 ```text
-global_cell_id =
-  ((k - 1) * ny_global + (global_j - 1)) * nx_global + global_i
+n_subdomains =
+  n_subdomains_x * n_subdomains_y
+
+subdomain_id =
+  subdomain_y_index * n_subdomains_x + subdomain_x_index
+
+n_step_id =
+  huge(1_int64) / n_subdomains
+```
+
+This is the standalone counterpart of:
+
+```fortran
+n_step_ID = huge(1_8) / nsubdomains
+n_ID = n_step_ID * rank
+```
+
+The standalone code keeps the same counter behavior: initialization seeds the
+LCM-owned `n_id` counter from the subdomain block, and each newly created
+particle takes the current value before the counter is incremented:
+
+```text
+n_id =
+  n_step_id * subdomain_id
 
 particle_id =
-  (global_cell_id - 1) * particles_per_cell + cell_particle_index
+  n_id
+
+n_id =
+  n_id + 1
 ```
 
 where:
 
-- `global_i = grid_state%grid%global_i_start + i - 1`
-- `global_j = grid_state%grid%global_j_start + j - 1`
-- `cell_particle_index` is the `m` loop index from `1:np_xy`
-- `particles_per_cell` is the configured initial particles per cell
+- `subdomain_x_index`, `subdomain_y_index`, `n_subdomains_x`, and
+  `n_subdomains_y` come from `lcm_grid_t`
 
-This replaces SAM-LCM's `n_ID = n_step_ID * rank` strategy. It does not require
-a SAM rank or a host-specific process numbering scheme, but it still preserves
-unique IDs across decomposed domains as long as the host supplies correct global
-cell offsets.
+This keeps the same broad ID layout as SAM-LCM while keeping the implementation
+host-facing through the LCM grid metadata. If a future host needs exact MPI-rank
+semantics rather than a regular Cartesian subdomain index, `lcm_grid_t` can be
+extended to carry explicit rank metadata.
 
 The code entry point is:
 
 ```fortran
-id = lcm_particle_id_for_cell_member(i, j, k, m, config_state%np_xy)
+call lcm_initialize_particle_id_counter()
+id = lcm_next_particle_id()
 ```
 
 ## Current Standalone Particle API
@@ -115,7 +139,8 @@ first implementation slice:
 - `lcm_allocate_particle_cells(initial_capacity_per_cell)`
 - `lcm_add_particle(i,j,k, particle)`
 - `lcm_reset_particle_cells()`
-- `lcm_particle_id_for_cell_member(i,j,k,cell_particle_index,particles_per_cell)`
+- `lcm_initialize_particle_id_counter()`
+- `lcm_next_particle_id()`
 
 The current `lcm_particle_t` contains named physical fields such as:
 

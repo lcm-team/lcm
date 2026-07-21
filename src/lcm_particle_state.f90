@@ -18,9 +18,13 @@ module lcm_particle_state
    public :: lcm_allocate_particle_cells
    public :: lcm_add_particle
    public :: lcm_reset_particle_cells
-   public :: lcm_particle_id_for_cell_member
+   public :: lcm_initialize_particle_id_counter
+   public :: lcm_next_particle_id
 
    type(lcm_particle_cell_t), allocatable, protected, save :: cell_particles(:,:,:)
+   integer(int64), protected, save :: n_step_id = 0_int64
+   integer(int64), protected, save :: n_id = 0_int64
+   logical, protected, save :: particle_id_counter_is_initialized = .false.
 
 contains
 
@@ -93,41 +97,32 @@ contains
       enddo
    end subroutine lcm_reset_particle_cells
 
-   integer(int64) function lcm_particle_id_for_cell_member( &
-      i, j, k, cell_particle_index, particles_per_cell) result(particle_id)
-      integer, intent(in) :: i
-      integer, intent(in) :: j
-      integer, intent(in) :: k
-      integer, intent(in) :: cell_particle_index
-      integer, intent(in) :: particles_per_cell
-
-      integer(int64) :: global_i
-      integer(int64) :: global_j
-      integer(int64) :: global_cell_id
+   subroutine lcm_initialize_particle_id_counter()
+      integer(int64) :: n_subdomains
+      integer(int64) :: subdomain_id
 
       call require_grid_set()
-      call validate_grid_cell_index(i, j, k)
 
-      if (particles_per_cell <= 0) then
-         error stop "LCM particles per cell must be positive for particle IDs"
+      n_subdomains = int(grid_state%grid%n_subdomains_x, int64) * &
+                     int(grid_state%grid%n_subdomains_y, int64)
+      subdomain_id = &
+         int(grid_state%grid%subdomain_y_index, int64) * &
+         int(grid_state%grid%n_subdomains_x, int64) + &
+         int(grid_state%grid%subdomain_x_index, int64)
+
+      n_step_id = huge(1_int64) / n_subdomains
+      n_id = n_step_id * subdomain_id
+      particle_id_counter_is_initialized = .true.
+   end subroutine lcm_initialize_particle_id_counter
+
+   integer(int64) function lcm_next_particle_id() result(particle_id)
+      if (.not. particle_id_counter_is_initialized) then
+         error stop "LCM particle ID counter has not been initialized"
       endif
-      if (cell_particle_index < 1 .or. &
-          cell_particle_index > particles_per_cell) then
-         error stop "LCM cell particle index is outside the ID range"
-      endif
 
-      global_i = int(grid_state%grid%global_i_start + i - 1, int64)
-      global_j = int(grid_state%grid%global_j_start + j - 1, int64)
-
-      global_cell_id = &
-         (int(k - 1, int64) * int(grid_state%grid%ny_global, int64) + &
-          global_j - 1_int64) * int(grid_state%grid%nx_global, int64) + &
-         global_i
-
-      particle_id = (global_cell_id - 1_int64) * &
-                    int(particles_per_cell, int64) + &
-                    int(cell_particle_index, int64)
-   end function lcm_particle_id_for_cell_member
+      particle_id = n_id
+      n_id = n_id + 1_int64
+   end function lcm_next_particle_id
 
    subroutine require_particle_cells_allocated()
       if (.not. allocated(cell_particles)) then
@@ -140,18 +135,6 @@ contains
          error stop "LCM grid must be initialized before generating particle IDs"
       endif
    end subroutine require_grid_set
-
-   subroutine validate_grid_cell_index(i, j, k)
-      integer, intent(in) :: i
-      integer, intent(in) :: j
-      integer, intent(in) :: k
-
-      if (i < 1 .or. i > grid_state%grid%nx_local .or. &
-          j < 1 .or. j > grid_state%grid%ny_local .or. &
-          k < 1 .or. k > grid_state%grid%nz) then
-         error stop "LCM particle ID cell index is outside the local grid"
-      endif
-   end subroutine validate_grid_cell_index
 
    subroutine validate_cell_index(i, j, k)
       integer, intent(in) :: i
