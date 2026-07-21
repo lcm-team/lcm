@@ -6,7 +6,7 @@
 !! is full, lcm_add_particle resizes that cell's particle array and preserves
 !! the existing particles.
 module lcm_particle_state
-   use iso_fortran_env, only: int64
+   use iso_fortran_env, only: int64, real64
    use lcm_config_state, only: config_state
    use lcm_grid_state, only: grid_state
    use lcm_types, only: lcm_particle_cell_t, lcm_particle_t
@@ -116,6 +116,7 @@ contains
                do n = 1, config_state%np_xy
                   particle = lcm_particle_t()
                   particle%id = lcm_next_particle_id()
+                  particle%w_sedi = 0.0_real64
                   call lcm_add_particle(i, j, k, particle)
                enddo
             enddo

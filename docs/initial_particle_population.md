@@ -151,6 +151,7 @@ do k = 1, min(config_state%nzl, grid_state%grid%nz)
          do n = 1, config_state%np_xy
             particle = lcm_particle_t()
             particle%id = lcm_next_particle_id()
+            particle%w_sedi = 0.0_real64
             call lcm_add_particle(i, j, k, particle)
          enddo
       enddo
@@ -159,8 +160,9 @@ enddo
 ```
 
 This creates the same number of initial computational particles as the
-SAM-LCM compatibility baseline, but it does not yet port aerosol, ice,
-thermodynamic, sedimentation, or user-hook initialization.
+SAM-LCM compatibility baseline and explicitly initializes sedimentation
+velocity to zero. It does not yet port aerosol, ice, thermodynamic, or
+user-hook initialization.
 
 ## Current Standalone Particle API
 
