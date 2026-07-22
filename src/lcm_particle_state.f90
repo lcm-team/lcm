@@ -119,7 +119,7 @@ contains
                do n = 1, config_state%np_xy
                   particle = lcm_particle_t()
                   particle%id = lcm_next_particle_id()
-                  call init_particle_properties(i, j, k, particle)
+                  call init_particle_properties(i, j, k, n, particle)
                   call lcm_add_particle(i, j, k, particle)
                enddo
             enddo
@@ -154,11 +154,19 @@ contains
       n_id = n_id + 1_int64
    end function lcm_next_particle_id
 
-   subroutine init_particle_properties(i, j, k, particle)
+   subroutine init_particle_properties(i, j, k, cell_particle_index, particle)
       integer, intent(in) :: i
       integer, intent(in) :: j
       integer, intent(in) :: k
+      integer, intent(in) :: cell_particle_index
       type(lcm_particle_t), intent(inout) :: particle
+
+      particle%cell_particle_index = cell_particle_index
+      particle%last_i = grid_state%grid%global_i_start + i - 1
+      particle%last_j = grid_state%grid%global_j_start + j - 1
+      particle%last_k = k
+      particle%spray_marker = -999
+      particle%track_marker = -999
 
       particle%particle_type = liquid_particle_type
       particle%w_sedi = 0.0_real64

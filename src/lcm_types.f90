@@ -186,21 +186,55 @@ module lcm_types
    end type lcm_field_state_t
 
    type :: lcm_particle_t
+      ! SAM-LCM ivar(iA), ivar(iID), and ivar(iTYPE).
       integer(int64) :: weight = 0_int64
       integer(int64) :: id = 0_int64
       integer :: particle_type = 0
 
+      ! SAM-LCM motion var(iX:iWsgs). Cell ownership remains the primary
+      ! location, but these fields preserve the current velocity-advection path.
+      real(real64) :: x = 0.0_real64
+      real(real64) :: y = 0.0_real64
+      real(real64) :: z = 0.0_real64
+      real(real64) :: u = 0.0_real64
+      real(real64) :: v = 0.0_real64
+      real(real64) :: w = 0.0_real64
+      real(real64) :: u_sgs = 0.0_real64
+      real(real64) :: v_sgs = 0.0_real64
+      real(real64) :: w_sgs = 0.0_real64
+
+      ! SAM-LCM microphysical var(iM), var(iN), var(iWsedi), var(iT),
+      ! var(iq), and var(ieta).
       real(real64) :: mass_water = 0.0_real64
       real(real64) :: mass_aero = 0.0_real64
       real(real64) :: w_sedi = 0.0_real64
       real(real64) :: temperature = 0.0_real64
       real(real64) :: qv = 0.0_real64
+      real(real64) :: eta = 0.0_real64
 
+      ! SAM-LCM ice and aerosol-composition state:
+      ! var(iAXS), var(iCXS), var(iDNS), var(iMrime), var(iTFZ),
+      ! var(iSC:iSP), and var(iAero_portions).
       real(real64) :: axis_a = 0.0_real64
       real(real64) :: axis_c = 0.0_real64
       real(real64) :: density = 0.0_real64
       real(real64) :: rimed_mass = 0.0_real64
       real(real64) :: freezing_temperature = 0.0_real64
+      real(real64) :: in_surface_area(4) = 0.0_real64
+      real(real64) :: aerosol_portions(4) = 0.0_real64
+
+      ! SAM-LCM timing var(itime).
+      real(real64) :: cloudy_age = 0.0_real64
+
+      ! SAM-LCM integer metadata ivar(iLEM), ivar(iilst:iklst),
+      ! ivar(iNmono), ivar(iSPR), and ivar(iTRACK).
+      integer :: cell_particle_index = 0
+      integer :: last_i = 0
+      integer :: last_j = 0
+      integer :: last_k = 0
+      integer(int64) :: n_monomer = 0_int64
+      integer :: spray_marker = -999
+      integer :: track_marker = -999
    end type lcm_particle_t
 
    type :: lcm_particle_cell_t

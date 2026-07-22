@@ -178,6 +178,10 @@ first-slice mapping from SAM-LCM `micro_place_particle` and
 | `var(iWsedi)` | `w_sedi` | Set explicitly to zero, matching `micro_place_particle`. |
 | `var(iT)` | `temperature` | Read from the attached host temperature field at `(i,j,k)`. |
 | `var(iq)` | `qv` | Read from the attached host water-vapor field at `(i,j,k)`. |
+| `ivar(iLEM)` | `cell_particle_index` | Set to the cell-local particle number `n`, matching the old within-cell tag. |
+| `ivar(iilst:iklst)` | `last_i`, `last_j`, `last_k` | Set from the grid cell indices. |
+| `ivar(iSPR)` | `spray_marker` | Set to the SAM-LCM default unsprayed marker `-999`. |
+| `ivar(iTRACK)` | `track_marker` | Set to the SAM-LCM default untracked marker `-999`. |
 
 The SAM-LCM multiplicity field `ivar(iA)` is not initialized in this first
 physical-property slice because it is produced by the aerosol distribution
@@ -196,21 +200,35 @@ first implementation slice:
 - `lcm_next_particle_id()`
 - `lcm_initialize_computational_particles()`
 
-The current `lcm_particle_t` contains named physical fields such as:
+The current `lcm_particle_t` intentionally contains named counterparts for the
+SAM-LCM computational-particle state. This is a compatibility choice: during
+the port, the trusted SAM-LCM routines should be translated by replacing
+`particle(n)%var(...)` and `particle(n)%ivar(...)` access with named fields,
+not by changing the scientific sequence.
+
+The named fields include:
 
 - `id`
 - `weight`
 - `particle_type`
+- motion fields `x`, `y`, `z`, `u`, `v`, `w`, `u_sgs`, `v_sgs`, `w_sgs`
 - `mass_water`
 - `mass_aero`
 - `w_sedi`
 - `temperature`
 - `qv`
+- `eta`
 - ice-shape and ice-state fields
+- aerosol composition portions
+- IN surface area per species
+- cloudy age
+- cell-local and tracking metadata
 
-It does not currently contain the full set of SAM-LCM motion/location fields.
-That is consistent with the design goal that cell ownership should come from
-the cell container, not from permanent particle coordinates.
+Cell ownership still comes from the `cell_particles(i,j,k)` container. The
+motion/location fields are kept because the medium-term compatibility target
+still advects particles with continuous position and velocity state. If a later
+finite-particle-flux advection path removes that need, those fields can be
+deleted after the replacement is verified.
 
 ## `micro_init_particles` Property Audit
 
@@ -233,73 +251,58 @@ ice-nucleating particle assignment, and a local thermodynamic adjustment.
 | Interpret `unit_aero` as either `1/m3` or `1/kg`. | Preserve and validate through configuration. The conversion needs grid-cell volume and, for `1/kg`, air density. |
 | Initialize particle multiplicity `ivar(iA)`. | Map to `lcm_particle_t%weight`. |
 | Initialize aerosol mass `var(iN)`. | Map to `lcm_particle_t%mass_aero`. |
-| Store aerosol composition portions in `var(iAero_portions)`. | The current `lcm_particle_t` has one `mass_aero` field only. If composition remains scientifically required, the particle type needs additional named composition state or a separate aerosol payload. |
+| Store aerosol composition portions in `var(iAero_portions)`. | Map to `lcm_particle_t%aerosol_portions`. |
 | Reassign zero-multiplicity aerosol bins by splitting the most populated bin. | Preserve in the aerosol helper to avoid zero-weight computational particles. |
 | Assign default liquid particle type `ivar(iTYPE)=1`. | Map to `lcm_particle_t%particle_type`. |
 | When ice is enabled, randomly convert a fraction of particles to IN-containing type `2`. | Preserve under an ice-enabled config path. This depends on `frac_ice`, IN concentrations, and random sampling. |
-| For IN-containing particles, sample IN species and IN size, store IN surface area, and compute freezing temperature `iTFZ`. | Current `lcm_particle_t` has `freezing_temperature`, but not per-species IN surface-area fields. The standalone particle type or an ice payload must be extended before full ice parity. |
+| For IN-containing particles, sample IN species and IN size, store IN surface area, and compute freezing temperature `iTFZ`. | Map IN surface area to `lcm_particle_t%in_surface_area` and freezing temperature to `freezing_temperature`. |
 | For non-IN particles, zero IN surface area and set `iTFZ=233.15`. | Preserve when ice fields exist; otherwise document as omitted in a liquid-only first slice. |
 | Iterate five times to compute equilibrium liquid mass from supersaturation. | Preserve eventually. It couples particle liquid mass, vapor, and temperature and should be handled by a dedicated microphysical initialization helper. |
 | Update `micro_field(i,j,k,imv)` and `tabs_LCM(i,j,k)` during equilibrium adjustment. | Standalone LCM should not copy host fields into SAM-style working arrays. It needs a clear decision: either initialize particle mass from attached host fields without mutating host fields in the first one-way baseline, or later write feedback through explicit tendency/state design. |
 | Initialize particle liquid mass `var(iM)`. | Map to `lcm_particle_t%mass_water`. |
 | Initialize particle temperature `var(iT)` from adjusted cell temperature plus `gamaz(k)`. | Map to `lcm_particle_t%temperature`, using attached temperature/static-energy state rather than SAM globals. |
 | Initialize particle vapor `var(iq)`. | Map to `lcm_particle_t%qv`. |
-| Initialize absolute supersaturation `var(ieta)`. | Current `lcm_particle_t` has no supersaturation field. Decide whether this should be derived on demand from attached fields or stored explicitly. |
-| Initialize monomer count `ivar(iNmono)=1`. | Current `lcm_particle_t` has no monomer-count field. Add only if needed for the preserved microphysics path. |
+| Initialize absolute supersaturation `var(ieta)`. | Map to `lcm_particle_t%eta`. |
+| Initialize monomer count `ivar(iNmono)=1`. | Map to `lcm_particle_t%n_monomer`. |
 | Call `micro_user_init_particles(i,j,k)`. | Do not include in the first standalone baseline. Decide separately whether standalone LCM supports user hooks. The current SAM hook is empty by default. |
-
-## Required Field Decisions From The Audit
-
-The current `lcm_particle_t` is enough for a liquid-only skeleton with IDs,
-weights, type, aerosol mass, water mass, sedimentation velocity, temperature,
-and vapor.
-
-Full parity with `micro_init_particles` still needs decisions for:
-
-- aerosol composition portions across modes
-- IN surface-area state per ice-nucleating species
-- stored supersaturation versus derived supersaturation
-- monomer count
-- optional particle age/time
-- temporary continuous position and velocity state for the intermediate
-  advection baseline
-- user particle initialization hooks
 
 ## `lcm_particle_t` Field Decision
 
-The first standalone population baseline should not expand `lcm_particle_t`
-yet. It should use the fields that already exist and only initialize values
-that have a clear SAM-LCM counterpart.
+`lcm_particle_t` is expanded to cover the SAM-LCM computational-particle state
+with named fields. This keeps the physics port close to SAM-LCM while removing
+the generic `var(:)` and `ivar(:)` indexing.
 
 | Field or concept | Current standalone location | Decision |
 | --- | --- | --- |
 | Particle ID | `lcm_particle_t%id` | Required for the first baseline. The ID generator is a separate task. |
 | Multiplicity / weighting factor | `lcm_particle_t%weight` | Required for the first baseline. It maps from SAM-LCM `ivar(iA)`. |
 | Particle type | `lcm_particle_t%particle_type` | Required for the first baseline. Liquid-only initialization can set the SAM-LCM-compatible default type. |
-| Liquid water mass | `lcm_particle_t%mass_water` | Required, but a simple first baseline may initialize it to zero until the aerosol/equilibrium initializer is ported. |
-| Aerosol mass | `lcm_particle_t%mass_aero` | Required, but one scalar only supports a reduced aerosol representation. Full aerosol-mode parity needs a follow-up decision. |
+| Continuous position `x/y/z` | `x`, `y`, `z` | Keep for the medium-term velocity/location advection baseline. |
+| Resolved particle velocities | `u`, `v`, `w` | Keep for SAM-LCM-compatible advection. |
+| SGS particle velocities | `u_sgs`, `v_sgs`, `w_sgs` | Keep for SAM-LCM-compatible SGS velocity behavior. |
+| Liquid water mass | `lcm_particle_t%mass_water` | Required for `var(iM)`. |
+| Aerosol mass | `lcm_particle_t%mass_aero` | Required for `var(iN)`. |
 | Sedimentation velocity | `lcm_particle_t%w_sedi` | Required for the first baseline and initialized to zero, matching `micro_place_particle`. |
 | Particle temperature | `lcm_particle_t%temperature` | Required for the first baseline. It should come from attached host fields through `lcm_field_state`. |
 | Particle vapor mixing ratio | `lcm_particle_t%qv` | Required for the first baseline. It should come from attached host fields through `lcm_field_state`. |
+| Absolute supersaturation / excess vapor | `eta` | Required for `var(ieta)`. |
 | Ice axis fields | `axis_a`, `axis_c` | Keep existing fields. They are not required for a liquid-only first baseline. |
 | Particle density | `density` | Keep existing field. It is not required for the first placement/count baseline. |
 | Rimed mass | `rimed_mass` | Keep existing field. It is not required until ice/riming behavior is ported. |
-| Freezing temperature | `freezing_temperature` | Keep existing field. Full ice parity needs IN surface-area state before this can match SAM-LCM. |
-| Aerosol composition portions | Missing | Do not add in the first baseline. Add only when porting SAM-LCM aerosol-mode initialization. |
-| IN surface area per species | Missing | Do not add in the first baseline. This belongs with ice initialization design. |
-| Supersaturation / absolute excess vapor | Missing | Do not add in the first baseline. Prefer deriving it from attached atmospheric state unless later microphysics needs stored per-particle state. |
-| Monomer count | Missing | Do not add in the first baseline. Add only if the preserved microphysics path requires it. |
-| Particle age / time | Missing | Do not add in the first baseline. It is initialized by SAM-LCM but not needed for count/cell placement. |
-| Continuous position `x/y/z` | Missing from `lcm_particle_t` | Do not add as permanent physical particle state here. Decide separately with the motion/location task. |
-| Resolved and SGS particle velocities | Missing from `lcm_particle_t` | Do not add as permanent physical particle state here. Keep with motion/advection design if needed. |
-| Cell ownership indices | `cell_particles(i,j,k)` container | Do not store in `lcm_particle_t` for the first baseline. Cell ownership is represented by the container. |
+| Freezing temperature | `freezing_temperature` | Required for `var(iTFZ)`. |
+| Aerosol composition portions | `aerosol_portions(4)` | Required for `var(iAero_portions)`. |
+| IN surface area per species | `in_surface_area(4)` | Required for `var(iSC:iSP)`. |
+| Monomer count | `n_monomer` | Required for `ivar(iNmono)`. |
+| Particle age / time | `cloudy_age` | Required for `var(itime)`. |
+| Cell-local particle index | `cell_particle_index` | Counterpart of `ivar(iLEM)`. |
+| Last grid indices | `last_i`, `last_j`, `last_k` | Counterpart of `ivar(iilst:iklst)`. Cell ownership still comes from the container. |
+| Spray marker | `spray_marker` | Counterpart of `ivar(iSPR)`. |
+| Tracking marker | `track_marker` | Counterpart of `ivar(iTRACK)`. |
 
-This decision means the first implementation can create valid
-`lcm_particle_t` objects without changing the type definition. The first
-baseline should focus on count, IDs, cell placement, default type,
-sedimentation velocity, and simple thermodynamic values from attached fields.
-Scientific parity for aerosol composition, ice, supersaturation, and
-motion/location should remain explicit follow-up tasks.
+This decision does not mean all fields are initialized in the first slice. It
+means the data structure is ready for a faithful, near line-by-line port of
+SAM-LCM routines. Each later port should preserve SAM-LCM control flow and
+replace only the storage expression.
 
 ## Recommended Next Slice
 
