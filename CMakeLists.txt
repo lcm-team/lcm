@@ -126,3 +126,15 @@ add_test(
   COMMAND test_initial_particle_population
           zero_weight_split
 )
+
+add_test(
+  NAME initial_particle_population_usm_aerosol
+  COMMAND test_initial_particle_population
+          usm_aerosol
+)
+
+add_test(
+  NAME initial_particle_population_random_aerosol
+  COMMAND test_initial_particle_population
+          random_aerosol
+)

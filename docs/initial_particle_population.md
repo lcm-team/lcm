@@ -237,6 +237,96 @@ still advects particles with continuous position and velocity state. If a later
 finite-particle-flux advection path removes that need, those fields can be
 deleted after the replacement is verified.
 
+## Aerosol Initialization Port Audit
+
+The current standalone `lcm_init_particles(i,j,k)` keeps the liquid-only aerosol
+initialization path close to SAM-LCM `micro_init_particles(i,j,k)`.
+
+### Direct Field Mapping
+
+| SAM-LCM expression | Standalone expression |
+| --- | --- |
+| `particle(n)%ivar(iA)` | `cell_particles(i,j,k)%particles(n)%weight` |
+| `particle(n)%var(iN)` | `cell_particles(i,j,k)%particles(n)%mass_aero` |
+| `particle(n)%var(iAero_portions)` | `cell_particles(i,j,k)%particles(n)%aerosol_portions` |
+| `particle(n)%ivar(iTYPE)` | `cell_particles(i,j,k)%particles(n)%particle_type` |
+| `particle(n)%var(in_startind+1:in_startind+4)` | `cell_particles(i,j,k)%particles(n)%in_surface_area` |
+| `particle(n)%var(iTFZ)` | `cell_particles(i,j,k)%particles(n)%freezing_temperature` |
+| `dV(k)` | `grid_state%dV(k)` |
+| `rho_air(k)` | `field_state%density(k)` |
+| aerosol namelist state | fields of `config_state` |
+
+### Ported Liquid-Only Branches
+
+`init_aero='bin'` preserves the SAM-LCM sequence:
+
+1. split `np_xy` over aerosol modes using `shares_aero`
+2. compute `r_aero_min` and `r_aero_max` from lognormal CDF percentiles
+3. divide each mode into log-radius bins
+4. compute multiplicity from `log_normal_pdf`, `dV`, and optionally `rho_air`
+5. compute aerosol mass from multiplicity, radius, and aerosol density
+6. set aerosol portions and liquid particle type
+7. split the most populated bin when another bin receives zero multiplicity
+
+`init_aero='USM'` preserves the SAM-LCM sequence:
+
+1. split `np_xy` over aerosol modes using `shares_aero`
+2. compute mode radius bounds with the same regula-falsi percentile search
+3. use `p_USM = 1.0 / np_mode`
+4. initialize particles `1:np_mode-1` from successive percentile intervals
+5. use equal per-mode multiplicity for the interior samples
+6. apply SAM-LCM's special largest-particle treatment for `np_done+np_mode`
+
+`init_aero='random'` preserves the SAM-LCM sequence:
+
+1. split `np_xy` over aerosol modes using `shares_aero`
+2. use the same inverse-CDF percentile index rule based on `n_inv_cdf`
+3. draw random radii using `randomu`
+4. keep the SAM-LCM accept/retry loop that checks the generated radius against
+   the lognormal PDF
+5. use equal per-mode multiplicity
+6. set aerosol mass, aerosol portions, and liquid particle type
+
+### Intentional Differences From SAM-LCM
+
+These differences are intentional and should remain visible during review:
+
+- SAM-LCM stores particles in a flat `particle(:)` array and uses
+  `n_start/n_end`. Standalone LCM writes directly to
+  `cell_particles(i,j,k)%particles(n)`.
+- SAM-LCM stores `inv_cdf(4,0:n_inv_cdf)` for `init_aero='random'`, where
+  `n_inv_cdf` is 50,000,000. Standalone LCM computes the selected inverse-CDF
+  entry on demand. This preserves the same percentile rule without allocating a
+  very large table.
+- SAM-LCM uses `randomu(rank+1)`. Standalone LCM derives the random seed ID from
+  `lcm_grid_t` subdomain metadata. This keeps the host-facing source of
+  rank-like information inside the LCM grid structure.
+- Ice-enabled branches are not ported in this slice. `config_state%switch_ice`
+  still stops with an explicit message.
+- The five-iteration equilibrium liquid mass, vapor, and temperature adjustment
+  is not ported in this slice. That step mutates SAM-LCM working atmospheric
+  fields and needs a standalone decision about one-way vs two-way coupling.
+- `micro_user_init_particles(i,j,k)` is not called in this slice. Standalone user
+  initialization hooks remain a separate design decision.
+
+### Test Coverage
+
+`tests/test_initial_particle_population.f90` now covers:
+
+- default aerosol configuration from `lcm_init_config`
+- one active bin aerosol mode
+- multiple bin aerosol modes
+- bin zero-weight splitting
+- deterministic `USM` aerosol initialization
+- structural `random` aerosol initialization
+
+The deterministic `bin` and `USM` cases compare particle weights, aerosol mass,
+and aerosol portions against test-local reference implementations following the
+SAM-LCM formulas. The `random` case checks the SAM-LCM-compatible invariants that
+do not depend on a fixed random radius sequence: particle count, cell placement,
+unique IDs, equal per-mode multiplicity, positive aerosol mass, particle type,
+and aerosol portions.
+
 ## `micro_init_particles` Property Audit
 
 `micro_init_particles(i,j,k)` is called after `micro_place_particle` has created
@@ -252,13 +342,13 @@ ice-nucleating particle assignment, and a local thermodynamic adjustment.
 | Return immediately when `np_xy == 0`. | Preserve this guard in the standalone fresh-population path. |
 | Split `np_xy` particles across four aerosol modes using `shares_aero`. | Preserve as the compatibility baseline, but source values from `lcm_config_t` rather than `micro_vars`. |
 | Compute aerosol radius bounds for each mode from the lognormal CDF. | Ported inside `lcm_init_particles(i,j,k)`, preserving the SAM-LCM regula-falsi sequence. |
-| Support `init_aero='bin'`. | Ported for the liquid-only path, because it defines deterministic aerosol bins and multiplicities. |
-| Support `init_aero='random'`. | Preserve, using standalone random-number access rather than direct SAM-LCM globals. |
-| Support `init_aero='USM'`. | Preserve as a named aerosol initialization mode. |
+| Support `init_aero='bin'`. | Ported for the liquid-only path, preserving deterministic aerosol bins, multiplicities, aerosol mass, aerosol portions, and zero-weight bin splitting. |
+| Support `init_aero='random'`. | Ported for the liquid-only path, preserving the SAM-LCM random sampling structure and equal per-mode multiplicity. |
+| Support `init_aero='USM'`. | Ported for the liquid-only path, preserving the Shima et al. uniform sampling structure, equal per-mode multiplicity for interior samples, and the SAM-LCM special handling of the largest sampled particle. |
 | Interpret `unit_aero` as either `1/m3` or `1/kg`. | Preserve and validate through configuration. The conversion needs grid-cell volume and, for `1/kg`, air density. |
-| Initialize particle multiplicity `ivar(iA)`. | Mapped to `lcm_particle_t%weight` for `init_aero='bin'`. |
-| Initialize aerosol mass `var(iN)`. | Mapped to `lcm_particle_t%mass_aero` for `init_aero='bin'`. |
-| Store aerosol composition portions in `var(iAero_portions)`. | Mapped to `lcm_particle_t%aerosol_portions` for `init_aero='bin'`. |
+| Initialize particle multiplicity `ivar(iA)`. | Mapped to `lcm_particle_t%weight` for liquid-only `bin`, `USM`, and `random`. |
+| Initialize aerosol mass `var(iN)`. | Mapped to `lcm_particle_t%mass_aero` for liquid-only `bin`, `USM`, and `random`. |
+| Store aerosol composition portions in `var(iAero_portions)`. | Mapped to `lcm_particle_t%aerosol_portions` for liquid-only `bin`, `USM`, and `random`. |
 | Reassign zero-multiplicity aerosol bins by splitting the most populated bin. | Ported for `init_aero='bin'`. |
 | Assign default liquid particle type `ivar(iTYPE)=1`. | Map to `lcm_particle_t%particle_type`. |
 | When ice is enabled, randomly convert a fraction of particles to IN-containing type `2`. | Preserve under an ice-enabled config path. This depends on `frac_ice`, IN concentrations, and random sampling. |
@@ -311,16 +401,15 @@ means the data structure is ready for a faithful, near line-by-line port of
 SAM-LCM routines. Each later port should preserve SAM-LCM control flow and
 replace only the storage expression.
 
-## Recommended Next Slice
+## Recommended Next Slices
 
-After the placement and property audits, the smallest implementation slice
-should be:
+After the liquid-only aerosol initialization port, the remaining
+`micro_init_particles` slices should stay separate so each can be compared
+against SAM-LCM carefully:
 
-1. add a fresh-run population routine that loops over local cells and creates
-   `config_state%np_xy` default particles per initialized cell
-2. assign IDs, default type, zero sedimentation velocity, and cell-local counts
-3. add tests for count and ID uniqueness
-
-The aerosol, ice, tracking, particle-source, and continuous motion/location
-details should remain explicit follow-up slices so they can be compared against
-`micro_init_particles` carefully.
+1. port ice-enabled aerosol and IN assignment for `switch_ice`
+2. port the five-iteration equilibrium liquid mass, vapor, and temperature
+   adjustment after deciding how standalone LCM should interact with host fields
+3. decide whether standalone LCM supports a counterpart of
+   `micro_user_init_particles(i,j,k)`
+4. add focused tests for each slice before moving to the next one

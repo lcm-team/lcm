@@ -11,6 +11,7 @@ module lcm_particle_state
    use lcm_field_state, only: field_state
    use lcm_grid_state, only: grid_state
    use lcm_types, only: lcm_particle_cell_t, lcm_particle_t
+   use micro_random, only: randomu
 
    implicit none
 
@@ -31,6 +32,7 @@ module lcm_particle_state
 
    real(real64), parameter :: pi = 3.141592653589793238462643383279502884_real64
    integer, parameter :: liquid_particle_type = 1
+   integer, parameter :: n_inv_cdf = 50000000
 
 contains
 
@@ -183,8 +185,10 @@ contains
       integer, intent(in) :: k
 
       integer :: n, nn, m, m_max, i_mode, np_mode, np_done
+      integer :: seed_id
       real(real64) :: dlogr, r_l, r_r, r_aero, n_dummy
       real(real64) :: f_ak, f_bk, f_ck, ak, bk, ck
+      real(real64) :: p_random, p_usm, x_rand
       real(real64) :: r_aero_min(4), r_aero_max(4)
 
       if (config_state%np_xy == 0) return
@@ -193,9 +197,7 @@ contains
          error stop "LCM ice initialization must be ported from SAM-LCM micro_init_particles"
       endif
 
-      if (trim(config_state%init_aero) /= "bin") then
-         error stop "LCM random and USM aerosol initialization must be ported from SAM-LCM micro_init_particles"
-      endif
+      seed_id = particle_random_seed_id()
 
       np_done = 0
       ! Initialize aerosols for every mode separately, preserving the
@@ -290,84 +292,125 @@ contains
          enddo
          r_aero_max(i_mode) = ck
 
-         dlogr = (log(r_aero_max(i_mode)) - log(r_aero_min(i_mode))) / &
-                 real(np_mode, real64)
+         if (trim(config_state%init_aero) == "bin") then
+            dlogr = (log(r_aero_max(i_mode)) - log(r_aero_min(i_mode))) / &
+                    real(np_mode, real64)
 
-         do n = np_done + 1, np_done + np_mode
-            nn = n - np_done
+            do n = np_done + 1, np_done + np_mode
+               nn = n - np_done
 
-            r_l = exp(log(r_aero_min(i_mode)) + real(nn - 1, real64) * dlogr)
-            r_r = exp(log(r_aero_min(i_mode)) + real(nn, real64) * dlogr)
-            r_aero = sqrt(r_l * r_r)
+               r_l = exp(log(r_aero_min(i_mode)) + real(nn - 1, real64) * dlogr)
+               r_r = exp(log(r_aero_min(i_mode)) + real(nn, real64) * dlogr)
+               r_aero = sqrt(r_l * r_r)
 
-            n_dummy = log_normal_pdf(real(config_state%n_aero(i_mode), real64), &
-                                     real(config_state%sigma_aero(i_mode), real64), &
-                                     real(config_state%rm_aero(i_mode), real64), &
-                                     r_aero)
-            if (trim(config_state%unit_aero) == "1/m3") then
-               cell_particles(i,j,k)%particles(n)%weight = &
-                  int(n_dummy * r_aero * dlogr * real(grid_state%dV(k), real64), int64)
-            else if (trim(config_state%unit_aero) == "1/kg") then
-               cell_particles(i,j,k)%particles(n)%weight = &
-                  int(n_dummy * r_aero * dlogr * real(grid_state%dV(k), real64) * &
-                      field_state%density(k), int64)
-            else
-               error stop "LCM unknown aerosol initialization unit"
-            endif
+               n_dummy = log_normal_pdf(real(config_state%n_aero(i_mode), real64), &
+                                        real(config_state%sigma_aero(i_mode), real64), &
+                                        real(config_state%rm_aero(i_mode), real64), &
+                                        r_aero)
+               if (trim(config_state%unit_aero) == "1/m3") then
+                  cell_particles(i,j,k)%particles(n)%weight = &
+                     int(n_dummy * r_aero * dlogr * real(grid_state%dV(k), real64), int64)
+               else if (trim(config_state%unit_aero) == "1/kg") then
+                  cell_particles(i,j,k)%particles(n)%weight = &
+                     int(n_dummy * r_aero * dlogr * real(grid_state%dV(k), real64) * &
+                         field_state%density(k), int64)
+               else
+                  error stop "LCM unknown aerosol initialization unit"
+               endif
 
-            cell_particles(i,j,k)%particles(n)%mass_aero = &
-               real(cell_particles(i,j,k)%particles(n)%weight, real64) * &
-               4.0_real64 / 3.0_real64 * pi * r_aero**3 * &
-               real(config_state%rho_aero(i_mode), real64)
+               call set_particle_aerosol_state(i, j, k, n, i_mode, r_aero)
+            enddo
 
-            cell_particles(i,j,k)%particles(n)%aerosol_portions = 0.0_real64
-            cell_particles(i,j,k)%particles(n)%aerosol_portions(i_mode) = 1.0_real64
-            cell_particles(i,j,k)%particles(n)%particle_type = liquid_particle_type
-            cell_particles(i,j,k)%particles(n)%in_surface_area = 0.0_real64
-            cell_particles(i,j,k)%particles(n)%freezing_temperature = 233.15_real64
-         enddo
+            do n = np_done + 1, np_done + np_mode
+               if (cell_particles(i,j,k)%particles(n)%weight == 0_int64) then
+                  m_max = n
+                  do m = np_done + 1, np_done + np_mode
+                     if (cell_particles(i,j,k)%particles(m)%weight > &
+                         cell_particles(i,j,k)%particles(m_max)%weight .and. &
+                         cell_particles(i,j,k)%particles(m)%weight >= 2_int64) then
+                        m_max = m
+                     endif
+                  enddo
 
-         do n = np_done + 1, np_done + np_mode
-            if (cell_particles(i,j,k)%particles(n)%weight == 0_int64) then
-               m_max = n
-               do m = np_done + 1, np_done + np_mode
-                  if (cell_particles(i,j,k)%particles(m)%weight > &
-                      cell_particles(i,j,k)%particles(m_max)%weight .and. &
-                      cell_particles(i,j,k)%particles(m)%weight >= 2_int64) then
-                     m_max = m
+                  if (cell_particles(i,j,k)%particles(m_max)%weight == 0_int64) then
+                     error stop "LCM initialization of aerosols not possible"
                   endif
-               enddo
 
-               if (cell_particles(i,j,k)%particles(m_max)%weight == 0_int64) then
-                  error stop "LCM initialization of aerosols not possible"
+                  cell_particles(i,j,k)%particles(n)%weight = &
+                     cell_particles(i,j,k)%particles(m_max)%weight / 2_int64
+                  cell_particles(i,j,k)%particles(m_max)%weight = &
+                     cell_particles(i,j,k)%particles(m_max)%weight - &
+                     cell_particles(i,j,k)%particles(n)%weight
+
+                  cell_particles(i,j,k)%particles(n)%mass_aero = &
+                     cell_particles(i,j,k)%particles(m_max)%mass_aero / &
+                     real(cell_particles(i,j,k)%particles(m_max)%weight + &
+                          cell_particles(i,j,k)%particles(n)%weight, real64) * &
+                     real(cell_particles(i,j,k)%particles(n)%weight, real64)
+                  cell_particles(i,j,k)%particles(m_max)%mass_aero = &
+                     cell_particles(i,j,k)%particles(m_max)%mass_aero - &
+                     cell_particles(i,j,k)%particles(n)%mass_aero
+
+                  cell_particles(i,j,k)%particles(n)%aerosol_portions = &
+                     cell_particles(i,j,k)%particles(m_max)%aerosol_portions
+                  cell_particles(i,j,k)%particles(n)%particle_type = &
+                     cell_particles(i,j,k)%particles(m_max)%particle_type
+
+                  if (cell_particles(i,j,k)%particles(n)%weight == 0_int64 .or. &
+                      cell_particles(i,j,k)%particles(m_max)%weight == 0_int64) then
+                     error stop "LCM initialization of aerosols not possible"
+                  endif
                endif
+            enddo
+         else if (trim(config_state%init_aero) == "USM") then
+            p_usm = 1.0_real64 / real(np_mode, real64)
+            r_l = r_aero_min(i_mode)
 
-               cell_particles(i,j,k)%particles(n)%weight = &
-                  cell_particles(i,j,k)%particles(m_max)%weight / 2_int64
-               cell_particles(i,j,k)%particles(m_max)%weight = &
-                  cell_particles(i,j,k)%particles(m_max)%weight - &
-                  cell_particles(i,j,k)%particles(n)%weight
+            do n = np_done + 1, np_done + np_mode - 1
+               nn = n - np_done
+               r_r = aerosol_percentile_radius(i_mode, p_usm * real(nn, real64), &
+                                                r_l, r_aero_max(i_mode))
+               r_aero = sqrt(r_l * r_r)
+               r_l = r_r
 
-               cell_particles(i,j,k)%particles(n)%mass_aero = &
-                  cell_particles(i,j,k)%particles(m_max)%mass_aero / &
-                  real(cell_particles(i,j,k)%particles(m_max)%weight + &
-                       cell_particles(i,j,k)%particles(n)%weight, real64) * &
-                  real(cell_particles(i,j,k)%particles(n)%weight, real64)
-               cell_particles(i,j,k)%particles(m_max)%mass_aero = &
-                  cell_particles(i,j,k)%particles(m_max)%mass_aero - &
-                  cell_particles(i,j,k)%particles(n)%mass_aero
+               call set_equal_mode_weight(i, j, k, n, i_mode, np_mode)
+               call set_particle_aerosol_state(i, j, k, n, i_mode, r_aero)
+            enddo
 
-               cell_particles(i,j,k)%particles(n)%aerosol_portions = &
-                  cell_particles(i,j,k)%particles(m_max)%aerosol_portions
-               cell_particles(i,j,k)%particles(n)%particle_type = &
-                  cell_particles(i,j,k)%particles(m_max)%particle_type
+            r_aero = sqrt(r_l * r_aero_max(i_mode))
+            n = np_done + np_mode
+            cell_particles(i,j,k)%particles(n)%weight = &
+               int(real(grid_state%dV(k), real64) * &
+                   sum(real(config_state%n_aero, real64)) / &
+                   (real(config_state%np_xy, real64) * &
+                    (1.0_real64 - real(config_state%frac_ice, real64))), int64)
+            call set_particle_aerosol_state(i, j, k, n, i_mode, r_aero)
+         else if (trim(config_state%init_aero) == "random") then
+            p_random = 1.0_real64 / real(n_inv_cdf, real64)
 
-               if (cell_particles(i,j,k)%particles(n)%weight == 0_int64 .or. &
-                   cell_particles(i,j,k)%particles(m_max)%weight == 0_int64) then
-                  error stop "LCM initialization of aerosols not possible"
-               endif
-            endif
-         enddo
+            do n = np_done + 1, np_done + np_mode
+               find_r: do nn = 1, 1000
+                  x_rand = real(randomu(seed_id), real64)
+                  r_aero = inverse_cdf_sample_radius(i_mode, x_rand, &
+                                                     r_aero_min(i_mode), &
+                                                     r_aero_max(i_mode), &
+                                                     p_random)
+                  n_dummy = equal_mode_weight(i_mode, k, np_mode)
+
+                  if (n_dummy < log_normal_pdf(real(config_state%n_aero(i_mode), real64), &
+                                               real(config_state%sigma_aero(i_mode), real64), &
+                                               real(config_state%rm_aero(i_mode), real64), &
+                                               r_aero)) then
+                     exit find_r
+                  endif
+               enddo find_r
+
+               cell_particles(i,j,k)%particles(n)%weight = int(n_dummy, int64)
+               call set_particle_aerosol_state(i, j, k, n, i_mode, r_aero)
+            enddo
+         else
+            error stop "LCM unknown aerosol initialization mode"
+         endif
 
          np_done = np_done + np_mode
       enddo
@@ -377,6 +420,153 @@ contains
          cell_particles(i,j,k)%particles(n)%qv = field_state%qv(i,j,k)
       enddo
    end subroutine lcm_init_particles
+
+   integer function particle_random_seed_id() result(seed_id)
+      integer :: subdomain_id
+
+      subdomain_id = grid_state%grid%subdomain_y_index * &
+                     grid_state%grid%n_subdomains_x + &
+                     grid_state%grid%subdomain_x_index
+      seed_id = subdomain_id + 1
+   end function particle_random_seed_id
+
+   subroutine set_equal_mode_weight(i, j, k, n, i_mode, np_mode)
+      integer, intent(in) :: i
+      integer, intent(in) :: j
+      integer, intent(in) :: k
+      integer, intent(in) :: n
+      integer, intent(in) :: i_mode
+      integer, intent(in) :: np_mode
+
+      cell_particles(i,j,k)%particles(n)%weight = &
+         int(equal_mode_weight(i_mode, k, np_mode), int64)
+   end subroutine set_equal_mode_weight
+
+   real(real64) function equal_mode_weight(i_mode, k, np_mode) result(weight)
+      integer, intent(in) :: i_mode
+      integer, intent(in) :: k
+      integer, intent(in) :: np_mode
+
+      if (trim(config_state%unit_aero) == "1/m3") then
+         weight = real(grid_state%dV(k), real64) * &
+                  real(config_state%n_aero(i_mode), real64) / &
+                  (real(np_mode, real64) * &
+                   (1.0_real64 - real(config_state%frac_ice, real64)))
+      else if (trim(config_state%unit_aero) == "1/kg") then
+         weight = real(grid_state%dV(k), real64) * field_state%density(k) * &
+                  real(config_state%n_aero(i_mode), real64) / &
+                  (real(np_mode, real64) * &
+                   (1.0_real64 - real(config_state%frac_ice, real64)))
+      else
+         error stop "LCM unknown aerosol initialization unit"
+      endif
+   end function equal_mode_weight
+
+   subroutine set_particle_aerosol_state(i, j, k, n, i_mode, r_aero)
+      integer, intent(in) :: i
+      integer, intent(in) :: j
+      integer, intent(in) :: k
+      integer, intent(in) :: n
+      integer, intent(in) :: i_mode
+      real(real64), intent(in) :: r_aero
+
+      cell_particles(i,j,k)%particles(n)%mass_aero = &
+         real(cell_particles(i,j,k)%particles(n)%weight, real64) * &
+         4.0_real64 / 3.0_real64 * pi * r_aero**3 * &
+         real(config_state%rho_aero(i_mode), real64)
+      cell_particles(i,j,k)%particles(n)%aerosol_portions = 0.0_real64
+      cell_particles(i,j,k)%particles(n)%aerosol_portions(i_mode) = 1.0_real64
+      cell_particles(i,j,k)%particles(n)%particle_type = liquid_particle_type
+      cell_particles(i,j,k)%particles(n)%in_surface_area = 0.0_real64
+      cell_particles(i,j,k)%particles(n)%freezing_temperature = 233.15_real64
+   end subroutine set_particle_aerosol_state
+
+   real(real64) function inverse_cdf_sample_radius(i_mode, x_rand, &
+                                                   r_aero_min, r_aero_max, &
+                                                   p_random) result(r_aero)
+      integer, intent(in) :: i_mode
+      real(real64), intent(in) :: x_rand
+      real(real64), intent(in) :: r_aero_min
+      real(real64), intent(in) :: r_aero_max
+      real(real64), intent(in) :: p_random
+
+      integer :: cdf_index
+      real(real64) :: left_percentile
+      real(real64) :: right_percentile
+      real(real64) :: r_l
+      real(real64) :: r_r
+
+      ! SAM-LCM stores inv_cdf(0:n_inv_cdf). Standalone computes the selected
+      ! entry on demand to preserve the same percentile rule without the table.
+      cdf_index = max(min(nint(x_rand * real(n_inv_cdf, real64)), n_inv_cdf), 0)
+
+      if (cdf_index == 0) then
+         r_aero = r_aero_min
+      else if (cdf_index == n_inv_cdf) then
+         r_aero = r_aero_max
+      else
+         right_percentile = p_random * real(cdf_index, real64)
+         if (cdf_index == 1) then
+            r_l = r_aero_min
+         else
+            left_percentile = p_random * real(cdf_index - 1, real64)
+            r_l = aerosol_percentile_radius(i_mode, left_percentile, &
+                                             r_aero_min, r_aero_max)
+         endif
+         r_r = aerosol_percentile_radius(i_mode, right_percentile, &
+                                          r_l, r_aero_max)
+         r_aero = sqrt(r_l * r_r)
+      endif
+   end function inverse_cdf_sample_radius
+
+   real(real64) function aerosol_percentile_radius(i_mode, percentile, &
+                                                   r_left, r_right) result(radius)
+      integer, intent(in) :: i_mode
+      real(real64), intent(in) :: percentile
+      real(real64), intent(in) :: r_left
+      real(real64), intent(in) :: r_right
+
+      real(real64) :: ak
+      real(real64) :: bk
+      real(real64) :: ck
+      real(real64) :: f_ak
+      real(real64) :: f_bk
+      real(real64) :: f_ck
+
+      ak = r_left
+      f_ak = log_normal_cdf(real(config_state%n_aero(i_mode), real64), &
+                            real(config_state%sigma_aero(i_mode), real64), &
+                            real(config_state%rm_aero(i_mode), real64), &
+                            ak) / real(config_state%n_aero(i_mode), real64) - &
+             percentile
+
+      bk = r_right
+      f_bk = log_normal_cdf(real(config_state%n_aero(i_mode), real64), &
+                            real(config_state%sigma_aero(i_mode), real64), &
+                            real(config_state%rm_aero(i_mode), real64), &
+                            bk) / real(config_state%n_aero(i_mode), real64) - &
+             percentile
+
+      do
+         ck = (ak * f_bk - bk * f_ak) / (f_bk - f_ak)
+         f_ck = log_normal_cdf(real(config_state%n_aero(i_mode), real64), &
+                               real(config_state%sigma_aero(i_mode), real64), &
+                               real(config_state%rm_aero(i_mode), real64), &
+                               ck) / real(config_state%n_aero(i_mode), real64) - &
+                percentile
+
+         if (f_ak * f_ck > 0.0_real64) then
+            ak = ck
+            f_ak = f_ck
+         else
+            bk = ck
+            f_bk = f_ck
+         endif
+
+         if (abs(f_ck) < 1.0e-12_real64) exit
+      enddo
+      radius = ck
+   end function aerosol_percentile_radius
 
    real(real64) function log_normal_pdf(n, s, m, x) result(pdf)
       real(real64), intent(in) :: n

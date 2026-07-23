@@ -112,6 +112,24 @@ contains
          config%sigma_aero = [1.4, 0.0, 0.0, 0.0]
          config%shares_aero = [1.0, 0.0, 0.0, 0.0]
          config%rho_aero = [2170.0, 0.0, 0.0, 0.0]
+      case ("usm_aerosol")
+         config%init_aero = "USM"
+         config%unit_aero = "1/kg"
+         config%switch_ice = .false.
+         config%n_aero = [100.0e6, 0.0, 0.0, 0.0]
+         config%rm_aero = [0.04e-6, 0.0, 0.0, 0.0]
+         config%sigma_aero = [1.4, 0.0, 0.0, 0.0]
+         config%shares_aero = [1.0, 0.0, 0.0, 0.0]
+         config%rho_aero = [2170.0, 0.0, 0.0, 0.0]
+      case ("random_aerosol")
+         config%init_aero = "random"
+         config%unit_aero = "1/kg"
+         config%switch_ice = .false.
+         config%n_aero = [100.0e6, 0.0, 0.0, 0.0]
+         config%rm_aero = [0.04e-6, 0.0, 0.0, 0.0]
+         config%sigma_aero = [1.4, 0.0, 0.0, 0.0]
+         config%shares_aero = [1.0, 0.0, 0.0, 0.0]
+         config%rho_aero = [2170.0, 0.0, 0.0, 0.0]
       case default
          error stop "unknown initial particle population test case"
       end select
@@ -153,18 +171,37 @@ contains
       real(real64) :: expected_aerosol_mass(np_xy)
       real(real64) :: expected_portions(4, np_xy)
 
-      call reference_bin_aerosol(k, expected_weight, expected_aerosol_mass, &
-                                 expected_portions)
+      select case (trim(config%init_aero))
+      case ("bin")
+         call reference_bin_aerosol(k, expected_weight, expected_aerosol_mass, &
+                                    expected_portions)
+         call assert_true(cell_particles(i,j,k)%particles(n)%weight == &
+                          expected_weight(n), "SAM-LCM bin aerosol weight")
+         call assert_near_relative(cell_particles(i,j,k)%particles(n)%mass_aero, &
+                                   expected_aerosol_mass(n), &
+                                   "SAM-LCM bin aerosol mass")
+      case ("USM")
+         call reference_usm_aerosol(k, expected_weight, expected_aerosol_mass, &
+                                    expected_portions)
+         call assert_true(cell_particles(i,j,k)%particles(n)%weight == &
+                          expected_weight(n), "SAM-LCM USM aerosol weight")
+         call assert_near_relative(cell_particles(i,j,k)%particles(n)%mass_aero, &
+                                   expected_aerosol_mass(n), &
+                                   "SAM-LCM USM aerosol mass")
+      case ("random")
+         call reference_random_aerosol(k, expected_weight, expected_portions)
+         call assert_true(cell_particles(i,j,k)%particles(n)%weight == &
+                          expected_weight(n), "SAM-LCM random aerosol weight")
+         call assert_true(cell_particles(i,j,k)%particles(n)%mass_aero > 0.0_real64, &
+                          "SAM-LCM random aerosol mass")
+      case default
+         error stop "unknown aerosol initialization mode"
+      end select
 
       call assert_true(cell_particles(i,j,k)%particles(n)%weight > 0_int64, &
                        "particle weight")
       call assert_true(cell_particles(i,j,k)%particles(n)%mass_aero > 0.0_real64, &
                        "particle aerosol mass")
-      call assert_true(cell_particles(i,j,k)%particles(n)%weight == &
-                       expected_weight(n), "SAM-LCM bin aerosol weight")
-      call assert_near_relative(cell_particles(i,j,k)%particles(n)%mass_aero, &
-                                expected_aerosol_mass(n), &
-                                "SAM-LCM bin aerosol mass")
       call assert_true(cell_particles(i,j,k)%particles(n)%particle_type == 1, &
                        "particle type")
       call assert_near(maxval(abs(cell_particles(i,j,k)%particles(n)%aerosol_portions - &
@@ -365,6 +402,197 @@ contains
          np_done = np_done + np_mode
       enddo
    end subroutine reference_bin_aerosol
+
+   subroutine reference_usm_aerosol(k, expected_weight, expected_aerosol_mass, &
+                                    expected_portions)
+      integer, intent(in) :: k
+      integer(int64), intent(out) :: expected_weight(np_xy)
+      real(real64), intent(out) :: expected_aerosol_mass(np_xy)
+      real(real64), intent(out) :: expected_portions(4, np_xy)
+
+      integer :: i_mode
+      integer :: n
+      integer :: nn
+      integer :: np_done
+      integer :: np_mode
+      real(real64) :: p_usm
+      real(real64) :: r_aero
+      real(real64) :: r_aero_max
+      real(real64) :: r_aero_min
+      real(real64) :: r_l
+      real(real64) :: r_r
+      real(real64) :: volume
+
+      expected_weight = 0_int64
+      expected_aerosol_mass = 0.0_real64
+      expected_portions = 0.0_real64
+      volume = 50.0_real64 * 50.0_real64 * dz(k)
+
+      np_done = 0
+      do i_mode = 1, 4
+         call aerosol_mode_particle_count(i_mode, np_mode)
+         if (np_mode == 0) cycle
+         call assert_true(config%n_aero(i_mode) /= 0.0, &
+                          "reference USM aerosol mode concentration")
+
+         call reference_aerosol_radius_bounds(i_mode, r_aero_min, r_aero_max)
+         p_usm = 1.0_real64 / real(np_mode, real64)
+         r_l = r_aero_min
+
+         do n = np_done + 1, np_done + np_mode - 1
+            nn = n - np_done
+            r_r = reference_percentile_radius(i_mode, p_usm * real(nn, real64), &
+                                              r_l, r_aero_max)
+            r_aero = sqrt(r_l * r_r)
+            r_l = r_r
+
+            if (trim(config%unit_aero) == "1/m3") then
+               expected_weight(n) = int(volume * real(config%n_aero(i_mode), real64) / &
+                                        real(np_mode, real64), int64)
+            else if (trim(config%unit_aero) == "1/kg") then
+               expected_weight(n) = int(volume * density(k) * &
+                                        real(config%n_aero(i_mode), real64) / &
+                                        real(np_mode, real64), int64)
+            else
+               error stop "unknown reference aerosol unit"
+            endif
+
+            expected_aerosol_mass(n) = real(expected_weight(n), real64) * &
+                                       4.0_real64 / 3.0_real64 * pi * &
+                                       r_aero**3 * &
+                                       real(config%rho_aero(i_mode), real64)
+            expected_portions(i_mode, n) = 1.0_real64
+         enddo
+
+         n = np_done + np_mode
+         r_aero = sqrt(r_l * r_aero_max)
+         expected_weight(n) = int(volume * sum(real(config%n_aero, real64)) / &
+                                  real(np_xy, real64), int64)
+         expected_aerosol_mass(n) = real(expected_weight(n), real64) * &
+                                    4.0_real64 / 3.0_real64 * pi * &
+                                    r_aero**3 * &
+                                    real(config%rho_aero(i_mode), real64)
+         expected_portions(i_mode, n) = 1.0_real64
+         np_done = np_done + np_mode
+      enddo
+   end subroutine reference_usm_aerosol
+
+   subroutine reference_random_aerosol(k, expected_weight, expected_portions)
+      integer, intent(in) :: k
+      integer(int64), intent(out) :: expected_weight(np_xy)
+      real(real64), intent(out) :: expected_portions(4, np_xy)
+
+      integer :: i_mode
+      integer :: n
+      integer :: np_done
+      integer :: np_mode
+      real(real64) :: volume
+
+      expected_weight = 0_int64
+      expected_portions = 0.0_real64
+      volume = 50.0_real64 * 50.0_real64 * dz(k)
+
+      np_done = 0
+      do i_mode = 1, 4
+         call aerosol_mode_particle_count(i_mode, np_mode)
+         if (np_mode == 0) cycle
+         call assert_true(config%n_aero(i_mode) /= 0.0, &
+                          "reference random aerosol mode concentration")
+
+         do n = np_done + 1, np_done + np_mode
+            if (trim(config%unit_aero) == "1/m3") then
+               expected_weight(n) = int(volume * real(config%n_aero(i_mode), real64) / &
+                                        real(np_mode, real64), int64)
+            else if (trim(config%unit_aero) == "1/kg") then
+               expected_weight(n) = int(volume * density(k) * &
+                                        real(config%n_aero(i_mode), real64) / &
+                                        real(np_mode, real64), int64)
+            else
+               error stop "unknown reference aerosol unit"
+            endif
+            expected_portions(i_mode, n) = 1.0_real64
+         enddo
+         np_done = np_done + np_mode
+      enddo
+   end subroutine reference_random_aerosol
+
+   subroutine aerosol_mode_particle_count(i_mode, np_mode)
+      integer, intent(in) :: i_mode
+      integer, intent(out) :: np_mode
+
+      integer :: n
+      integer :: nn
+
+      np_mode = floor(real(np_xy, real64) * &
+                      real(config%shares_aero(i_mode), real64) / &
+                      sum(real(config%shares_aero, real64)))
+      if (i_mode == 1) then
+         n = 0
+         do nn = 1, 4
+            n = n + floor(real(np_xy, real64) * &
+                          real(config%shares_aero(nn), real64) / &
+                          sum(real(config%shares_aero, real64)))
+         enddo
+         np_mode = np_mode + np_xy - n
+      endif
+   end subroutine aerosol_mode_particle_count
+
+   subroutine reference_aerosol_radius_bounds(i_mode, r_aero_min, r_aero_max)
+      integer, intent(in) :: i_mode
+      real(real64), intent(out) :: r_aero_min
+      real(real64), intent(out) :: r_aero_max
+
+      r_aero_min = reference_percentile_radius(i_mode, 5.0e-5_real64, &
+                                               1.0e-9_real64, 1.0e-5_real64)
+      r_aero_max = reference_percentile_radius(i_mode, 1.0_real64 - 5.0e-5_real64, &
+                                               r_aero_min, 1.0e-5_real64)
+   end subroutine reference_aerosol_radius_bounds
+
+   real(real64) function reference_percentile_radius(i_mode, percentile, &
+                                                     r_left, r_right) result(radius)
+      integer, intent(in) :: i_mode
+      real(real64), intent(in) :: percentile
+      real(real64), intent(in) :: r_left
+      real(real64), intent(in) :: r_right
+
+      real(real64) :: ak
+      real(real64) :: bk
+      real(real64) :: ck
+      real(real64) :: f_ak
+      real(real64) :: f_bk
+      real(real64) :: f_ck
+
+      ak = r_left
+      f_ak = reference_log_normal_cdf(real(config%n_aero(i_mode), real64), &
+                                      real(config%sigma_aero(i_mode), real64), &
+                                      real(config%rm_aero(i_mode), real64), ak) / &
+             real(config%n_aero(i_mode), real64) - percentile
+
+      bk = r_right
+      f_bk = reference_log_normal_cdf(real(config%n_aero(i_mode), real64), &
+                                      real(config%sigma_aero(i_mode), real64), &
+                                      real(config%rm_aero(i_mode), real64), bk) / &
+             real(config%n_aero(i_mode), real64) - percentile
+
+      do
+         ck = (ak * f_bk - bk * f_ak) / (f_bk - f_ak)
+         f_ck = reference_log_normal_cdf(real(config%n_aero(i_mode), real64), &
+                                         real(config%sigma_aero(i_mode), real64), &
+                                         real(config%rm_aero(i_mode), real64), ck) / &
+                real(config%n_aero(i_mode), real64) - percentile
+
+         if (f_ak * f_ck > 0.0_real64) then
+            ak = ck
+            f_ak = f_ck
+         else
+            bk = ck
+            f_bk = f_ck
+         endif
+
+         if (abs(f_ck) < 1.0e-12_real64) exit
+      enddo
+      radius = ck
+   end function reference_percentile_radius
 
    real(real64) function reference_log_normal_pdf(n, s, m, x) result(pdf)
       real(real64), intent(in) :: n
