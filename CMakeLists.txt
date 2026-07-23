@@ -104,6 +104,19 @@ set_target_properties(test_initial_particle_population
 )
 
 add_test(
-  NAME initial_particle_population
+  NAME initial_particle_population_one_mode
   COMMAND test_initial_particle_population
+          one_mode
+)
+
+add_test(
+  NAME initial_particle_population_multi_mode
+  COMMAND test_initial_particle_population
+          multi_mode
+)
+
+add_test(
+  NAME initial_particle_population_zero_weight_split
+  COMMAND test_initial_particle_population
+          zero_weight_split
 )

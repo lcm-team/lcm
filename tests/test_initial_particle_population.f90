@@ -13,7 +13,7 @@ program test_initial_particle_population
    integer, parameter :: ny_local = 2
    integer, parameter :: nz = 3
    integer, parameter :: nzl = 2
-   integer, parameter :: np_xy = 4
+   integer, parameter :: np_xy = 8
    real(real64), parameter :: pi = 3.141592653589793238462643383279502884_real64
    integer(int64), parameter :: expected_count = int(nx_local, int64) * &
                                                  int(ny_local, int64) * &
@@ -33,18 +33,13 @@ program test_initial_particle_population
    real(real64) :: dz(nz)
    real(real64) :: z_center(nz)
    real(real64) :: z_face(nz + 1)
+   character(len=32) :: case_name
+
+   call get_command_argument(1, case_name)
+   if (len_trim(case_name) == 0) case_name = "one_mode"
 
    call lcm_init_config(config)
-   config%np_xy = np_xy
-   config%nzl = nzl
-   config%init_aero = "bin"
-   config%unit_aero = "1/kg"
-   config%switch_ice = .false.
-   config%n_aero = [100.0e6, 0.0, 0.0, 0.0]
-   config%rm_aero = [0.04e-6, 0.0, 0.0, 0.0]
-   config%sigma_aero = [1.4, 0.0, 0.0, 0.0]
-   config%shares_aero = [1.0, 0.0, 0.0, 0.0]
-   config%rho_aero = [2170.0, 0.0, 0.0, 0.0]
+   call configure_case(trim(case_name), config)
    call lcm_set_config(config)
 
    dz = [100.0_real64, 100.0_real64, 100.0_real64]
@@ -79,6 +74,34 @@ program test_initial_particle_population
    call assert_particle_cells()
 
 contains
+
+   subroutine configure_case(case_name, config)
+      character(len=*), intent(in) :: case_name
+      type(lcm_config_t), intent(inout) :: config
+
+      config%np_xy = np_xy
+      config%nzl = nzl
+      config%init_aero = "bin"
+      config%unit_aero = "1/kg"
+      config%switch_ice = .false.
+      config%rm_aero = [0.04e-6, 0.08e-6, 0.12e-6, 0.0]
+      config%sigma_aero = [1.4, 1.6, 1.8, 0.0]
+      config%rho_aero = [2170.0, 1800.0, 1500.0, 0.0]
+
+      select case (case_name)
+      case ("one_mode")
+         config%n_aero = [100.0e6, 0.0, 0.0, 0.0]
+         config%shares_aero = [1.0, 0.0, 0.0, 0.0]
+      case ("multi_mode")
+         config%n_aero = [100.0e6, 50.0e6, 25.0e6, 0.0]
+         config%shares_aero = [1.0, 2.0, 1.0, 0.0]
+      case ("zero_weight_split")
+         config%n_aero = [0.1, 0.0, 0.0, 0.0]
+         config%shares_aero = [1.0, 0.0, 0.0, 0.0]
+      case default
+         error stop "unknown initial particle population test case"
+      end select
+   end subroutine configure_case
 
    subroutine assert_particle_cells()
       integer :: i, j, k, n
@@ -130,10 +153,6 @@ contains
                                 "SAM-LCM bin aerosol mass")
       call assert_true(cell_particles(i,j,k)%particles(n)%particle_type == 1, &
                        "particle type")
-      call assert_near(cell_particles(i,j,k)%particles(n)%aerosol_portions(1), &
-                       1.0_real64, "aerosol mode one portion")
-      call assert_near(sum(cell_particles(i,j,k)%particles(n)%aerosol_portions(2:4)), &
-                       0.0_real64, "inactive aerosol portions")
       call assert_near(maxval(abs(cell_particles(i,j,k)%particles(n)%aerosol_portions - &
                                   expected_portions(:, n))), &
                        0.0_real64, "SAM-LCM aerosol portions")
@@ -413,8 +432,8 @@ contains
       character(len=*), intent(in) :: label
       real(real64) :: scale
 
-      scale = max(1.0_real64, abs(expected))
-      if (abs(actual - expected) / scale > 1.0e-12_real64) then
+      scale = max(1.0e-30_real64, abs(expected))
+      if (abs(actual - expected) / scale > 1.0e-10_real64) then
          error stop "failed assertion: " // label
       endif
    end subroutine assert_near_relative
