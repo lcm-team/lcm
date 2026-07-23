@@ -131,7 +131,7 @@ module lcm_types
       real :: n_aero(4) = [100.0e6, 0.0, 0.0, 0.0]
       real :: rm_aero(4) = [0.04e-6, 0.0, 0.0, 0.0]
       real :: sigma_aero(4) = [1.4, 0.0, 0.0, 0.0]
-      real :: shares_aero(4) = [1.0, 1.0, 1.0, 1.0]
+      real :: shares_aero(4) = [1.0, 0.0, 0.0, 0.0]
       real :: n_ice(4) = [0.0, 0.0, 0.001e6, 0.0]
       real :: rm_in(4) = [1.0e-6, 0.2e-6, 1.0e-6, 0.0]
       real :: sigma_in(4) = [1.4, 1.4, 1.4, 0.0]

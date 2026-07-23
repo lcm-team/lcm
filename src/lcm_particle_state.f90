@@ -29,6 +29,7 @@ module lcm_particle_state
    integer(int64), protected, save :: n_id = 0_int64
    logical, protected, save :: particle_id_counter_is_initialized = .false.
 
+   real(real64), parameter :: pi = 3.141592653589793238462643383279502884_real64
    integer, parameter :: liquid_particle_type = 1
 
 contains
@@ -122,6 +123,8 @@ contains
                   call init_particle_properties(i, j, k, n, particle)
                   call lcm_add_particle(i, j, k, particle)
                enddo
+
+               call lcm_init_particles(i, j, k)
             enddo
          enddo
       enddo
@@ -173,6 +176,237 @@ contains
       particle%temperature = field_state%temperature(i,j,k)
       particle%qv = field_state%qv(i,j,k)
    end subroutine init_particle_properties
+
+   subroutine lcm_init_particles(i, j, k)
+      integer, intent(in) :: i
+      integer, intent(in) :: j
+      integer, intent(in) :: k
+
+      integer :: n, nn, m, m_max, i_mode, np_mode, np_done
+      real(real64) :: dlogr, r_l, r_r, r_aero, n_dummy
+      real(real64) :: f_ak, f_bk, f_ck, ak, bk, ck
+      real(real64) :: r_aero_min(4), r_aero_max(4)
+
+      if (config_state%np_xy == 0) return
+
+      if (config_state%switch_ice) then
+         error stop "LCM ice initialization must be ported from SAM-LCM micro_init_particles"
+      endif
+
+      if (trim(config_state%init_aero) /= "bin") then
+         error stop "LCM random and USM aerosol initialization must be ported from SAM-LCM micro_init_particles"
+      endif
+
+      np_done = 0
+      ! Initialize aerosols for every mode separately, preserving the
+      ! SAM-LCM micro_init_particles loop structure.
+      do i_mode = 1, 4
+         np_mode = floor(real(config_state%np_xy, real64) * &
+                         real(config_state%shares_aero(i_mode), real64) / &
+                         sum(real(config_state%shares_aero, real64)))
+         if (i_mode == 1) then
+            n = 0
+            do nn = 1, 4
+               n = n + floor(real(config_state%np_xy, real64) * &
+                             real(config_state%shares_aero(nn), real64) / &
+                             sum(real(config_state%shares_aero, real64)))
+            enddo
+            np_mode = np_mode + config_state%np_xy - n
+         endif
+
+         if (np_mode == 0) cycle
+         if (config_state%n_aero(i_mode) == 0.0) then
+            error stop "LCM aerosol mode with zero concentration received particles"
+         endif
+
+         r_aero_min(i_mode) = 1.0e-9_real64
+         r_aero_max(i_mode) = 1.0e-5_real64
+
+         ak = r_aero_min(i_mode)
+         f_ak = log_normal_cdf(real(config_state%n_aero(i_mode), real64), &
+                               real(config_state%sigma_aero(i_mode), real64), &
+                               real(config_state%rm_aero(i_mode), real64), &
+                               ak) / real(config_state%n_aero(i_mode), real64) - &
+                5.0e-5_real64
+
+         bk = r_aero_max(i_mode)
+         f_bk = log_normal_cdf(real(config_state%n_aero(i_mode), real64), &
+                               real(config_state%sigma_aero(i_mode), real64), &
+                               real(config_state%rm_aero(i_mode), real64), &
+                               bk) / real(config_state%n_aero(i_mode), real64) - &
+                5.0e-5_real64
+
+         do
+            ck = (ak * f_bk - bk * f_ak) / (f_bk - f_ak)
+            f_ck = log_normal_cdf(real(config_state%n_aero(i_mode), real64), &
+                                  real(config_state%sigma_aero(i_mode), real64), &
+                                  real(config_state%rm_aero(i_mode), real64), &
+                                  ck) / real(config_state%n_aero(i_mode), real64) - &
+                   5.0e-5_real64
+
+            if (f_ak * f_ck > 0.0_real64) then
+               ak = ck
+               f_ak = f_ck
+            else
+               bk = ck
+               f_bk = f_ck
+            endif
+
+            if (abs(f_ck) < 1.0e-12_real64) exit
+         enddo
+         r_aero_min(i_mode) = ck
+
+         ak = r_aero_min(i_mode)
+         f_ak = log_normal_cdf(real(config_state%n_aero(i_mode), real64), &
+                               real(config_state%sigma_aero(i_mode), real64), &
+                               real(config_state%rm_aero(i_mode), real64), &
+                               ak) / real(config_state%n_aero(i_mode), real64) - &
+                (1.0_real64 - 5.0e-5_real64)
+
+         bk = r_aero_max(i_mode)
+         f_bk = log_normal_cdf(real(config_state%n_aero(i_mode), real64), &
+                               real(config_state%sigma_aero(i_mode), real64), &
+                               real(config_state%rm_aero(i_mode), real64), &
+                               bk) / real(config_state%n_aero(i_mode), real64) - &
+                (1.0_real64 - 5.0e-5_real64)
+
+         do
+            ck = (ak * f_bk - bk * f_ak) / (f_bk - f_ak)
+            f_ck = log_normal_cdf(real(config_state%n_aero(i_mode), real64), &
+                                  real(config_state%sigma_aero(i_mode), real64), &
+                                  real(config_state%rm_aero(i_mode), real64), &
+                                  ck) / real(config_state%n_aero(i_mode), real64) - &
+                   (1.0_real64 - 5.0e-5_real64)
+
+            if (f_ak * f_ck > 0.0_real64) then
+               ak = ck
+               f_ak = f_ck
+            else
+               bk = ck
+               f_bk = f_ck
+            endif
+
+            if (abs(f_ck) < 1.0e-12_real64) exit
+         enddo
+         r_aero_max(i_mode) = ck
+
+         dlogr = (log(r_aero_max(i_mode)) - log(r_aero_min(i_mode))) / &
+                 real(np_mode, real64)
+
+         do n = np_done + 1, np_done + np_mode
+            nn = n - np_done
+
+            r_l = exp(log(r_aero_min(i_mode)) + real(nn - 1, real64) * dlogr)
+            r_r = exp(log(r_aero_min(i_mode)) + real(nn, real64) * dlogr)
+            r_aero = sqrt(r_l * r_r)
+
+            n_dummy = log_normal_pdf(real(config_state%n_aero(i_mode), real64), &
+                                     real(config_state%sigma_aero(i_mode), real64), &
+                                     real(config_state%rm_aero(i_mode), real64), &
+                                     r_aero)
+            if (trim(config_state%unit_aero) == "1/m3") then
+               cell_particles(i,j,k)%particles(n)%weight = &
+                  int(n_dummy * r_aero * dlogr * real(grid_state%dV(k), real64), int64)
+            else if (trim(config_state%unit_aero) == "1/kg") then
+               cell_particles(i,j,k)%particles(n)%weight = &
+                  int(n_dummy * r_aero * dlogr * real(grid_state%dV(k), real64) * &
+                      field_state%density(k), int64)
+            else
+               error stop "LCM unknown aerosol initialization unit"
+            endif
+
+            cell_particles(i,j,k)%particles(n)%mass_aero = &
+               real(cell_particles(i,j,k)%particles(n)%weight, real64) * &
+               4.0_real64 / 3.0_real64 * pi * r_aero**3 * &
+               real(config_state%rho_aero(i_mode), real64)
+
+            cell_particles(i,j,k)%particles(n)%aerosol_portions = 0.0_real64
+            cell_particles(i,j,k)%particles(n)%aerosol_portions(i_mode) = 1.0_real64
+            cell_particles(i,j,k)%particles(n)%particle_type = liquid_particle_type
+            cell_particles(i,j,k)%particles(n)%in_surface_area = 0.0_real64
+            cell_particles(i,j,k)%particles(n)%freezing_temperature = 233.15_real64
+         enddo
+
+         do n = np_done + 1, np_done + np_mode
+            if (cell_particles(i,j,k)%particles(n)%weight == 0_int64) then
+               m_max = n
+               do m = np_done + 1, np_done + np_mode
+                  if (cell_particles(i,j,k)%particles(m)%weight > &
+                      cell_particles(i,j,k)%particles(m_max)%weight .and. &
+                      cell_particles(i,j,k)%particles(m)%weight >= 2_int64) then
+                     m_max = m
+                  endif
+               enddo
+
+               if (cell_particles(i,j,k)%particles(m_max)%weight == 0_int64) then
+                  error stop "LCM initialization of aerosols not possible"
+               endif
+
+               cell_particles(i,j,k)%particles(n)%weight = &
+                  cell_particles(i,j,k)%particles(m_max)%weight / 2_int64
+               cell_particles(i,j,k)%particles(m_max)%weight = &
+                  cell_particles(i,j,k)%particles(m_max)%weight - &
+                  cell_particles(i,j,k)%particles(n)%weight
+
+               cell_particles(i,j,k)%particles(n)%mass_aero = &
+                  cell_particles(i,j,k)%particles(m_max)%mass_aero / &
+                  real(cell_particles(i,j,k)%particles(m_max)%weight + &
+                       cell_particles(i,j,k)%particles(n)%weight, real64) * &
+                  real(cell_particles(i,j,k)%particles(n)%weight, real64)
+               cell_particles(i,j,k)%particles(m_max)%mass_aero = &
+                  cell_particles(i,j,k)%particles(m_max)%mass_aero - &
+                  cell_particles(i,j,k)%particles(n)%mass_aero
+
+               cell_particles(i,j,k)%particles(n)%aerosol_portions = &
+                  cell_particles(i,j,k)%particles(m_max)%aerosol_portions
+               cell_particles(i,j,k)%particles(n)%particle_type = &
+                  cell_particles(i,j,k)%particles(m_max)%particle_type
+
+               if (cell_particles(i,j,k)%particles(n)%weight == 0_int64 .or. &
+                   cell_particles(i,j,k)%particles(m_max)%weight == 0_int64) then
+                  error stop "LCM initialization of aerosols not possible"
+               endif
+            endif
+         enddo
+
+         np_done = np_done + np_mode
+      enddo
+
+      do n = 1, cell_particles(i,j,k)%count
+         cell_particles(i,j,k)%particles(n)%temperature = field_state%temperature(i,j,k)
+         cell_particles(i,j,k)%particles(n)%qv = field_state%qv(i,j,k)
+      enddo
+   end subroutine lcm_init_particles
+
+   real(real64) function log_normal_pdf(n, s, m, x) result(pdf)
+      real(real64), intent(in) :: n
+      real(real64), intent(in) :: s
+      real(real64), intent(in) :: m
+      real(real64), intent(in) :: x
+
+      pdf = 0.0_real64
+      if (n /= 0.0_real64 .and. s /= 0.0_real64 .and. &
+          m /= 0.0_real64 .and. x > 0.0_real64) then
+         pdf = n / (sqrt(2.0_real64 * pi) * log(s) * x) * &
+               exp(-1.0_real64 * log(x / m)**2 / &
+                   (2.0_real64 * log(s)**2))
+      endif
+   end function log_normal_pdf
+
+   real(real64) function log_normal_cdf(n, s, m, x) result(cdf)
+      real(real64), intent(in) :: n
+      real(real64), intent(in) :: s
+      real(real64), intent(in) :: m
+      real(real64), intent(in) :: x
+
+      cdf = 0.0_real64
+      if (n /= 0.0_real64 .and. s /= 0.0_real64 .and. &
+          m /= 0.0_real64 .and. x > 0.0_real64) then
+         cdf = n * 0.5_real64 * &
+               (1.0_real64 + erf(log(x / m) / &
+                (sqrt(2.0_real64) * log(s))))
+      endif
+   end function log_normal_cdf
 
    subroutine require_particle_cells_allocated()
       if (.not. allocated(cell_particles)) then

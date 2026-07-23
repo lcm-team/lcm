@@ -151,18 +151,19 @@ do k = 1, min(config_state%nzl, grid_state%grid%nz)
          do n = 1, config_state%np_xy
             particle = lcm_particle_t()
             particle%id = lcm_next_particle_id()
-            call init_particle_properties(i, j, k, particle)
+            call init_particle_properties(i, j, k, n, particle)
             call lcm_add_particle(i, j, k, particle)
          enddo
+         call lcm_init_particles(i, j, k)
       enddo
    enddo
 enddo
 ```
 
 This creates the same number of initial computational particles as the
-SAM-LCM compatibility baseline and initializes the direct physical-property
-baseline for each particle. It does not yet port aerosol, ice, equilibrium
-thermodynamic adjustment, or user-hook initialization.
+SAM-LCM compatibility baseline, initializes the placement-time particle
+metadata, and then calls `lcm_init_particles(i,j,k)` for the first
+microphysical initialization slice.
 
 ## Initial Physical Properties
 
@@ -185,7 +186,13 @@ first-slice mapping from SAM-LCM `micro_place_particle` and
 
 The SAM-LCM multiplicity field `ivar(iA)` is not initialized in this first
 physical-property slice because it is produced by the aerosol distribution
-logic. It belongs with the dedicated aerosol-initialization task.
+logic. In the current implementation, `lcm_init_particles(i,j,k)` initializes
+that field for the SAM-LCM-compatible `init_aero='bin'` path.
+
+SAM-LCM preprocesses aerosol mode configuration before this routine, including
+zeroing shares for modes with zero concentration. Standalone LCM keeps the
+default in that preprocessed form and stops if a zero-concentration mode is
+assigned particles.
 
 ## Current Standalone Particle API
 
@@ -244,15 +251,15 @@ ice-nucleating particle assignment, and a local thermodynamic adjustment.
 | --- | --- |
 | Return immediately when `np_xy == 0`. | Preserve this guard in the standalone fresh-population path. |
 | Split `np_xy` particles across four aerosol modes using `shares_aero`. | Preserve as the compatibility baseline, but source values from `lcm_config_t` rather than `micro_vars`. |
-| Compute aerosol radius bounds for each mode from the lognormal CDF. | Move into a standalone aerosol-initialization helper. This is scientific behavior and should not be hidden inside placement. |
-| Support `init_aero='bin'`. | Preserve, because it defines deterministic aerosol bins and multiplicities. |
+| Compute aerosol radius bounds for each mode from the lognormal CDF. | Ported inside `lcm_init_particles(i,j,k)`, preserving the SAM-LCM regula-falsi sequence. |
+| Support `init_aero='bin'`. | Ported for the liquid-only path, because it defines deterministic aerosol bins and multiplicities. |
 | Support `init_aero='random'`. | Preserve, using standalone random-number access rather than direct SAM-LCM globals. |
 | Support `init_aero='USM'`. | Preserve as a named aerosol initialization mode. |
 | Interpret `unit_aero` as either `1/m3` or `1/kg`. | Preserve and validate through configuration. The conversion needs grid-cell volume and, for `1/kg`, air density. |
-| Initialize particle multiplicity `ivar(iA)`. | Map to `lcm_particle_t%weight`. |
-| Initialize aerosol mass `var(iN)`. | Map to `lcm_particle_t%mass_aero`. |
-| Store aerosol composition portions in `var(iAero_portions)`. | Map to `lcm_particle_t%aerosol_portions`. |
-| Reassign zero-multiplicity aerosol bins by splitting the most populated bin. | Preserve in the aerosol helper to avoid zero-weight computational particles. |
+| Initialize particle multiplicity `ivar(iA)`. | Mapped to `lcm_particle_t%weight` for `init_aero='bin'`. |
+| Initialize aerosol mass `var(iN)`. | Mapped to `lcm_particle_t%mass_aero` for `init_aero='bin'`. |
+| Store aerosol composition portions in `var(iAero_portions)`. | Mapped to `lcm_particle_t%aerosol_portions` for `init_aero='bin'`. |
+| Reassign zero-multiplicity aerosol bins by splitting the most populated bin. | Ported for `init_aero='bin'`. |
 | Assign default liquid particle type `ivar(iTYPE)=1`. | Map to `lcm_particle_t%particle_type`. |
 | When ice is enabled, randomly convert a fraction of particles to IN-containing type `2`. | Preserve under an ice-enabled config path. This depends on `frac_ice`, IN concentrations, and random sampling. |
 | For IN-containing particles, sample IN species and IN size, store IN surface area, and compute freezing temperature `iTFZ`. | Map IN surface area to `lcm_particle_t%in_surface_area` and freezing temperature to `freezing_temperature`. |
