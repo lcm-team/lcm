@@ -5,6 +5,8 @@ project(lcm LANGUAGES Fortran)
 option(LCM_BUILD_COMPAT_STUBS "Build LCM with temporary SAM compatibility stubs" ON)
 option(LCM_BUILD_ALL_SAM_SOURCES "Attempt to build all SAM-derived LCM source files" OFF)
 
+enable_testing()
+
 find_package(MPI REQUIRED COMPONENTS Fortran)
 
 set(CMAKE_Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/mod")
@@ -85,4 +87,23 @@ target_include_directories(lcm
 set_target_properties(lcm lcm_sam_compat
   PROPERTIES
     Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_executable(test_initial_particle_population
+  tests/test_initial_particle_population.f90
+)
+
+target_link_libraries(test_initial_particle_population
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_initial_particle_population
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME initial_particle_population
+  COMMAND test_initial_particle_population
 )
