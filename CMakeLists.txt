@@ -104,6 +104,12 @@ set_target_properties(test_initial_particle_population
 )
 
 add_test(
+  NAME initial_particle_population_default_aerosol
+  COMMAND test_initial_particle_population
+          default_aerosol
+)
+
+add_test(
   NAME initial_particle_population_one_mode
   COMMAND test_initial_particle_population
           one_mode

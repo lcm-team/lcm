@@ -81,23 +81,37 @@ contains
 
       config%np_xy = np_xy
       config%nzl = nzl
-      config%init_aero = "bin"
-      config%unit_aero = "1/kg"
-      config%switch_ice = .false.
-      config%rm_aero = [0.04e-6, 0.08e-6, 0.12e-6, 0.0]
-      config%sigma_aero = [1.4, 1.6, 1.8, 0.0]
-      config%rho_aero = [2170.0, 1800.0, 1500.0, 0.0]
 
       select case (case_name)
+      case ("default_aerosol")
+         continue
       case ("one_mode")
+         config%init_aero = "bin"
+         config%unit_aero = "1/kg"
+         config%switch_ice = .false.
          config%n_aero = [100.0e6, 0.0, 0.0, 0.0]
+         config%rm_aero = [0.04e-6, 0.0, 0.0, 0.0]
+         config%sigma_aero = [1.4, 0.0, 0.0, 0.0]
          config%shares_aero = [1.0, 0.0, 0.0, 0.0]
+         config%rho_aero = [2170.0, 0.0, 0.0, 0.0]
       case ("multi_mode")
+         config%init_aero = "bin"
+         config%unit_aero = "1/kg"
+         config%switch_ice = .false.
          config%n_aero = [100.0e6, 50.0e6, 25.0e6, 0.0]
+         config%rm_aero = [0.04e-6, 0.08e-6, 0.12e-6, 0.0]
+         config%sigma_aero = [1.4, 1.6, 1.8, 0.0]
          config%shares_aero = [1.0, 2.0, 1.0, 0.0]
+         config%rho_aero = [2170.0, 1800.0, 1500.0, 0.0]
       case ("zero_weight_split")
+         config%init_aero = "bin"
+         config%unit_aero = "1/kg"
+         config%switch_ice = .false.
          config%n_aero = [0.1, 0.0, 0.0, 0.0]
+         config%rm_aero = [0.04e-6, 0.0, 0.0, 0.0]
+         config%sigma_aero = [1.4, 0.0, 0.0, 0.0]
          config%shares_aero = [1.0, 0.0, 0.0, 0.0]
+         config%rho_aero = [2170.0, 0.0, 0.0, 0.0]
       case default
          error stop "unknown initial particle population test case"
       end select
