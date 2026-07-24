@@ -472,7 +472,6 @@ contains
                                     4.0_real64 / 3.0_real64 * pi * &
                                     r_aero**3 * &
                                     real(config%rho_aero(i_mode), real64)
-         expected_portions(i_mode, n) = 1.0_real64
          np_done = np_done + np_mode
       enddo
    end subroutine reference_usm_aerosol

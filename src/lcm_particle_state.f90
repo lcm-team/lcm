@@ -384,7 +384,8 @@ contains
                    sum(real(config_state%n_aero, real64)) / &
                    (real(config_state%np_xy, real64) * &
                     (1.0_real64 - real(config_state%frac_ice, real64))), int64)
-            call set_particle_aerosol_state(i, j, k, n, i_mode, r_aero)
+            call set_particle_aerosol_state(i, j, k, n, i_mode, r_aero, &
+                                            set_aerosol_portions=.false.)
          else if (trim(config_state%init_aero) == "random") then
             p_random = 1.0_real64 / real(n_inv_cdf, real64)
 
@@ -462,20 +463,29 @@ contains
       endif
    end function equal_mode_weight
 
-   subroutine set_particle_aerosol_state(i, j, k, n, i_mode, r_aero)
+   subroutine set_particle_aerosol_state(i, j, k, n, i_mode, r_aero, &
+                                         set_aerosol_portions)
       integer, intent(in) :: i
       integer, intent(in) :: j
       integer, intent(in) :: k
       integer, intent(in) :: n
       integer, intent(in) :: i_mode
       real(real64), intent(in) :: r_aero
+      logical, intent(in), optional :: set_aerosol_portions
+      logical :: should_set_aerosol_portions
 
       cell_particles(i,j,k)%particles(n)%mass_aero = &
          real(cell_particles(i,j,k)%particles(n)%weight, real64) * &
          4.0_real64 / 3.0_real64 * pi * r_aero**3 * &
          real(config_state%rho_aero(i_mode), real64)
-      cell_particles(i,j,k)%particles(n)%aerosol_portions = 0.0_real64
-      cell_particles(i,j,k)%particles(n)%aerosol_portions(i_mode) = 1.0_real64
+      should_set_aerosol_portions = .true.
+      if (present(set_aerosol_portions)) then
+         should_set_aerosol_portions = set_aerosol_portions
+      endif
+      if (should_set_aerosol_portions) then
+         cell_particles(i,j,k)%particles(n)%aerosol_portions = 0.0_real64
+         cell_particles(i,j,k)%particles(n)%aerosol_portions(i_mode) = 1.0_real64
+      endif
       cell_particles(i,j,k)%particles(n)%particle_type = liquid_particle_type
       cell_particles(i,j,k)%particles(n)%in_surface_area = 0.0_real64
       cell_particles(i,j,k)%particles(n)%freezing_temperature = 233.15_real64
@@ -497,7 +507,7 @@ contains
       real(real64) :: r_r
 
       ! SAM-LCM stores inv_cdf(0:n_inv_cdf). Standalone computes the selected
-      ! entry on demand to preserve the same percentile rule without the table.
+      ! entry on demand to avoid allocating the full lookup table during tests.
       cdf_index = max(min(nint(x_rand * real(n_inv_cdf, real64)), n_inv_cdf), 0)
 
       if (cdf_index == 0) then
