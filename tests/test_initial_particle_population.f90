@@ -246,10 +246,17 @@ contains
       call assert_near(maxval(abs(cell_particles(i,j,k)%particles(n)%aerosol_portions - &
                                   expected_portions(:, n))), &
                        0.0_real64, "SAM-LCM aerosol portions")
-      call assert_near(cell_particles(i,j,k)%particles(n)%temperature, &
-                       temperature(i,j,k), "particle temperature")
-      call assert_near(cell_particles(i,j,k)%particles(n)%qv, qv(i,j,k), &
-                       "particle qv")
+      call assert_true(cell_particles(i,j,k)%particles(n)%mass_water >= &
+                       0.0_real64, "equilibrium liquid mass")
+      call assert_true(cell_particles(i,j,k)%particles(n)%temperature >= &
+                       temperature(i,j,k), "equilibrium particle temperature")
+      call assert_true(cell_particles(i,j,k)%particles(n)%qv <= qv(i,j,k), &
+                       "equilibrium particle qv")
+      call assert_true(cell_particles(i,j,k)%particles(n)%eta == &
+                       cell_particles(i,j,k)%particles(n)%eta, &
+                       "equilibrium particle eta")
+      call assert_true(cell_particles(i,j,k)%particles(n)%n_monomer == 1_int64, &
+                       "equilibrium particle monomer count")
    end subroutine assert_particle
 
    subroutine reference_bin_aerosol(k, expected_weight, expected_aerosol_mass, &

@@ -32,6 +32,12 @@ module lcm_particle_state
    logical, protected, save :: particle_id_counter_is_initialized = .false.
 
    real(real64), parameter :: pi = 3.141592653589793238462643383279502884_real64
+   real(real64), parameter :: epsv = 0.622_real64
+   real(real64), parameter :: fac_cond = 2.5e6_real64 / 1004.0_real64
+   real(real64), parameter :: molecular_weight_water = 18.0_real64
+   real(real64), parameter :: rho_liq = 1000.0_real64
+   real(real64), parameter :: rv = 461.5_real64
+   real(real64), parameter :: surface_tension_water = 0.0728_real64
    integer, parameter :: liquid_particle_type = 1
    integer, parameter :: ice_nucleating_particle_type = 2
    integer, parameter :: n_inv_cdf = 50000000
@@ -438,10 +444,7 @@ contains
          np_done = np_done + np_mode
       enddo
 
-      do n = 1, cell_particles(i,j,k)%count
-         cell_particles(i,j,k)%particles(n)%temperature = field_state%temperature(i,j,k)
-         cell_particles(i,j,k)%particles(n)%qv = field_state%qv(i,j,k)
-      enddo
+      call initialize_equilibrium_liquid_state(i, j, k)
 
       call lcm_user_init_particles(i, j, k, cell_particles(i,j,k))
    end subroutine lcm_init_particles
@@ -514,6 +517,173 @@ contains
       cell_particles(i,j,k)%particles(n)%in_surface_area = 0.0_real64
       cell_particles(i,j,k)%particles(n)%freezing_temperature = 233.15_real64
    end subroutine set_particle_aerosol_state
+
+   subroutine initialize_equilibrium_liquid_state(i, j, k)
+      integer, intent(in) :: i
+      integer, intent(in) :: j
+      integer, intent(in) :: k
+
+      integer :: n
+      integer :: nn
+      real(real64) :: cell_qv
+      real(real64) :: cell_temperature
+      real(real64) :: dql
+      real(real64) :: qsat
+      real(real64) :: r_aero
+      real(real64) :: ss_gb
+
+      cell_qv = field_state%qv(i,j,k)
+      cell_temperature = field_state%temperature(i,j,k)
+
+      ! Port of SAM-LCM micro_init_particles' five-iteration equilibrium
+      ! initialization. The adjusted cell qv/T are local here because attached
+      ! host fields are read-only in standalone LCM initialization.
+      do nn = 1, 5
+         qsat = qsatw_liquid(cell_temperature, field_state%pressure(k))
+         ss_gb = (cell_qv - qsat) / qsat
+         ss_gb = min(ss_gb, -0.01_real64)
+
+         dql = 0.0_real64
+         do n = 1, cell_particles(i,j,k)%count
+            r_aero = particle_aerosol_radius(i, j, k, n)
+            dql = dql - cell_particles(i,j,k)%particles(n)%mass_water
+            cell_particles(i,j,k)%particles(n)%mass_water = &
+               real(cell_particles(i,j,k)%particles(n)%weight, real64) * &
+               4.0_real64 / 3.0_real64 * pi * rho_liq * &
+               max(equilibrium_radius(ss_gb, cell_temperature, i, j, k, n), &
+                   r_aero)**3
+            dql = dql + cell_particles(i,j,k)%particles(n)%mass_water
+         enddo
+
+         dql = dql / (real(grid_state%dV(k), real64) * field_state%density(k))
+         cell_qv = cell_qv - dql
+         cell_temperature = cell_temperature + fac_cond * dql
+      enddo
+
+      do n = 1, cell_particles(i,j,k)%count
+         cell_particles(i,j,k)%particles(n)%temperature = cell_temperature
+         cell_particles(i,j,k)%particles(n)%qv = cell_qv
+         cell_particles(i,j,k)%particles(n)%eta = &
+            cell_qv - qsatw_liquid(cell_temperature, field_state%pressure(k))
+         cell_particles(i,j,k)%particles(n)%n_monomer = 1_int64
+      enddo
+   end subroutine initialize_equilibrium_liquid_state
+
+   real(real64) function particle_aerosol_radius(i, j, k, n) result(r_aero)
+      integer, intent(in) :: i
+      integer, intent(in) :: j
+      integer, intent(in) :: k
+      integer, intent(in) :: n
+
+      r_aero = (particle_aerosol_volume(i, j, k, n) * &
+                3.0_real64 / 4.0_real64 / pi)**(1.0_real64 / 3.0_real64)
+   end function particle_aerosol_radius
+
+   real(real64) function particle_aerosol_volume(i, j, k, n) result(volume)
+      integer, intent(in) :: i
+      integer, intent(in) :: j
+      integer, intent(in) :: k
+      integer, intent(in) :: n
+
+      integer :: i_mode
+      real(real64) :: weight
+
+      volume = 0.0_real64
+      weight = real(cell_particles(i,j,k)%particles(n)%weight, real64)
+      if (weight <= 0.0_real64) return
+
+      do i_mode = 1, 4
+         if (config_state%rho_aero(i_mode) > 0.0 .and. &
+             cell_particles(i,j,k)%particles(n)%aerosol_portions(i_mode) /= &
+             0.0_real64) then
+            volume = volume + &
+               cell_particles(i,j,k)%particles(n)%aerosol_portions(i_mode) * &
+               cell_particles(i,j,k)%particles(n)%mass_aero / &
+               real(config_state%rho_aero(i_mode), real64) / weight
+         endif
+      enddo
+   end function particle_aerosol_volume
+
+   real(real64) function equilibrium_radius(ss_gb, temperature, i, j, k, n) &
+      result(radius)
+      real(real64), intent(in) :: ss_gb
+      real(real64), intent(in) :: temperature
+      integer, intent(in) :: i
+      integer, intent(in) :: j
+      integer, intent(in) :: k
+      integer, intent(in) :: n
+
+      real(real64) :: afactor
+      real(real64) :: bfactor
+      real(real64) :: radius_old
+
+      afactor = 2.0_real64 * surface_tension_water / &
+                (rho_liq * rv * temperature)
+      bfactor = particle_bfactor(i, j, k, n)
+
+      radius_old = 1.0_real64
+      radius = 1.0e-6_real64
+      do while (abs((radius - radius_old) / radius_old) > 1.0e-20_real64)
+         radius_old = radius
+         radius = (bfactor / (afactor / radius - ss_gb))**(1.0_real64 / 3.0_real64)
+      enddo
+   end function equilibrium_radius
+
+   real(real64) function particle_bfactor(i, j, k, n) result(bfactor)
+      integer, intent(in) :: i
+      integer, intent(in) :: j
+      integer, intent(in) :: k
+      integer, intent(in) :: n
+
+      integer :: i_mode
+      real(real64) :: weight
+
+      bfactor = 0.0_real64
+      weight = real(cell_particles(i,j,k)%particles(n)%weight, real64)
+      if (weight <= 0.0_real64) return
+
+      if (only_one_aerosol_mode()) then
+         bfactor = bfactor_coefficient(1)
+      else
+         do i_mode = 1, 4
+            if (config_state%molecular_weight_aero(i_mode) > 0.0 .and. &
+                cell_particles(i,j,k)%particles(n)%aerosol_portions(i_mode) /= &
+                0.0_real64) then
+               bfactor = bfactor + bfactor_coefficient(i_mode) * &
+                  cell_particles(i,j,k)%particles(n)%aerosol_portions(i_mode)
+            endif
+         enddo
+      endif
+
+      bfactor = bfactor * &
+                cell_particles(i,j,k)%particles(n)%mass_aero / weight
+   end function particle_bfactor
+
+   logical function only_one_aerosol_mode() result(has_one_mode)
+      has_one_mode = config_state%shares_aero(1) > 0.0 .and. &
+                     all(config_state%shares_aero(2:4) == 0.0)
+   end function only_one_aerosol_mode
+
+   real(real64) function bfactor_coefficient(i_mode) result(coefficient)
+      integer, intent(in) :: i_mode
+
+      coefficient = &
+         real(config_state%vanthoff_aero(i_mode), real64) / &
+         real(config_state%molecular_weight_aero(i_mode), real64) * &
+         molecular_weight_water / (rho_liq * 4.0_real64 * pi / 3.0_real64)
+   end function bfactor_coefficient
+
+   real(real64) function qsatw_liquid(temperature, pressure) result(qsatw)
+      real(real64), intent(in) :: temperature
+      real(real64), intent(in) :: pressure
+
+      real(real64) :: e
+
+      e = 610.94_real64 * &
+          exp(17.625_real64 * (temperature - 273.15_real64) / &
+              max(temperature - 30.11_real64, 1.0_real64))
+      qsatw = epsv * e / max(pressure - e, 1.0_real64)
+   end function qsatw_liquid
 
    subroutine ice_type_probabilities(in_typeprobs)
       real(real64), intent(out) :: in_typeprobs(4)

@@ -31,6 +31,11 @@ program test_sam_particle_population_comparison
    real(real64) :: sam_aerosol_portions(4, np_xy)
    real(real64) :: sam_in_surface_area(4, np_xy)
    real(real64) :: sam_freezing_temperature(np_xy)
+   real(real64) :: sam_mass_water(np_xy)
+   real(real64) :: sam_temperature(np_xy)
+   real(real64) :: sam_qv(np_xy)
+   real(real64) :: sam_eta(np_xy)
+   integer(int64) :: sam_n_monomer(np_xy)
    integer :: sam_particle_type(np_xy)
    character(len=1024) :: helper_path
    character(len=1024) :: output_path
@@ -60,7 +65,9 @@ program test_sam_particle_population_comparison
 
    call read_sam_reference(trim(output_path), sam_weight, sam_mass_aero, &
                            sam_aerosol_portions, sam_particle_type,     &
-                           sam_in_surface_area, sam_freezing_temperature)
+                           sam_in_surface_area, sam_freezing_temperature, &
+                           sam_mass_water, sam_temperature, sam_qv,       &
+                           sam_eta, sam_n_monomer)
    call initialize_standalone_lcm_case(trim(aerosol_mode), trim(ice_mode))
 
    call assert_true(cell_particles(1,1,1)%count == np_xy, &
@@ -68,7 +75,9 @@ program test_sam_particle_population_comparison
    call assert_matches_sam_reference(sam_weight, sam_mass_aero, &
                                      sam_aerosol_portions, sam_particle_type, &
                                      sam_in_surface_area,                    &
-                                     sam_freezing_temperature)
+                                     sam_freezing_temperature, sam_mass_water, &
+                                     sam_temperature, sam_qv, sam_eta,        &
+                                     sam_n_monomer)
 
 contains
 
@@ -125,7 +134,9 @@ contains
 
    subroutine read_sam_reference(path, weight, mass_aero, aerosol_portions, &
                                  particle_type, in_surface_area,            &
-                                 freezing_temperature)
+                                 freezing_temperature, mass_water,           &
+                                 particle_temperature, particle_qv, eta,     &
+                                 n_monomer)
       character(len=*), intent(in) :: path
       integer(int64), intent(out) :: weight(np_xy)
       real(real64), intent(out) :: mass_aero(np_xy)
@@ -133,6 +144,11 @@ contains
       integer, intent(out) :: particle_type(np_xy)
       real(real64), intent(out) :: in_surface_area(4, np_xy)
       real(real64), intent(out) :: freezing_temperature(np_xy)
+      real(real64), intent(out) :: mass_water(np_xy)
+      real(real64), intent(out) :: particle_temperature(np_xy)
+      real(real64), intent(out) :: particle_qv(np_xy)
+      real(real64), intent(out) :: eta(np_xy)
+      integer(int64), intent(out) :: n_monomer(np_xy)
 
       integer :: i
       integer :: record_index
@@ -145,7 +161,9 @@ contains
                             aerosol_portions(3,i), aerosol_portions(4,i), &
                             particle_type(i), in_surface_area(1,i),       &
                             in_surface_area(2,i), in_surface_area(3,i),   &
-                            in_surface_area(4,i), freezing_temperature(i)
+                            in_surface_area(4,i), freezing_temperature(i), &
+                            mass_water(i), particle_temperature(i),        &
+                            particle_qv(i), eta(i), n_monomer(i)
          call assert_true(record_index == i, "SAM reference record index")
       enddo
       close(input_unit)
@@ -153,13 +171,20 @@ contains
 
    subroutine assert_matches_sam_reference(weight, mass_aero, aerosol_portions, &
                                            particle_type, in_surface_area,   &
-                                           freezing_temperature)
+                                           freezing_temperature, mass_water, &
+                                           particle_temperature, particle_qv, &
+                                           eta, n_monomer)
       integer(int64), intent(in) :: weight(np_xy)
       real(real64), intent(in) :: mass_aero(np_xy)
       real(real64), intent(in) :: aerosol_portions(4, np_xy)
       integer, intent(in) :: particle_type(np_xy)
       real(real64), intent(in) :: in_surface_area(4, np_xy)
       real(real64), intent(in) :: freezing_temperature(np_xy)
+      real(real64), intent(in) :: mass_water(np_xy)
+      real(real64), intent(in) :: particle_temperature(np_xy)
+      real(real64), intent(in) :: particle_qv(np_xy)
+      real(real64), intent(in) :: eta(np_xy)
+      integer(int64), intent(in) :: n_monomer(np_xy)
 
       integer :: n
 
@@ -206,6 +231,22 @@ contains
                freezing_temperature(n), 1.0e-10_real64, &
                "SAM freezing temperature")
          endif
+         call assert_near_relative( &
+            cell_particles(1,1,1)%particles(n)%mass_water, &
+            mass_water(n), 1.0e-5_real64, "SAM equilibrium liquid mass")
+         call assert_near_relative( &
+            cell_particles(1,1,1)%particles(n)%temperature, &
+            particle_temperature(n), 1.0e-5_real64, &
+            "SAM equilibrium particle temperature")
+         call assert_near_relative( &
+            cell_particles(1,1,1)%particles(n)%qv, &
+            particle_qv(n), 1.0e-5_real64, &
+            "SAM equilibrium particle qv")
+         call assert_near_relative( &
+            cell_particles(1,1,1)%particles(n)%eta, &
+            eta(n), 1.0e-5_real64, "SAM equilibrium particle eta")
+         call assert_true(cell_particles(1,1,1)%particles(n)%n_monomer == &
+                          n_monomer(n), "SAM equilibrium monomer count")
       enddo
    end subroutine assert_matches_sam_reference
 

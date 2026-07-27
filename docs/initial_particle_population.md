@@ -174,8 +174,8 @@ first-slice mapping from SAM-LCM `micro_place_particle` and
 | SAM-LCM field | Standalone field | First baseline |
 | --- | --- | --- |
 | `ivar(iTYPE)` | `particle_type` | Set to `1`, the SAM-LCM default liquid particle type. |
-| `var(iM)` | `mass_water` | Left at the `lcm_particle_t` default until the aerosol/equilibrium initializer is ported. |
-| `var(iN)` | `mass_aero` | Left at the `lcm_particle_t` default until the aerosol distribution initializer is ported. |
+| `var(iM)` | `mass_water` | Set by the five-iteration equilibrium liquid initialization after aerosol mass is known. |
+| `var(iN)` | `mass_aero` | Set by the aerosol distribution initializer. |
 | `var(iWsedi)` | `w_sedi` | Set explicitly to zero, matching `micro_place_particle`. |
 | `var(iT)` | `temperature` | Read from the attached host temperature field at `(i,j,k)`. |
 | `var(iq)` | `qv` | Read from the attached host water-vapor field at `(i,j,k)`. |
@@ -304,8 +304,11 @@ These differences are intentional and should remain visible during review:
 - Ice-enabled IN assignment is ported for the initial particle population.
   Later ice microphysical evolution remains outside this slice.
 - The five-iteration equilibrium liquid mass, vapor, and temperature adjustment
-  is not ported in this slice. That step mutates SAM-LCM working atmospheric
-  fields and needs a standalone decision about one-way vs two-way coupling.
+  is ported for particle initialization. SAM-LCM mutates its internal
+  `micro_field(i,j,k,imv)` and `tabs_LCM(i,j,k)` working fields; standalone LCM
+  keeps the same local relaxation but stores the adjusted qv/T only on the
+  initialized particles because attached host fields are read-only in this
+  lifecycle.
 - SAM-LCM's default `micro_user_init_particles(i,j,k)` hook is empty but is
   called after standard particle initialization. Standalone LCM preserves this
   compile-time extension concept through `lcm_user_init_particles`, passing the
@@ -344,6 +347,8 @@ actual routine.
 - bin zero-weight splitting
 - deterministic `USM` aerosol initialization
 - structural `random` aerosol initialization
+- equilibrium liquid mass, final particle qv/temperature, eta, and monomer
+  count
 
 The deterministic `bin` and `USM` cases compare particle weights, aerosol mass,
 and aerosol portions against test-local reference implementations following the
@@ -351,6 +356,12 @@ SAM-LCM formulas. The `random` case checks the SAM-LCM-compatible invariants tha
 do not depend on a fixed random radius sequence: particle count, cell placement,
 unique IDs, equal per-mode multiplicity, positive aerosol mass, particle type,
 and aerosol portions.
+
+`tests/test_sam_particle_population_comparison.f90` also runs the original
+SAM-LCM `micro_init_particles(i,j,k)` in a tiny probe harness and compares
+standalone particle weights, aerosol mass/composition, IN state, equilibrium
+liquid mass, final qv/temperature, eta, and monomer count against that direct
+SAM output for representative `bin`, `USM`, and ice-enabled cases.
 
 ## `micro_init_particles` Property Audit
 
@@ -379,13 +390,13 @@ ice-nucleating particle assignment, and a local thermodynamic adjustment.
 | When ice is enabled, randomly convert a fraction of particles to IN-containing type `2`. | Ported for the initial population path. This depends on `frac_ice`, IN concentrations, and random sampling. |
 | For IN-containing particles, sample IN species and IN size, store IN surface area, and compute freezing temperature `iTFZ`. | Ported with IN surface area mapped to `lcm_particle_t%in_surface_area` and freezing temperature mapped to `freezing_temperature`. |
 | For non-IN particles, zero IN surface area and set `iTFZ=233.15`. | Ported for the initial population path. |
-| Iterate five times to compute equilibrium liquid mass from supersaturation. | Preserve eventually. It couples particle liquid mass, vapor, and temperature and should be handled by a dedicated microphysical initialization helper. |
-| Update `micro_field(i,j,k,imv)` and `tabs_LCM(i,j,k)` during equilibrium adjustment. | Standalone LCM should not copy host fields into SAM-style working arrays. It needs a clear decision: either initialize particle mass from attached host fields without mutating host fields in the first one-way baseline, or later write feedback through explicit tendency/state design. |
-| Initialize particle liquid mass `var(iM)`. | Map to `lcm_particle_t%mass_water`. |
-| Initialize particle temperature `var(iT)` from adjusted cell temperature plus `gamaz(k)`. | Map to `lcm_particle_t%temperature`, using attached temperature/static-energy state rather than SAM globals. |
-| Initialize particle vapor `var(iq)`. | Map to `lcm_particle_t%qv`. |
-| Initialize absolute supersaturation `var(ieta)`. | Map to `lcm_particle_t%eta`. |
-| Initialize monomer count `ivar(iNmono)=1`. | Map to `lcm_particle_t%n_monomer`. |
+| Iterate five times to compute equilibrium liquid mass from supersaturation. | Ported for particle initialization, preserving the SAM-LCM relaxation loop. |
+| Update `micro_field(i,j,k,imv)` and `tabs_LCM(i,j,k)` during equilibrium adjustment. | Ported as local `cell_qv` and `cell_temperature` relaxation. Standalone LCM does not mutate attached host fields during initialization. |
+| Initialize particle liquid mass `var(iM)`. | Mapped to `lcm_particle_t%mass_water` after the five-iteration equilibrium relaxation. |
+| Initialize particle temperature `var(iT)` from adjusted cell temperature plus `gamaz(k)`. | Mapped to `lcm_particle_t%temperature` from the locally adjusted cell temperature. |
+| Initialize particle vapor `var(iq)`. | Mapped to `lcm_particle_t%qv` from the locally adjusted cell qv. |
+| Initialize absolute supersaturation `var(ieta)`. | Mapped to `lcm_particle_t%eta`. |
+| Initialize monomer count `ivar(iNmono)=1`. | Mapped to `lcm_particle_t%n_monomer`. |
 | Call `micro_user_init_particles(i,j,k)`. | Ported as `lcm_user_init_particles(i,j,k, particle_cell)`, called after standard initialization with the cell-owned particle container. The default hook is empty, matching SAM-LCM. |
 
 ## `lcm_particle_t` Field Decision
@@ -428,10 +439,7 @@ replace only the storage expression.
 
 ## Recommended Next Slices
 
-After the aerosol and IN initialization ports, the remaining
-`micro_init_particles` slices should stay separate so each can be compared
-against SAM-LCM carefully:
-
-1. port the five-iteration equilibrium liquid mass, vapor, and temperature
-   adjustment after deciding how standalone LCM should interact with host fields
-2. add focused tests for each slice before moving to the next one
+The initial particle population now covers the fresh-run `micro_place_particle`
+and `micro_init_particles` responsibilities in scope for issue #43. Later work
+should continue with focused PRs for timestep physics and source/restart paths,
+so each slice can still be compared against SAM-LCM carefully.

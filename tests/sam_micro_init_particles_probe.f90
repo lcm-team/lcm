@@ -36,7 +36,7 @@ program sam_micro_init_particles_probe
    open(newunit=output_unit, file=trim(output_path), status="replace", &
         action="write")
    do n = 1, np_xy
-      write(output_unit,'(i0,1x,i0,1x,es24.16,1x,4(es24.16,1x),i0,1x,4(es24.16,1x),es24.16)') &
+      write(output_unit,'(i0,1x,i0,1x,es24.16,1x,4(es24.16,1x),i0,1x,4(es24.16,1x),5(es24.16,1x),i0)') &
          n, particle(n)%ivar(iA), particle(n)%var(iN), &
          particle(n)%var(iAero_portions(1)), &
          particle(n)%var(iAero_portions(2)), &
@@ -47,7 +47,12 @@ program sam_micro_init_particles_probe
          particle(n)%var(in_startind + 2), &
          particle(n)%var(in_startind + 3), &
          particle(n)%var(in_startind + 4), &
-         particle(n)%var(iTFZ)
+         particle(n)%var(iTFZ), &
+         particle(n)%var(iM), &
+         particle(n)%var(iT), &
+         particle(n)%var(iq), &
+         particle(n)%var(ieta), &
+         particle(n)%ivar(iNmono)
    enddo
    close(output_unit)
 
@@ -77,6 +82,12 @@ contains
       sigma_aero = real([1.4, 0.0, 0.0, 0.0], kind=4)
       shares_aero = real([1.0, 0.0, 0.0, 0.0], kind=4)
       rho_aero = real([2170.0, 0.0, 0.0, 0.0], kind=4)
+      bfactor_coefficient = 0.0
+      bfactor_coefficient(1) = &
+         (vanthoff_aero(1) / molecular_weight_aero(1)) * &
+         molecular_weight_water / (rho_liq * 4.0 * pi / 3.0)
+      only_one_aerosol_mode = .true.
+      n_aerosol_modes = 1
       n_ice = real([0.0, 0.0, 0.001e6, 0.0], kind=4)
       rm_in = real([1.0e-6, 0.2e-6, 1.0e-6, 0.0], kind=4)
       sigma_in = real([1.4, 1.4, 1.4, 0.0], kind=4)
