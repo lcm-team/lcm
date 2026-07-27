@@ -29,6 +29,7 @@ set(LCM_CORE_SOURCES
   "${LCM_SOURCE_DIR}/lcm_grid_state.f90"
   "${LCM_SOURCE_DIR}/lcm_field_state.f90"
   "${LCM_SOURCE_DIR}/lcm_random.f90"
+  "${LCM_SOURCE_DIR}/lcm_user.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_state.f90"
   "${LCM_SOURCE_DIR}/micro_user_vars.f90"
   "${LCM_SOURCE_DIR}/micro_vars.f90"

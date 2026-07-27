@@ -306,8 +306,11 @@ These differences are intentional and should remain visible during review:
 - The five-iteration equilibrium liquid mass, vapor, and temperature adjustment
   is not ported in this slice. That step mutates SAM-LCM working atmospheric
   fields and needs a standalone decision about one-way vs two-way coupling.
-- `micro_user_init_particles(i,j,k)` is not called in this slice. Standalone user
-  initialization hooks remain a separate design decision.
+- SAM-LCM's default `micro_user_init_particles(i,j,k)` hook is empty but is
+  called after standard particle initialization. Standalone LCM preserves this
+  compile-time extension concept through `lcm_user_init_particles`, passing the
+  cell-owned particle container instead of SAM's flat `particle(:)` plus
+  `n_start/n_end` slice.
 
 ### Cell-Local Particle Counts
 
@@ -383,7 +386,7 @@ ice-nucleating particle assignment, and a local thermodynamic adjustment.
 | Initialize particle vapor `var(iq)`. | Map to `lcm_particle_t%qv`. |
 | Initialize absolute supersaturation `var(ieta)`. | Map to `lcm_particle_t%eta`. |
 | Initialize monomer count `ivar(iNmono)=1`. | Map to `lcm_particle_t%n_monomer`. |
-| Call `micro_user_init_particles(i,j,k)`. | Do not include in the first standalone baseline. Decide separately whether standalone LCM supports user hooks. The current SAM hook is empty by default. |
+| Call `micro_user_init_particles(i,j,k)`. | Ported as `lcm_user_init_particles(i,j,k, particle_cell)`, called after standard initialization with the cell-owned particle container. The default hook is empty, matching SAM-LCM. |
 
 ## `lcm_particle_t` Field Decision
 
@@ -431,6 +434,4 @@ against SAM-LCM carefully:
 
 1. port the five-iteration equilibrium liquid mass, vapor, and temperature
    adjustment after deciding how standalone LCM should interact with host fields
-2. decide whether standalone LCM supports a counterpart of
-   `micro_user_init_particles(i,j,k)`
-3. add focused tests for each slice before moving to the next one
+2. add focused tests for each slice before moving to the next one

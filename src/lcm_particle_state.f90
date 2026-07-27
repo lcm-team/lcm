@@ -11,6 +11,7 @@ module lcm_particle_state
    use lcm_field_state, only: field_state
    use lcm_grid_state, only: grid_state
    use lcm_types, only: lcm_particle_cell_t, lcm_particle_t
+   use lcm_user, only: lcm_user_init_particles
    use micro_random, only: randomu
 
    implicit none
@@ -441,6 +442,8 @@ contains
          cell_particles(i,j,k)%particles(n)%temperature = field_state%temperature(i,j,k)
          cell_particles(i,j,k)%particles(n)%qv = field_state%qv(i,j,k)
       enddo
+
+      call lcm_user_init_particles(i, j, k, cell_particles(i,j,k))
    end subroutine lcm_init_particles
 
    integer function particle_random_seed_id() result(seed_id)
