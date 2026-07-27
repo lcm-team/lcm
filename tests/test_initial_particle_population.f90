@@ -159,6 +159,9 @@ contains
                if (k <= nzl) then
                   call assert_true(cell_particles(i,j,k)%count == np_xy, &
                                    "initialized cell particle count")
+                  call assert_true(cell_particles(i,j,k)%capacity >= &
+                                   cell_particles(i,j,k)%count, &
+                                   "cell-local active particle range")
                   do n = 1, cell_particles(i,j,k)%count
                      total_count = total_count + 1
                      call assert_particle(i, j, k, n)
