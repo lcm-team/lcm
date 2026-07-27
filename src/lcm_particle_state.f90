@@ -32,6 +32,7 @@ module lcm_particle_state
 
    real(real64), parameter :: pi = 3.141592653589793238462643383279502884_real64
    integer, parameter :: liquid_particle_type = 1
+   integer, parameter :: ice_nucleating_particle_type = 2
    integer, parameter :: n_inv_cdf = 50000000
 
 contains
@@ -189,15 +190,17 @@ contains
       real(real64) :: dlogr, r_l, r_r, r_aero, n_dummy
       real(real64) :: f_ak, f_bk, f_ck, ak, bk, ck
       real(real64) :: p_random, p_usm, x_rand
+      real(real64) :: in_typeprobs(4)
       real(real64) :: r_aero_min(4), r_aero_max(4)
 
       if (config_state%np_xy == 0) return
 
-      if (config_state%switch_ice) then
-         error stop "LCM ice initialization must be ported from SAM-LCM micro_init_particles"
-      endif
-
       seed_id = particle_random_seed_id()
+      if (config_state%switch_ice) then
+         call ice_type_probabilities(in_typeprobs)
+      else
+         in_typeprobs = 0.0_real64
+      endif
 
       np_done = 0
       ! Initialize aerosols for every mode separately, preserving the
@@ -317,8 +320,15 @@ contains
                else
                   error stop "LCM unknown aerosol initialization unit"
                endif
+               if (config_state%switch_ice) then
+                  cell_particles(i,j,k)%particles(n)%weight = &
+                     int(real(cell_particles(i,j,k)%particles(n)%weight, real64) / &
+                         (1.0_real64 - real(config_state%frac_ice, real64)), int64)
+               endif
 
                call set_particle_aerosol_state(i, j, k, n, i_mode, r_aero)
+               call apply_ice_initialization(i, j, k, n, i_mode, r_aero, &
+                                             seed_id, in_typeprobs)
             enddo
 
             do n = np_done + 1, np_done + np_mode
@@ -375,6 +385,8 @@ contains
 
                call set_equal_mode_weight(i, j, k, n, i_mode, np_mode)
                call set_particle_aerosol_state(i, j, k, n, i_mode, r_aero)
+               call apply_ice_initialization(i, j, k, n, i_mode, r_aero, &
+                                             seed_id, in_typeprobs)
             enddo
 
             r_aero = sqrt(r_l * r_aero_max(i_mode))
@@ -386,6 +398,8 @@ contains
                     (1.0_real64 - real(config_state%frac_ice, real64))), int64)
             call set_particle_aerosol_state(i, j, k, n, i_mode, r_aero, &
                                             set_aerosol_portions=.false.)
+            call apply_ice_initialization(i, j, k, n, i_mode, r_aero, &
+                                          seed_id, in_typeprobs)
          else if (trim(config_state%init_aero) == "random") then
             p_random = 1.0_real64 / real(n_inv_cdf, real64)
 
@@ -407,7 +421,14 @@ contains
                enddo find_r
 
                cell_particles(i,j,k)%particles(n)%weight = int(n_dummy, int64)
+               if (config_state%switch_ice) then
+                  cell_particles(i,j,k)%particles(n)%weight = &
+                     int(real(cell_particles(i,j,k)%particles(n)%weight, real64) / &
+                         (1.0_real64 - real(config_state%frac_ice, real64)), int64)
+               endif
                call set_particle_aerosol_state(i, j, k, n, i_mode, r_aero)
+               call apply_ice_initialization(i, j, k, n, i_mode, r_aero, &
+                                             seed_id, in_typeprobs)
             enddo
          else
             error stop "LCM unknown aerosol initialization mode"
@@ -490,6 +511,164 @@ contains
       cell_particles(i,j,k)%particles(n)%in_surface_area = 0.0_real64
       cell_particles(i,j,k)%particles(n)%freezing_temperature = 233.15_real64
    end subroutine set_particle_aerosol_state
+
+   subroutine ice_type_probabilities(in_typeprobs)
+      real(real64), intent(out) :: in_typeprobs(4)
+      integer :: m
+      real(real64) :: n_ice_sum
+
+      n_ice_sum = sum(real(config_state%n_ice, real64))
+      do m = 1, 4
+         in_typeprobs(m) = sum(real(config_state%n_ice(1:m), real64)) / n_ice_sum
+      enddo
+   end subroutine ice_type_probabilities
+
+   subroutine apply_ice_initialization(i, j, k, n, i_mode, r_aero, &
+                                       seed_id, in_typeprobs)
+      integer, intent(in) :: i
+      integer, intent(in) :: j
+      integer, intent(in) :: k
+      integer, intent(in) :: n
+      integer, intent(in) :: i_mode
+      integer, intent(in) :: seed_id
+      real(real64), intent(in) :: r_aero
+      real(real64), intent(in) :: in_typeprobs(4)
+
+      integer :: intype
+      real(real64) :: n_dummy
+      real(real64) :: r_in
+      real(real64) :: sfc_in
+      real(real64) :: x_rand
+
+      if (.not. config_state%switch_ice) return
+
+      if (real(randomu(seed_id), real64) < real(config_state%frac_ice, real64)) then
+         cell_particles(i,j,k)%particles(n)%particle_type = &
+            ice_nucleating_particle_type
+
+         x_rand = real(randomu(seed_id), real64)
+         intype = minloc(in_typeprobs - x_rand, &
+                         mask=in_typeprobs >= x_rand, dim=1)
+
+         n_dummy = real(config_state%n_ice(intype), real64) * &
+                   real(grid_state%dV(k), real64) / &
+                   (real(config_state%np_xy, real64) * &
+                    real(config_state%frac_ice, real64))
+         if (trim(config_state%unit_aero) == "1/kg") then
+            n_dummy = n_dummy * field_state%density(k)
+         endif
+
+         cell_particles(i,j,k)%particles(n)%mass_aero = &
+            n_dummy * 4.0_real64 / 3.0_real64 * pi * &
+            real(config_state%rho_aero(i_mode), real64) * r_aero**3
+         cell_particles(i,j,k)%particles(n)%weight = int(n_dummy, int64)
+
+         r_in = -1.0_real64
+         do while (r_in <= 0.001e-6_real64 .or. r_in >= 10.0e-4_real64)
+            x_rand = real(randomu(seed_id), real64)
+            r_in = real(config_state%rm_in(intype), real64) * &
+                   exp(sqrt(2.0_real64) * &
+                       log(real(config_state%sigma_in(intype), real64)) * &
+                       min(max(inverse_error_function_approx( &
+                                  2.0_real64 * x_rand - 1.0_real64), &
+                               -2.0_real64), 2.0_real64))
+         enddo
+
+         sfc_in = 4.0_real64 * pi * r_in**2
+         cell_particles(i,j,k)%particles(n)%in_surface_area = 0.0_real64
+         cell_particles(i,j,k)%particles(n)%in_surface_area(intype) = &
+            n_dummy * sfc_in
+         cell_particles(i,j,k)%particles(n)%freezing_temperature = &
+            ice_freezing_temperature(intype, sfc_in, seed_id)
+      else
+         cell_particles(i,j,k)%particles(n)%particle_type = liquid_particle_type
+         cell_particles(i,j,k)%particles(n)%in_surface_area = 0.0_real64
+         cell_particles(i,j,k)%particles(n)%freezing_temperature = 233.15_real64
+      endif
+   end subroutine apply_ice_initialization
+
+   real(real64) function ice_freezing_temperature(m, sfc, seed_id) result(t_frz)
+      integer, intent(in) :: m
+      integer, intent(in) :: seed_id
+      real(real64), intent(in) :: sfc
+
+      integer :: loc14
+      integer :: tcounter
+      real(real64) :: frzprob_dust(289)
+      real(real64) :: frzprob_pollen(289)
+      real(real64) :: frzprob_snowmax(289)
+      real(real64) :: frzprob_soot(289)
+      real(real64) :: ns_dust(289)
+      real(real64) :: ns_pollen(289)
+      real(real64) :: ns_snowmax(289)
+      real(real64) :: ns_soot(289)
+      real(real64) :: randnum
+      real(real64) :: tempc(289)
+
+      ! Formula ported from SAM-LCM micro_init_particles:t_frz.
+      tempc = [(-38.0_real64 + (36.0_real64 / 288.0_real64) * &
+                real(tcounter, real64), tcounter = 0, 288)]
+      loc14 = minloc(abs(tempc + 14.0_real64), dim=1)
+
+      ns_dust = exp(-0.517_real64 * &
+                    max(-30.0_real64, min(tempc, -14.0_real64)) + &
+                    8.781_real64)
+      ns_soot = 7.463_real64 * &
+                exp(-0.0101_real64 * &
+                    max(-34.0_real64, min(tempc, -18.0_real64))**2 - &
+                    0.8525_real64 * &
+                    max(-34.0_real64, min(tempc, -18.0_real64)) + &
+                    0.7667_real64)
+      ns_snowmax = 4.53e11_real64 * &
+                   (1.0_real64 - exp(-2.0e-10_real64 * &
+                    exp(-max(-20.0_real64, min(tempc, -2.0_real64)) * &
+                    2.34_real64)))
+      ns_pollen(1:loc14) = &
+         exp(14.701_real64 + 6.0842_real64 * &
+             atan(-15.8840_real64 * &
+                  max(min(tempc(1:loc14), -14.0_real64), -35.0_real64)) + &
+             1.4573_real64 * &
+             log(-0.45627_real64 * &
+                 max(min(tempc(1:loc14), -14.0_real64), -35.0_real64)))
+      ns_pollen(loc14+1:289) = &
+         exp(-17.864_real64 - 6.9238_real64 * &
+             max(min(tempc(loc14+1:289), -2.0_real64), -14.0_real64) - &
+             0.59183_real64 * &
+             max(min(tempc(loc14+1:289), -2.0_real64), -14.0_real64) - &
+             1.7131e-2_real64 * &
+             max(min(tempc(loc14+1:289), -2.0_real64), -14.0_real64))
+
+      frzprob_dust = 1.0_real64 - exp(-sfc * ns_dust)
+      frzprob_soot = 1.0_real64 - exp(-sfc * ns_soot)
+      frzprob_snowmax = 1.0_real64 - exp(-sfc * ns_snowmax)
+      frzprob_pollen = 1.0_real64 - exp(-sfc * ns_pollen)
+
+      randnum = real(randomu(seed_id), real64)
+      select case (m)
+      case (1)
+         t_frz = tempc(minloc(abs(frzprob_soot - randnum), dim=1))
+      case (2)
+         t_frz = tempc(minloc(abs(frzprob_dust - randnum), dim=1))
+      case (3)
+         t_frz = tempc(minloc(abs(frzprob_snowmax - randnum), dim=1))
+      case (4)
+         t_frz = tempc(minloc(abs(frzprob_pollen - randnum), dim=1))
+      case default
+         t_frz = -40.0_real64
+      end select
+      t_frz = max(t_frz, -40.0_real64)
+      t_frz = t_frz + 273.15_real64
+   end function ice_freezing_temperature
+
+   real(real64) function inverse_error_function_approx(x) result(erfi)
+      real(real64), intent(in) :: x
+      real(real64), parameter :: a = 0.147_real64
+
+      ! Winitzki approximation used by SAM-LCM micro_init_particles:ERFI.
+      erfi = 2.0_real64 / (pi * a) + log(1.0_real64 - x**2) / 2.0_real64
+      erfi = sign(1.0_real64, x) * &
+             sqrt(sqrt(erfi**2 - log(1.0_real64 - x**2) / a) - erfi)
+   end function inverse_error_function_approx
 
    real(real64) function inverse_cdf_sample_radius(i_mode, x_rand, &
                                                    r_aero_min, r_aero_max, &

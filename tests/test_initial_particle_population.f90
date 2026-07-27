@@ -130,6 +130,19 @@ contains
          config%sigma_aero = [1.4, 0.0, 0.0, 0.0]
          config%shares_aero = [1.0, 0.0, 0.0, 0.0]
          config%rho_aero = [2170.0, 0.0, 0.0, 0.0]
+      case ("bin_ice")
+         config%init_aero = "bin"
+         config%unit_aero = "1/kg"
+         config%switch_ice = .true.
+         config%frac_ice = 0.999999
+         config%n_aero = [100.0e6, 0.0, 0.0, 0.0]
+         config%rm_aero = [0.04e-6, 0.0, 0.0, 0.0]
+         config%sigma_aero = [1.4, 0.0, 0.0, 0.0]
+         config%shares_aero = [1.0, 0.0, 0.0, 0.0]
+         config%rho_aero = [2170.0, 0.0, 0.0, 0.0]
+         config%n_ice = [0.0, 0.0, 0.001e6, 0.0]
+         config%rm_in = [1.0e-6, 0.2e-6, 1.0e-6, 0.0]
+         config%sigma_in = [1.4, 1.4, 1.4, 0.0]
       case default
          error stop "unknown initial particle population test case"
       end select
@@ -171,15 +184,21 @@ contains
       real(real64) :: expected_aerosol_mass(np_xy)
       real(real64) :: expected_portions(4, np_xy)
 
+      expected_portions = 0.0_real64
+
       select case (trim(config%init_aero))
       case ("bin")
-         call reference_bin_aerosol(k, expected_weight, expected_aerosol_mass, &
-                                    expected_portions)
-         call assert_true(cell_particles(i,j,k)%particles(n)%weight == &
-                          expected_weight(n), "SAM-LCM bin aerosol weight")
-         call assert_near_relative(cell_particles(i,j,k)%particles(n)%mass_aero, &
-                                   expected_aerosol_mass(n), &
-                                   "SAM-LCM bin aerosol mass")
+         if (config%switch_ice) then
+            expected_portions(1, :) = 1.0_real64
+         else
+            call reference_bin_aerosol(k, expected_weight, expected_aerosol_mass, &
+                                       expected_portions)
+            call assert_true(cell_particles(i,j,k)%particles(n)%weight == &
+                             expected_weight(n), "SAM-LCM bin aerosol weight")
+            call assert_near_relative(cell_particles(i,j,k)%particles(n)%mass_aero, &
+                                      expected_aerosol_mass(n), &
+                                      "SAM-LCM bin aerosol mass")
+         endif
       case ("USM")
          call reference_usm_aerosol(k, expected_weight, expected_aerosol_mass, &
                                     expected_portions)
@@ -202,15 +221,28 @@ contains
                        "particle weight")
       call assert_true(cell_particles(i,j,k)%particles(n)%mass_aero > 0.0_real64, &
                        "particle aerosol mass")
-      call assert_true(cell_particles(i,j,k)%particles(n)%particle_type == 1, &
-                       "particle type")
+      if (config%switch_ice) then
+         call assert_true(cell_particles(i,j,k)%particles(n)%particle_type == 2, &
+                          "ice-nucleating particle type")
+         call assert_true(cell_particles(i,j,k)%particles(n)%in_surface_area(3) > &
+                          0.0_real64, "ice-nucleating particle surface area")
+         call assert_near(maxval(abs(cell_particles(i,j,k)%particles(n)%in_surface_area([1,2,4]))), &
+                          0.0_real64, "inactive IN surface areas")
+         call assert_true(cell_particles(i,j,k)%particles(n)%freezing_temperature >= &
+                          233.15_real64, "ice freezing temperature lower bound")
+         call assert_true(cell_particles(i,j,k)%particles(n)%freezing_temperature <= &
+                          273.15_real64, "ice freezing temperature upper bound")
+      else
+         call assert_true(cell_particles(i,j,k)%particles(n)%particle_type == 1, &
+                          "particle type")
+         call assert_near(cell_particles(i,j,k)%particles(n)%freezing_temperature, &
+                          233.15_real64, "default homogeneous freezing temperature")
+         call assert_near(maxval(abs(cell_particles(i,j,k)%particles(n)%in_surface_area)), &
+                          0.0_real64, "default IN surface area")
+      endif
       call assert_near(maxval(abs(cell_particles(i,j,k)%particles(n)%aerosol_portions - &
                                   expected_portions(:, n))), &
                        0.0_real64, "SAM-LCM aerosol portions")
-      call assert_near(cell_particles(i,j,k)%particles(n)%freezing_temperature, &
-                       233.15_real64, "default homogeneous freezing temperature")
-      call assert_near(maxval(abs(cell_particles(i,j,k)%particles(n)%in_surface_area)), &
-                       0.0_real64, "default IN surface area")
       call assert_near(cell_particles(i,j,k)%particles(n)%temperature, &
                        temperature(i,j,k), "particle temperature")
       call assert_near(cell_particles(i,j,k)%particles(n)%qv, qv(i,j,k), &

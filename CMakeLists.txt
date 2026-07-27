@@ -139,6 +139,12 @@ add_test(
           random_aerosol
 )
 
+add_test(
+  NAME initial_particle_population_bin_ice
+  COMMAND test_initial_particle_population
+          bin_ice
+)
+
 set(SAM_MICRO_INIT_PROBE_MODULE_DIR "${CMAKE_CURRENT_BINARY_DIR}/sam_probe_mod")
 
 add_library(sam_micro_init_particles_probe_objects OBJECT
@@ -222,4 +228,12 @@ add_test(
   COMMAND test_sam_particle_population_comparison
           $<TARGET_FILE:sam_micro_init_particles_probe>
           USM
+)
+
+add_test(
+  NAME initial_particle_population_sam_bin_ice_comparison
+  COMMAND test_sam_particle_population_comparison
+          $<TARGET_FILE:sam_micro_init_particles_probe>
+          bin
+          ice
 )
