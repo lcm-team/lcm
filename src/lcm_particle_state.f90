@@ -571,7 +571,7 @@ contains
       particle%last_j = grid_state%grid%global_j_start + j - 1
       particle%last_k = k
       particle%spray_marker = -999
-      particle%track_marker = -999
+      call set_particle_tracking_marker(i, j, k, cell_particle_index, particle)
 
       particle%particle_type = liquid_particle_type
       seed_id = particle_random_seed_id()
@@ -599,6 +599,59 @@ contains
       particle%z = grid_state%grid%z_face(k) + &
                    real(randomu(seed_id), real64) * grid_state%grid%dz(k)
    end subroutine set_particle_position
+
+   subroutine set_particle_tracking_marker(i, j, k, cell_particle_index, particle)
+      integer, intent(in) :: i
+      integer, intent(in) :: j
+      integer, intent(in) :: k
+      integer, intent(in) :: cell_particle_index
+      type(lcm_particle_t), intent(inout) :: particle
+
+      integer :: marker_divisor
+      integer :: particle_sequence
+      integer :: tracking_period
+      integer :: tracked_particles_per_subdomain
+
+      particle%track_marker = -999
+      if (.not. config_state%track_some_particles) return
+
+      tracked_particles_per_subdomain = &
+         max(1, config_state%n_track_particles / &
+                grid_state%grid%n_subdomains_x / &
+                grid_state%grid%n_subdomains_y)
+      tracking_period = initial_particle_count_for_tracking() / &
+                        tracked_particles_per_subdomain
+      marker_divisor = initial_particle_count_for_tracking() / &
+                       config_state%n_track_particles
+
+      if (tracking_period <= 0 .or. marker_divisor <= 0) then
+         error stop "LCM particle tracking requests more markers than initial particles"
+      endif
+
+      particle_sequence = initial_particle_sequence(i, j, k, cell_particle_index)
+      if (mod(particle_sequence, tracking_period) == 0) then
+         particle%track_marker = particle_subdomain_id() * 1000000 + &
+                                 particle_sequence / marker_divisor
+      endif
+   end subroutine set_particle_tracking_marker
+
+   integer function initial_particle_count_for_tracking() result(particle_count)
+      particle_count = grid_state%grid%nx_local * grid_state%grid%ny_local * &
+                       min(config_state%nzl, grid_state%grid%nz) * &
+                       config_state%np_xy
+   end function initial_particle_count_for_tracking
+
+   integer function initial_particle_sequence(i, j, k, cell_particle_index) &
+      result(sequence)
+      integer, intent(in) :: i
+      integer, intent(in) :: j
+      integer, intent(in) :: k
+      integer, intent(in) :: cell_particle_index
+
+      sequence = (((k - 1) * grid_state%grid%ny_local + (j - 1)) * &
+                  grid_state%grid%nx_local + (i - 1)) * &
+                 config_state%np_xy + cell_particle_index
+   end function initial_particle_sequence
 
    subroutine lcm_init_particles(i, j, k)
       integer, intent(in) :: i
@@ -863,13 +916,14 @@ contains
    end subroutine lcm_init_particles
 
    integer function particle_random_seed_id() result(seed_id)
-      integer :: subdomain_id
+      seed_id = particle_subdomain_id() + 1
+   end function particle_random_seed_id
 
+   integer function particle_subdomain_id() result(subdomain_id)
       subdomain_id = grid_state%grid%subdomain_y_index * &
                      grid_state%grid%n_subdomains_x + &
                      grid_state%grid%subdomain_x_index
-      seed_id = subdomain_id + 1
-   end function particle_random_seed_id
+   end function particle_subdomain_id
 
    subroutine set_equal_mode_weight(i, j, k, n, i_mode, np_mode)
       integer, intent(in) :: i

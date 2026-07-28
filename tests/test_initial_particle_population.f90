@@ -94,6 +94,17 @@ contains
          config%sigma_aero = [1.4, 0.0, 0.0, 0.0]
          config%shares_aero = [1.0, 0.0, 0.0, 0.0]
          config%rho_aero = [2170.0, 0.0, 0.0, 0.0]
+      case ("tracking")
+         config%init_aero = "bin"
+         config%unit_aero = "1/kg"
+         config%switch_ice = .false.
+         config%track_some_particles = .true.
+         config%n_track_particles = 4
+         config%n_aero = [100.0e6, 0.0, 0.0, 0.0]
+         config%rm_aero = [0.04e-6, 0.0, 0.0, 0.0]
+         config%sigma_aero = [1.4, 0.0, 0.0, 0.0]
+         config%shares_aero = [1.0, 0.0, 0.0, 0.0]
+         config%rho_aero = [2170.0, 0.0, 0.0, 0.0]
       case ("multi_mode")
          config%init_aero = "bin"
          config%unit_aero = "1/kg"
@@ -225,6 +236,7 @@ contains
       call assert_true(cell_particles(i,j,k)%particles(n)%mass_aero > 0.0_real64, &
                        "particle aerosol mass")
       call assert_particle_position(i, j, k, n)
+      call assert_particle_tracking_marker(i, j, k, n)
       if (config%switch_ice) then
          call assert_true(cell_particles(i,j,k)%particles(n)%particle_type == 2, &
                           "ice-nucleating particle type")
@@ -290,6 +302,44 @@ contains
                        cell_particles(i,j,k)%particles(n)%z < z_top, &
                        "particle z position inside owning cell")
    end subroutine assert_particle_position
+
+   subroutine assert_particle_tracking_marker(i, j, k, n)
+      integer, intent(in) :: i
+      integer, intent(in) :: j
+      integer, intent(in) :: k
+      integer, intent(in) :: n
+
+      call assert_true(cell_particles(i,j,k)%particles(n)%track_marker == &
+                       expected_tracking_marker(i, j, k, n), &
+                       "SAM-LCM particle tracking marker")
+   end subroutine assert_particle_tracking_marker
+
+   integer function expected_tracking_marker(i, j, k, n) result(track_marker)
+      integer, intent(in) :: i
+      integer, intent(in) :: j
+      integer, intent(in) :: k
+      integer, intent(in) :: n
+
+      integer :: marker_divisor
+      integer :: particle_sequence
+      integer :: tracking_period
+      integer :: tracked_particles_per_subdomain
+
+      track_marker = -999
+      if (.not. config%track_some_particles) return
+
+      tracked_particles_per_subdomain = &
+         max(1, config%n_track_particles / &
+                grid%n_subdomains_x / grid%n_subdomains_y)
+      tracking_period = int(expected_count) / tracked_particles_per_subdomain
+      marker_divisor = int(expected_count) / config%n_track_particles
+
+      particle_sequence = (((k - 1) * ny_local + (j - 1)) * nx_local + &
+                           (i - 1)) * np_xy + n
+      if (mod(particle_sequence, tracking_period) == 0) then
+         track_marker = particle_sequence / marker_divisor
+      endif
+   end function expected_tracking_marker
 
    subroutine reference_bin_aerosol(k, expected_weight, expected_aerosol_mass, &
                                     expected_portions)

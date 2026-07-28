@@ -117,6 +117,12 @@ add_test(
 )
 
 add_test(
+  NAME initial_particle_population_tracking
+  COMMAND test_initial_particle_population
+          tracking
+)
+
+add_test(
   NAME initial_particle_population_multi_mode
   COMMAND test_initial_particle_population
           multi_mode
