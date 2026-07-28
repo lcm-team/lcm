@@ -3,6 +3,7 @@ program sam_micro_init_particles_probe
    use grid, only: dimx1_s, dimx2_s, dimy1_s, dimy2_s, nzm
    use micro_vars
    use microphysics, only: imv, micro_field, nmicro_fields, nmicro_fields_diag
+   use vars, only: gamaz
 
    implicit none
 
@@ -112,6 +113,7 @@ contains
       pres_LCM = 100000.0
       dz_LCM = 100.0
       tabs_LCM = 280.0
+      gamaz = 20.0
       micro_field = 0.0
       micro_field(1,1,1,imv) = 0.010
       n_start = 1

@@ -262,7 +262,7 @@ contains
       call assert_true(cell_particles(i,j,k)%particles(n)%mass_water >= &
                        0.0_real64, "equilibrium liquid mass")
       call assert_true(cell_particles(i,j,k)%particles(n)%temperature >= &
-                       temperature(i,j,k), "equilibrium particle temperature")
+                       static_energy(i,j,k), "equilibrium particle temperature")
       call assert_true(cell_particles(i,j,k)%particles(n)%qv <= qv(i,j,k), &
                        "equilibrium particle qv")
       call assert_true(cell_particles(i,j,k)%particles(n)%eta == &

@@ -375,7 +375,7 @@ contains
 
       real(real64) :: qsat
 
-      qsat = qsatw_liquid(field_state%temperature(i,j,k), field_state%pressure(k))
+      qsat = qsatw_liquid(cell_tabs_lcm(i, j, k), field_state%pressure(k))
       ss_gb = (field_state%qv(i,j,k) - qsat) / qsat
       ss_gb = min(ss_gb, -0.01_real64)
    end function source_cell_supersaturation
@@ -438,7 +438,7 @@ contains
          particle%mass_water = real(weight, real64) * 4.0_real64 / 3.0_real64 * &
                                pi * rho_liq * &
                                max(source_equilibrium_radius(ss_gb, &
-                                     field_state%temperature(i,j,k), r_aero, &
+                                     cell_tabs_lcm(i, j, k), r_aero, &
                                      particle%mass_aero, weight), r_aero)**3
       else if (trim(config_state%type_source) == "seawater") then
          particle%mass_water = real(weight, real64) * 4.0_real64 / 3.0_real64 * &
@@ -453,10 +453,11 @@ contains
 
       particle%aerosol_portions = 0.0_real64
       particle%aerosol_portions(1) = 1.0_real64
-      particle%temperature = field_state%temperature(i,j,k)
+      particle%temperature = cell_absolute_temperature(i, j, k, &
+                                                       cell_tabs_lcm(i, j, k))
       particle%qv = field_state%qv(i,j,k)
       particle%eta = field_state%qv(i,j,k) - &
-                     qsatw_liquid(field_state%temperature(i,j,k), &
+                     qsatw_liquid(cell_tabs_lcm(i, j, k), &
                                   field_state%pressure(k))
       particle%particle_type = liquid_particle_type
       particle%in_surface_area = 0.0_real64
@@ -577,7 +578,8 @@ contains
       seed_id = particle_random_seed_id()
       call set_particle_position(i, j, k, seed_id, particle)
       particle%w_sedi = 0.0_real64
-      particle%temperature = field_state%temperature(i,j,k)
+      particle%temperature = cell_absolute_temperature(i, j, k, &
+                                                       cell_tabs_lcm(i, j, k))
       particle%qv = field_state%qv(i,j,k)
    end subroutine init_particle_properties
 
@@ -1000,7 +1002,7 @@ contains
       real(real64) :: ss_gb
 
       cell_qv = field_state%qv(i,j,k)
-      cell_temperature = field_state%temperature(i,j,k)
+      cell_temperature = cell_tabs_lcm(i, j, k)
 
       ! Port of SAM-LCM micro_init_particles' five-iteration equilibrium
       ! initialization. The adjusted cell qv/T are local here because attached
@@ -1028,13 +1030,40 @@ contains
       enddo
 
       do n = 1, cell_particles(i,j,k)%count
-         cell_particles(i,j,k)%particles(n)%temperature = cell_temperature
+         cell_particles(i,j,k)%particles(n)%temperature = &
+            cell_absolute_temperature(i, j, k, cell_temperature)
          cell_particles(i,j,k)%particles(n)%qv = cell_qv
          cell_particles(i,j,k)%particles(n)%eta = &
             cell_qv - qsatw_liquid(cell_temperature, field_state%pressure(k))
          cell_particles(i,j,k)%particles(n)%n_monomer = 1_int64
       enddo
    end subroutine initialize_equilibrium_liquid_state
+
+   real(real64) function cell_tabs_lcm(i, j, k) result(tabs_lcm)
+      integer, intent(in) :: i
+      integer, intent(in) :: j
+      integer, intent(in) :: k
+
+      ! SAM-LCM diagnoses tabs_LCM as liquid-water static energy minus gamaz.
+      tabs_lcm = field_state%static_energy(i,j,k) - cell_gamaz(i, j, k)
+   end function cell_tabs_lcm
+
+   real(real64) function cell_absolute_temperature(i, j, k, tabs_lcm) result(temperature)
+      integer, intent(in) :: i
+      integer, intent(in) :: j
+      integer, intent(in) :: k
+      real(real64), intent(in) :: tabs_lcm
+
+      temperature = tabs_lcm + cell_gamaz(i, j, k)
+   end function cell_absolute_temperature
+
+   real(real64) function cell_gamaz(i, j, k) result(gamaz)
+      integer, intent(in) :: i
+      integer, intent(in) :: j
+      integer, intent(in) :: k
+
+      gamaz = field_state%static_energy(i,j,k) - field_state%temperature(i,j,k)
+   end function cell_gamaz
 
    real(real64) function particle_aerosol_radius(i, j, k, n) result(r_aero)
       integer, intent(in) :: i

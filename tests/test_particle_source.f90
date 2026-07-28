@@ -168,6 +168,8 @@ contains
                        "source particle aerosol mass")
       call assert_true(cell_particles(1,1,1)%particles(source_index)%mass_water > 0.0_real64, &
                        "source particle liquid mass")
+      call assert_near(cell_particles(1,1,1)%particles(source_index)%temperature, &
+                       static_energy(1,1,1), "source particle absolute temperature")
       call assert_true(cell_particles(1,1,1)%particles(source_index)%aerosol_portions(1) == &
                        1.0_real64, "source particle aerosol portion")
       call assert_unique_ids()
@@ -193,6 +195,8 @@ contains
                        0.0_real64, "IN source particle surface area")
       call assert_true(cell_particles(1,1,1)%particles(source_index)%freezing_temperature > &
                        0.0_real64, "IN source particle freezing temperature")
+      call assert_near(cell_particles(1,1,1)%particles(source_index)%temperature, &
+                       static_energy(1,1,1), "IN source particle absolute temperature")
       call assert_unique_ids()
    end subroutine assert_in_source
 
@@ -251,4 +255,14 @@ contains
          error stop "failed assertion: " // label
       endif
    end subroutine assert_true
+
+   subroutine assert_near(actual, expected, label)
+      real(real64), intent(in) :: actual
+      real(real64), intent(in) :: expected
+      character(len=*), intent(in) :: label
+
+      if (abs(actual - expected) > 1.0e-12_real64) then
+         error stop "failed assertion: " // label
+      endif
+   end subroutine assert_near
 end program test_particle_source
