@@ -224,6 +224,7 @@ contains
                        "particle weight")
       call assert_true(cell_particles(i,j,k)%particles(n)%mass_aero > 0.0_real64, &
                        "particle aerosol mass")
+      call assert_particle_position(i, j, k, n)
       if (config%switch_ice) then
          call assert_true(cell_particles(i,j,k)%particles(n)%particle_type == 2, &
                           "ice-nucleating particle type")
@@ -258,6 +259,37 @@ contains
       call assert_true(cell_particles(i,j,k)%particles(n)%n_monomer == 1_int64, &
                        "equilibrium particle monomer count")
    end subroutine assert_particle
+
+   subroutine assert_particle_position(i, j, k, n)
+      integer, intent(in) :: i
+      integer, intent(in) :: j
+      integer, intent(in) :: k
+      integer, intent(in) :: n
+
+      real(real64) :: x_left
+      real(real64) :: x_right
+      real(real64) :: y_south
+      real(real64) :: y_north
+      real(real64) :: z_bottom
+      real(real64) :: z_top
+
+      x_left = real(i - 1, real64) * grid%dx
+      x_right = x_left + grid%dx
+      y_south = real(j - 1, real64) * grid%dy
+      y_north = y_south + grid%dy
+      z_bottom = z_face(k)
+      z_top = z_bottom + dz(k)
+
+      call assert_true(cell_particles(i,j,k)%particles(n)%x >= x_left .and. &
+                       cell_particles(i,j,k)%particles(n)%x < x_right, &
+                       "particle x position inside owning cell")
+      call assert_true(cell_particles(i,j,k)%particles(n)%y >= y_south .and. &
+                       cell_particles(i,j,k)%particles(n)%y < y_north, &
+                       "particle y position inside owning cell")
+      call assert_true(cell_particles(i,j,k)%particles(n)%z >= z_bottom .and. &
+                       cell_particles(i,j,k)%particles(n)%z < z_top, &
+                       "particle z position inside owning cell")
+   end subroutine assert_particle_position
 
    subroutine reference_bin_aerosol(k, expected_weight, expected_aerosol_mass, &
                                     expected_portions)

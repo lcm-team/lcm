@@ -343,16 +343,7 @@ contains
       particle%last_k = k
       particle%id = lcm_next_particle_id()
       particle%cloudy_age = 0.0_real64
-      particle%x = (real(i - 1 + grid_state%nx_sb, real64) + &
-                    real(randomu(seed_id), real64)) * grid_state%grid%dx
-      if (grid_state%grid%y_dimension == 1) then
-         particle%y = (real(j - 1 + grid_state%ny_sb, real64) + &
-                       real(randomu(seed_id), real64)) * grid_state%grid%dy
-      else
-         particle%y = 0.5_real64 * grid_state%grid%dy
-      endif
-      particle%z = grid_state%grid%z_face(k) + &
-                   real(randomu(seed_id), real64) * grid_state%grid%dz(k)
+      call set_particle_position(i, j, k, seed_id, particle)
       particle%u = 0.0_real64
       particle%v = 0.0_real64
       particle%w = 0.0_real64
@@ -573,6 +564,7 @@ contains
       integer, intent(in) :: k
       integer, intent(in) :: cell_particle_index
       type(lcm_particle_t), intent(inout) :: particle
+      integer :: seed_id
 
       particle%cell_particle_index = cell_particle_index
       particle%last_i = grid_state%grid%global_i_start + i - 1
@@ -582,10 +574,31 @@ contains
       particle%track_marker = -999
 
       particle%particle_type = liquid_particle_type
+      seed_id = particle_random_seed_id()
+      call set_particle_position(i, j, k, seed_id, particle)
       particle%w_sedi = 0.0_real64
       particle%temperature = field_state%temperature(i,j,k)
       particle%qv = field_state%qv(i,j,k)
    end subroutine init_particle_properties
+
+   subroutine set_particle_position(i, j, k, seed_id, particle)
+      integer, intent(in) :: i
+      integer, intent(in) :: j
+      integer, intent(in) :: k
+      integer, intent(in) :: seed_id
+      type(lcm_particle_t), intent(inout) :: particle
+
+      particle%x = (real(i - 1 + grid_state%nx_sb, real64) + &
+                    real(randomu(seed_id), real64)) * grid_state%grid%dx
+      if (grid_state%grid%y_dimension == 1) then
+         particle%y = (real(j - 1 + grid_state%ny_sb, real64) + &
+                       real(randomu(seed_id), real64)) * grid_state%grid%dy
+      else
+         particle%y = 0.5_real64 * grid_state%grid%dy
+      endif
+      particle%z = grid_state%grid%z_face(k) + &
+                   real(randomu(seed_id), real64) * grid_state%grid%dz(k)
+   end subroutine set_particle_position
 
    subroutine lcm_init_particles(i, j, k)
       integer, intent(in) :: i
