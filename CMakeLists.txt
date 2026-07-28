@@ -200,6 +200,32 @@ add_dependencies(test_sam_particle_population_comparison
   sam_micro_init_particles_probe
 )
 
+add_executable(test_particle_source
+  tests/test_particle_source.f90
+)
+
+target_link_libraries(test_particle_source
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_particle_source
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME particle_source_aerosol
+  COMMAND test_particle_source
+          aerosol
+)
+
+add_test(
+  NAME particle_source_in
+  COMMAND test_particle_source
+          in
+)
+
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   target_compile_options(sam_micro_init_particles_probe_objects
     PRIVATE

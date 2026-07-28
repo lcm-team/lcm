@@ -669,8 +669,19 @@ contains
       integer :: i, j, k, n
       integer :: idx
       integer :: other
-      integer(int64) :: ids(expected_count)
+      integer :: total_count
+      integer(int64), allocatable :: ids(:)
 
+      total_count = 0
+      do k = 1, nzl
+         do j = 1, ny_local
+            do i = 1, nx_local
+               total_count = total_count + cell_particles(i,j,k)%count
+            enddo
+         enddo
+      enddo
+
+      allocate(ids(total_count))
       idx = 0
       do k = 1, nzl
          do j = 1, ny_local
@@ -683,8 +694,8 @@ contains
          enddo
       enddo
 
-      do idx = 1, int(expected_count)
-         do other = idx + 1, int(expected_count)
+      do idx = 1, total_count
+         do other = idx + 1, total_count
             call assert_true(ids(idx) /= ids(other), "unique particle IDs")
          enddo
       enddo
