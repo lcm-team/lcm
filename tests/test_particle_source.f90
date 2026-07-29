@@ -3,7 +3,7 @@ program test_particle_source
    use lcm_host_interface, only: lcm_advance, lcm_attach_fields, lcm_config_t, &
                                  lcm_grid_t, lcm_init_config, lcm_init_grid,  &
                                  lcm_initialize, lcm_set_config, lcm_set_grid
-   use lcm_particle_state, only: cell_particles
+   use lcm_particle_state, only: cell_particles, nin_prof
 
    implicit none
 
@@ -40,6 +40,10 @@ program test_particle_source
       call assert_aerosol_source()
    case ("in")
       call assert_in_source()
+   case ("moving_aerosol")
+      call assert_moving_aerosol_source()
+   case ("moving_in")
+      call assert_moving_in_source()
    case default
       error stop "unknown particle source test case"
    end select
@@ -57,6 +61,14 @@ contains
          call configure_aerosol_source(config)
       case ("in")
          call configure_in_source(config)
+      case ("moving_aerosol")
+         call configure_aerosol_source(config)
+         config%switch_moving_source = .true.
+         config%vx_source_aero = [50.0, 0.0, 0.0, 0.0]
+      case ("moving_in")
+         call configure_in_source(config)
+         config%switch_moving_source = .true.
+         config%vx_source_in = [50.0, 0.0, 0.0, 0.0]
       case default
          error stop "unknown particle source test case"
       end select
@@ -157,6 +169,7 @@ contains
       source_index = np_xy + 1
 
       call assert_source_cell_counts()
+      call assert_nin_profile(0.0_real64)
       call assert_true(cell_particles(1,1,1)%particles(source_index)%spray_marker == 100, &
                        "source particle spray marker")
       call assert_true(cell_particles(1,1,1)%particles(source_index)%weight == &
@@ -184,6 +197,7 @@ contains
       source_index = np_xy + 1
 
       call assert_source_cell_counts()
+      call assert_nin_profile(real(expected_source_weight, real64))
       call assert_true(cell_particles(1,1,1)%particles(source_index)%spray_marker == 100, &
                        "IN source particle spray marker")
       call assert_true(cell_particles(1,1,1)%particles(source_index)%weight == &
@@ -200,6 +214,53 @@ contains
       call assert_unique_ids()
    end subroutine assert_in_source
 
+   subroutine assert_moving_aerosol_source()
+      integer :: expected_source_weight
+      integer :: source_index
+
+      expected_source_weight = nint(100.0_real64 * 50.0_real64 * &
+                                    50.0_real64 * dz(1))
+      source_index = np_xy + 1
+
+      call assert_true(cell_particles(1,1,1)%count == np_xy, &
+                       "moving source leaves original cell")
+      call assert_true(cell_particles(2,1,1)%count == np_xy + 1, &
+                       "moving source enters downstream cell")
+      call assert_true(cell_particles(1,2,1)%count == np_xy, &
+                       "moving source y-neighbor particle count")
+      call assert_true(cell_particles(2,1,2)%count == np_xy, &
+                       "moving source z-neighbor particle count")
+      call assert_nin_profile(0.0_real64)
+      call assert_true(cell_particles(2,1,1)%particles(source_index)%spray_marker == 100, &
+                       "moving source particle spray marker")
+      call assert_true(cell_particles(2,1,1)%particles(source_index)%weight == &
+                       int(expected_source_weight, int64), &
+                       "moving SAM-LCM source particle weight")
+      call assert_near(cell_particles(2,1,1)%particles(source_index)%temperature, &
+                       static_energy(2,1,1), "moving source particle temperature")
+      call assert_unique_ids()
+   end subroutine assert_moving_aerosol_source
+
+   subroutine assert_moving_in_source()
+      integer :: expected_source_weight
+      integer :: source_index
+
+      expected_source_weight = nint(100.0_real64 * 50.0_real64 * &
+                                    50.0_real64 * dz(1))
+      source_index = np_xy + 1
+
+      call assert_true(cell_particles(1,1,1)%count == np_xy, &
+                       "moving IN source leaves original cell")
+      call assert_true(cell_particles(2,1,1)%count == np_xy + 1, &
+                       "moving IN source enters downstream cell")
+      call assert_nin_profile(real(expected_source_weight, real64))
+      call assert_true(cell_particles(2,1,1)%particles(source_index)%particle_type == 2, &
+                       "moving IN source particle type")
+      call assert_true(cell_particles(2,1,1)%particles(source_index)%in_surface_area(3) > &
+                       0.0_real64, "moving IN source particle surface area")
+      call assert_unique_ids()
+   end subroutine assert_moving_in_source
+
    subroutine assert_source_cell_counts()
       call assert_true(cell_particles(1,1,1)%count == np_xy + 1, &
                        "source cell particle count")
@@ -210,6 +271,14 @@ contains
       call assert_true(cell_particles(1,1,2)%count == np_xy, &
                        "non-source z-neighbor particle count")
    end subroutine assert_source_cell_counts
+
+   subroutine assert_nin_profile(expected_first_level)
+      real(real64), intent(in) :: expected_first_level
+
+      call assert_true(allocated(nin_prof), "nin_prof allocated")
+      call assert_near(nin_prof(1), expected_first_level, "nin_prof first level")
+      call assert_near(sum(nin_prof(2:nz)), 0.0_real64, "nin_prof upper levels")
+   end subroutine assert_nin_profile
 
    subroutine assert_unique_ids()
       integer :: i, j, k, n

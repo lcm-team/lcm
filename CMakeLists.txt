@@ -232,6 +232,18 @@ add_test(
           in
 )
 
+add_test(
+  NAME particle_source_moving_aerosol
+  COMMAND test_particle_source
+          moving_aerosol
+)
+
+add_test(
+  NAME particle_source_moving_in
+  COMMAND test_particle_source
+          moving_in
+)
+
 if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   target_compile_options(sam_micro_init_particles_probe_objects
     PRIVATE

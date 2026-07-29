@@ -26,11 +26,26 @@ module lcm_particle_state
    public :: lcm_next_particle_id
    public :: lcm_initialize_computational_particles
    public :: lcm_apply_particle_sources
+   public :: nin_prof
 
    type(lcm_particle_cell_t), allocatable, protected, save :: cell_particles(:,:,:)
+   real(real64), allocatable, protected, save :: nin_prof(:)
    integer(int64), protected, save :: n_step_id = 0_int64
    integer(int64), protected, save :: n_id = 0_int64
    logical, protected, save :: particle_id_counter_is_initialized = .false.
+   logical, save :: source_position_state_is_initialized = .false.
+   real(real64), save :: x_w_source_aero(4) = 0.0_real64
+   real(real64), save :: x_e_source_aero(4) = 0.0_real64
+   real(real64), save :: y_s_source_aero(4) = 0.0_real64
+   real(real64), save :: y_n_source_aero(4) = 0.0_real64
+   real(real64), save :: z_b_source_aero(4) = 0.0_real64
+   real(real64), save :: z_t_source_aero(4) = 0.0_real64
+   real(real64), save :: x_w_source_in(4) = 0.0_real64
+   real(real64), save :: x_e_source_in(4) = 0.0_real64
+   real(real64), save :: y_s_source_in(4) = 0.0_real64
+   real(real64), save :: y_n_source_in(4) = 0.0_real64
+   real(real64), save :: z_b_source_in(4) = 0.0_real64
+   real(real64), save :: z_t_source_in(4) = 0.0_real64
 
    real(real64), parameter :: pi = 3.141592653589793238462643383279502884_real64
    real(real64), parameter :: epsv = 0.622_real64
@@ -152,9 +167,8 @@ contains
       real(real64) :: p_source_in(4)
 
       if (.not. config_state%switch_particle_source) return
-      if (config_state%switch_moving_source) then
-         error stop "LCM moving particle sources need standalone source-position state"
-      endif
+      call ensure_source_state()
+      nin_prof = 0.0_real64
 
       p_source_aero = real(config_state%p_source_aero, real64)
       p_source_in = real(config_state%p_source_in, real64)
@@ -172,6 +186,11 @@ contains
       do i_mode = 1, 4
          if (max(p_source_aero(i_mode), p_source_in(i_mode)) <= 0.0_real64) exit
 
+         if (config_state%switch_moving_source) then
+            call move_source_positions(i_mode, p_source_aero(i_mode), &
+                                       p_source_in(i_mode), time_step)
+         endif
+
          if (p_source_aero(i_mode) > 0.0_real64) then
             call add_source_particles_for_region(i_mode, p_source_aero(i_mode), &
                                                  time_step, source_kind_aerosol)
@@ -184,6 +203,181 @@ contains
          endif
       enddo
    end subroutine lcm_apply_particle_sources
+
+   subroutine ensure_source_state()
+      if (.not. allocated(nin_prof)) then
+         allocate(nin_prof(grid_state%grid%nz))
+      endif
+
+      if (.not. source_position_state_is_initialized) then
+         call initialize_source_position_state()
+         source_position_state_is_initialized = .true.
+      endif
+   end subroutine ensure_source_state
+
+   subroutine initialize_source_position_state()
+      integer :: i_mode
+
+      do i_mode = 1, 4
+         call initialize_source_position_for_kind(i_mode, source_kind_aerosol)
+         call initialize_source_position_for_kind(i_mode, source_kind_in)
+      enddo
+   end subroutine initialize_source_position_state
+
+   subroutine initialize_source_position_for_kind(i_mode, source_kind)
+      integer, intent(in) :: i_mode
+      integer, intent(in) :: source_kind
+
+      integer :: nx_e
+      integer :: nx_w
+      integer :: ny_n
+      integer :: ny_s
+      integer :: nz_b
+      integer :: nz_t
+
+      call fixed_source_bounds(i_mode, source_kind, nx_w, nx_e, ny_s, ny_n, &
+                               nz_b, nz_t)
+
+      if (source_kind == source_kind_aerosol) then
+         call initialize_source_position_from_bounds(nx_w, nx_e, ny_s, ny_n, &
+                                                     nz_b, nz_t,             &
+                                                     x_w_source_aero(i_mode),&
+                                                     x_e_source_aero(i_mode),&
+                                                     y_s_source_aero(i_mode),&
+                                                     y_n_source_aero(i_mode),&
+                                                     z_b_source_aero(i_mode),&
+                                                     z_t_source_aero(i_mode))
+      else
+         call initialize_source_position_from_bounds(nx_w, nx_e, ny_s, ny_n, &
+                                                     nz_b, nz_t,             &
+                                                     x_w_source_in(i_mode),  &
+                                                     x_e_source_in(i_mode),  &
+                                                     y_s_source_in(i_mode),  &
+                                                     y_n_source_in(i_mode),  &
+                                                     z_b_source_in(i_mode),  &
+                                                     z_t_source_in(i_mode))
+      endif
+   end subroutine initialize_source_position_for_kind
+
+   subroutine initialize_source_position_from_bounds(nx_w, nx_e, ny_s, ny_n, &
+                                                     nz_b, nz_t,             &
+                                                     x_w, x_e, y_s, y_n,     &
+                                                     z_b, z_t)
+      integer, intent(in) :: nx_w
+      integer, intent(in) :: nx_e
+      integer, intent(in) :: ny_s
+      integer, intent(in) :: ny_n
+      integer, intent(in) :: nz_b
+      integer, intent(in) :: nz_t
+      real(real64), intent(out) :: x_w
+      real(real64), intent(out) :: x_e
+      real(real64), intent(out) :: y_s
+      real(real64), intent(out) :: y_n
+      real(real64), intent(out) :: z_b
+      real(real64), intent(out) :: z_t
+
+      x_w = real(nx_w - 1, real64) * grid_state%grid%dx
+      x_e = source_upper_bound_position(nx_e, grid_state%grid%dx)
+      y_s = real(ny_s - 1, real64) * grid_state%grid%dy
+      y_n = source_upper_bound_position(ny_n, grid_state%grid%dy)
+
+      if (nz_b >= 1 .and. nz_b <= grid_state%grid%nz + 1) then
+         z_b = grid_state%grid%z_face(nz_b)
+      else
+         z_b = 0.0_real64
+      endif
+
+      if (nz_t >= 0 .and. nz_t < grid_state%grid%nz + 1) then
+         z_t = source_vertical_upper_bound(nz_t)
+      else
+         z_t = 0.0_real64
+      endif
+   end subroutine initialize_source_position_from_bounds
+
+   real(real64) function source_upper_bound_position(index, spacing) &
+      result(position)
+      integer, intent(in) :: index
+      real(real64), intent(in) :: spacing
+
+      if (index <= 0) then
+         position = 0.0_real64
+      else
+         position = real(index, real64) * spacing - spacing * &
+                    epsilon(1.0_real64)
+      endif
+   end function source_upper_bound_position
+
+   real(real64) function source_vertical_upper_bound(nz_t) result(position)
+      integer, intent(in) :: nz_t
+
+      if (nz_t <= 0) then
+         position = 0.0_real64
+      else
+         position = grid_state%grid%z_face(nz_t + 1) - &
+                    max(1.0_real64, abs(grid_state%grid%z_face(nz_t + 1))) * &
+                    epsilon(1.0_real64)
+      endif
+   end function source_vertical_upper_bound
+
+   subroutine move_source_positions(i_mode, p_source_aero, p_source_in, time_step)
+      integer, intent(in) :: i_mode
+      real(real64), intent(in) :: p_source_aero
+      real(real64), intent(in) :: p_source_in
+      real(real64), intent(in) :: time_step
+
+      if (p_source_aero > 0.0_real64) then
+         call move_source_position_set(time_step,                                  &
+                                       real(config_state%vx_source_aero(i_mode), real64), &
+                                       real(config_state%vy_source_aero(i_mode), real64), &
+                                       real(config_state%vz_source_aero(i_mode), real64), &
+                                       x_w_source_aero(i_mode), x_e_source_aero(i_mode),  &
+                                       y_s_source_aero(i_mode), y_n_source_aero(i_mode),  &
+                                       z_b_source_aero(i_mode), z_t_source_aero(i_mode))
+      endif
+
+      if (p_source_in > 0.0_real64) then
+         call move_source_position_set(time_step,                                  &
+                                       real(config_state%vx_source_in(i_mode), real64), &
+                                       real(config_state%vy_source_in(i_mode), real64), &
+                                       real(config_state%vz_source_in(i_mode), real64), &
+                                       x_w_source_in(i_mode), x_e_source_in(i_mode),    &
+                                       y_s_source_in(i_mode), y_n_source_in(i_mode),    &
+                                       z_b_source_in(i_mode), z_t_source_in(i_mode))
+      endif
+   end subroutine move_source_positions
+
+   subroutine move_source_position_set(time_step, vx, vy, vz, x_w, x_e, y_s, &
+                                       y_n, z_b, z_t)
+      real(real64), intent(in) :: time_step
+      real(real64), intent(in) :: vx
+      real(real64), intent(in) :: vy
+      real(real64), intent(in) :: vz
+      real(real64), intent(inout) :: x_w
+      real(real64), intent(inout) :: x_e
+      real(real64), intent(inout) :: y_s
+      real(real64), intent(inout) :: y_n
+      real(real64), intent(inout) :: z_b
+      real(real64), intent(inout) :: z_t
+
+      x_e = mod(x_e + vx * time_step, source_domain_length_x())
+      x_w = mod(x_w + vx * time_step, source_domain_length_x())
+      y_n = y_n + vy * time_step
+      y_s = y_s + vy * time_step
+      if (grid_state%grid%y_dimension == 1) then
+         y_n = mod(y_n, source_domain_length_y())
+         y_s = mod(y_s, source_domain_length_y())
+      endif
+      z_t = z_t + vz * time_step
+      z_b = z_b + vz * time_step
+   end subroutine move_source_position_set
+
+   real(real64) function source_domain_length_x() result(length)
+      length = real(grid_state%grid%nx_global, real64) * grid_state%grid%dx
+   end function source_domain_length_x
+
+   real(real64) function source_domain_length_y() result(length)
+      length = real(grid_state%grid%ny_global, real64) * grid_state%grid%dy
+   end function source_domain_length_y
 
    logical function source_is_inactive(model_step, n_start, n_end) result(is_inactive)
       integer, intent(in) :: model_step
@@ -235,6 +429,45 @@ contains
       global_i = grid_state%grid%global_i_start + i - 1
       global_j = grid_state%grid%global_j_start + j - 1
 
+      call source_bounds(i_mode, source_kind, nx_w, nx_e, ny_s, ny_n, &
+                         nz_b, nz_t)
+
+      is_in_region = k >= nz_b .and. k <= nz_t .and. &
+                     global_j >= ny_s .and. global_j <= ny_n .and. &
+                     global_i >= nx_w .and. global_i <= nx_e
+   end function cell_is_in_source_region
+
+   subroutine source_bounds(i_mode, source_kind, nx_w, nx_e, ny_s, ny_n, &
+                            nz_b, nz_t)
+      integer, intent(in) :: i_mode
+      integer, intent(in) :: source_kind
+      integer, intent(out) :: nx_w
+      integer, intent(out) :: nx_e
+      integer, intent(out) :: ny_s
+      integer, intent(out) :: ny_n
+      integer, intent(out) :: nz_b
+      integer, intent(out) :: nz_t
+
+      if (config_state%switch_moving_source) then
+         call moving_source_bounds(i_mode, source_kind, nx_w, nx_e, ny_s, &
+                                   ny_n, nz_b, nz_t)
+      else
+         call fixed_source_bounds(i_mode, source_kind, nx_w, nx_e, ny_s, &
+                                  ny_n, nz_b, nz_t)
+      endif
+   end subroutine source_bounds
+
+   subroutine fixed_source_bounds(i_mode, source_kind, nx_w, nx_e, ny_s, ny_n, &
+                                  nz_b, nz_t)
+      integer, intent(in) :: i_mode
+      integer, intent(in) :: source_kind
+      integer, intent(out) :: nx_w
+      integer, intent(out) :: nx_e
+      integer, intent(out) :: ny_s
+      integer, intent(out) :: ny_n
+      integer, intent(out) :: nz_b
+      integer, intent(out) :: nz_t
+
       if (source_kind == source_kind_aerosol) then
          nx_w = config_state%nx_w_source_aero(i_mode)
          nx_e = config_state%nx_e_source_aero(i_mode)
@@ -250,11 +483,86 @@ contains
          nz_b = config_state%nz_b_source_in(i_mode)
          nz_t = config_state%nz_t_source_in(i_mode)
       endif
+   end subroutine fixed_source_bounds
 
-      is_in_region = k >= nz_b .and. k <= nz_t .and. &
-                     global_j >= ny_s .and. global_j <= ny_n .and. &
-                     global_i >= nx_w .and. global_i <= nx_e
-   end function cell_is_in_source_region
+   subroutine moving_source_bounds(i_mode, source_kind, nx_w, nx_e, ny_s, ny_n, &
+                                   nz_b, nz_t)
+      integer, intent(in) :: i_mode
+      integer, intent(in) :: source_kind
+      integer, intent(out) :: nx_w
+      integer, intent(out) :: nx_e
+      integer, intent(out) :: ny_s
+      integer, intent(out) :: ny_n
+      integer, intent(out) :: nz_b
+      integer, intent(out) :: nz_t
+
+      if (source_kind == source_kind_aerosol) then
+         call source_indices_from_positions(x_w_source_aero(i_mode), &
+                                            x_e_source_aero(i_mode), &
+                                            y_s_source_aero(i_mode), &
+                                            y_n_source_aero(i_mode), &
+                                            z_b_source_aero(i_mode), &
+                                            z_t_source_aero(i_mode), &
+                                            nx_w, nx_e, ny_s, ny_n, nz_b, nz_t)
+      else
+         call source_indices_from_positions(x_w_source_in(i_mode), &
+                                            x_e_source_in(i_mode), &
+                                            y_s_source_in(i_mode), &
+                                            y_n_source_in(i_mode), &
+                                            z_b_source_in(i_mode), &
+                                            z_t_source_in(i_mode), &
+                                            nx_w, nx_e, ny_s, ny_n, nz_b, nz_t)
+      endif
+   end subroutine moving_source_bounds
+
+   subroutine source_indices_from_positions(x_w, x_e, y_s, y_n, z_b, z_t, &
+                                             nx_w, nx_e, ny_s, ny_n, nz_b, nz_t)
+      real(real64), intent(in) :: x_w
+      real(real64), intent(in) :: x_e
+      real(real64), intent(in) :: y_s
+      real(real64), intent(in) :: y_n
+      real(real64), intent(in) :: z_b
+      real(real64), intent(in) :: z_t
+      integer, intent(out) :: nx_w
+      integer, intent(out) :: nx_e
+      integer, intent(out) :: ny_s
+      integer, intent(out) :: ny_n
+      integer, intent(out) :: nz_b
+      integer, intent(out) :: nz_t
+
+      nx_w = int(x_w / grid_state%grid%dx) + 1
+      nx_e = int(x_e / grid_state%grid%dx) + 1
+      ny_s = int(y_s / grid_state%grid%dy) + 1
+      ny_n = int(y_n / grid_state%grid%dy) + 1
+      nz_b = search_sorted_z_face(z_b)
+      nz_t = search_sorted_z_face(z_t)
+   end subroutine source_indices_from_positions
+
+   integer function search_sorted_z_face(z) result(index)
+      real(real64), intent(in) :: z
+
+      integer :: finish
+      integer :: mid
+      integer :: range
+      integer :: start
+
+      start = 1
+      finish = grid_state%grid%nz + 1
+      range = finish - start
+      mid = (start + finish) / 2
+
+      do while (range > 1)
+         if (z > grid_state%grid%z_face(mid)) then
+            start = mid
+         else
+            finish = mid
+         endif
+         range = finish - start
+         mid = (start + finish) / 2
+      enddo
+
+      index = start
+   end function search_sorted_z_face
 
    subroutine add_source_particles_for_cell(i, j, k, i_mode, p_source, &
                                             time_step, source_kind)
@@ -361,8 +669,9 @@ contains
          r_in = source_in_radius(i_mode, seed_id, 100.0e-6_real64)
          sfc_in = 4.0_real64 * pi * r_in**2
          call set_source_in_state(i_mode, weight, sfc_in, seed_id, particle)
+         call add_nin_profile(k, weight)
       else
-         call maybe_set_embedded_source_in(i_mode, weight, seed_id, particle)
+         call maybe_set_embedded_source_in(i_mode, k, weight, seed_id, particle)
       endif
 
       call lcm_add_particle(i, j, k, particle)
@@ -489,8 +798,10 @@ contains
       enddo
    end function source_equilibrium_radius
 
-   subroutine maybe_set_embedded_source_in(i_mode, source_weight, seed_id, particle)
+   subroutine maybe_set_embedded_source_in(i_mode, k, source_weight, seed_id, &
+                                           particle)
       integer, intent(in) :: i_mode
+      integer, intent(in) :: k
       integer(int64), intent(in) :: source_weight
       integer, intent(in) :: seed_id
       type(lcm_particle_t), intent(inout) :: particle
@@ -513,8 +824,20 @@ contains
          particle%mass_water = particle%mass_water * &
                                real(config_state%frac_in_source_weight(i_mode), real64)
          call set_source_in_state(i_mode, particle%weight, sfc_in, seed_id, particle)
+         call add_nin_profile(k, particle%weight)
       endif
    end subroutine maybe_set_embedded_source_in
+
+   subroutine add_nin_profile(k, weight)
+      integer, intent(in) :: k
+      integer(int64), intent(in) :: weight
+
+      if (.not. allocated(nin_prof)) then
+         error stop "LCM source injection profile is not allocated"
+      endif
+
+      nin_prof(k) = nin_prof(k) + real(weight, real64)
+   end subroutine add_nin_profile
 
    subroutine set_source_in_state(i_mode, weight, sfc_in, seed_id, particle)
       integer, intent(in) :: i_mode
