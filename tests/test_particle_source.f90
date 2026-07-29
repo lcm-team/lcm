@@ -3,7 +3,8 @@ program test_particle_source
    use lcm_host_interface, only: lcm_advance, lcm_attach_fields, lcm_config_t, &
                                  lcm_grid_t, lcm_init_config, lcm_init_grid,  &
                                  lcm_initialize, lcm_set_config, lcm_set_grid
-   use lcm_particle_state, only: cell_particles, nin_prof
+   use lcm_particle_source, only: nin_prof
+   use lcm_particle_state, only: cell_particles
 
    implicit none
 

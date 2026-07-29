@@ -4,7 +4,7 @@ module lcm_advance_mod
    use lcm_config_state, only: config_is_set, config_state
    use lcm_grid_state, only: grid_state
    use lcm_initialization_state, only: lcm_is_initialized
-   use lcm_particle_state, only: lcm_apply_particle_sources
+   use lcm_particle_source, only: lcm_apply_particle_sources
 
    implicit none
 
