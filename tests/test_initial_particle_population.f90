@@ -205,7 +205,7 @@ contains
          if (config%switch_ice) then
             expected_portions(1, :) = 1.0_real64
          else
-            call reference_bin_aerosol(k, expected_weight, expected_aerosol_mass, &
+            call reference_bin_aerosol(1, expected_weight, expected_aerosol_mass, &
                                        expected_portions)
             call assert_true(cell_particles(i,j,k)%particles(n)%weight == &
                              expected_weight(n), "SAM-LCM bin aerosol weight")
@@ -214,7 +214,7 @@ contains
                                       "SAM-LCM bin aerosol mass")
          endif
       case ("USM")
-         call reference_usm_aerosol(k, expected_weight, expected_aerosol_mass, &
+         call reference_usm_aerosol(1, expected_weight, expected_aerosol_mass, &
                                     expected_portions)
          call assert_true(cell_particles(i,j,k)%particles(n)%weight == &
                           expected_weight(n), "SAM-LCM USM aerosol weight")

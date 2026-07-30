@@ -34,8 +34,10 @@ module lcm_particle_state
    public :: ice_freezing_temperature
 
    type(lcm_particle_cell_t), allocatable, protected, save :: cell_particles(:,:,:)
+   type(lcm_particle_t), allocatable, save :: aerosol_initialization_template(:)
    integer(int64), protected, save :: n_step_id = 0_int64
    integer(int64), protected, save :: n_id = 0_int64
+   logical, save :: aerosol_initialization_template_is_set = .false.
    logical, protected, save :: particle_id_counter_is_initialized = .false.
 
    real(real64), parameter :: pi = 3.141592653589793238462643383279502884_real64
@@ -128,6 +130,7 @@ contains
       call require_particle_cells_allocated()
       call lcm_reset_particle_cells()
       call lcm_initialize_particle_id_counter()
+      call reset_aerosol_initialization_template()
 
       initialization_levels = min(config_state%nzl, grid_state%grid%nz)
 
@@ -284,6 +287,14 @@ contains
       real(real64) :: r_aero_min(4), r_aero_max(4)
 
       if (config_state%np_xy == 0) return
+
+      if (uses_shared_aerosol_initialization_template() .and. &
+          aerosol_initialization_template_is_set) then
+         call copy_aerosol_initialization_template(i, j, k)
+         call initialize_equilibrium_liquid_state(i, j, k)
+         call lcm_user_init_particles(i, j, k, cell_particles(i,j,k))
+         return
+      endif
 
       seed_id = particle_random_seed_id()
       if (config_state%switch_ice) then
@@ -527,10 +538,84 @@ contains
          np_done = np_done + np_mode
       enddo
 
+      if (uses_shared_aerosol_initialization_template()) then
+         call save_aerosol_initialization_template(i, j, k)
+      endif
+
       call initialize_equilibrium_liquid_state(i, j, k)
 
       call lcm_user_init_particles(i, j, k, cell_particles(i,j,k))
    end subroutine lcm_init_particles
+
+   logical function uses_shared_aerosol_initialization_template() &
+      result(uses_template)
+      uses_template = trim(config_state%init_aero) == "bin" .or. &
+                      trim(config_state%init_aero) == "USM"
+   end function uses_shared_aerosol_initialization_template
+
+   subroutine reset_aerosol_initialization_template()
+      if (allocated(aerosol_initialization_template)) then
+         deallocate(aerosol_initialization_template)
+      endif
+      aerosol_initialization_template_is_set = .false.
+   end subroutine reset_aerosol_initialization_template
+
+   subroutine save_aerosol_initialization_template(i, j, k)
+      integer, intent(in) :: i
+      integer, intent(in) :: j
+      integer, intent(in) :: k
+
+      integer :: n
+
+      if (allocated(aerosol_initialization_template)) then
+         deallocate(aerosol_initialization_template)
+      endif
+      allocate(aerosol_initialization_template(config_state%np_xy))
+
+      do n = 1, config_state%np_xy
+         aerosol_initialization_template(n)%weight = &
+            cell_particles(i,j,k)%particles(n)%weight
+         aerosol_initialization_template(n)%mass_aero = &
+            cell_particles(i,j,k)%particles(n)%mass_aero
+         aerosol_initialization_template(n)%aerosol_portions = &
+            cell_particles(i,j,k)%particles(n)%aerosol_portions
+         aerosol_initialization_template(n)%particle_type = &
+            cell_particles(i,j,k)%particles(n)%particle_type
+         aerosol_initialization_template(n)%in_surface_area = &
+            cell_particles(i,j,k)%particles(n)%in_surface_area
+         aerosol_initialization_template(n)%freezing_temperature = &
+            cell_particles(i,j,k)%particles(n)%freezing_temperature
+      enddo
+
+      aerosol_initialization_template_is_set = .true.
+   end subroutine save_aerosol_initialization_template
+
+   subroutine copy_aerosol_initialization_template(i, j, k)
+      integer, intent(in) :: i
+      integer, intent(in) :: j
+      integer, intent(in) :: k
+
+      integer :: n
+
+      if (.not. aerosol_initialization_template_is_set) then
+         error stop "LCM aerosol initialization template has not been set"
+      endif
+
+      do n = 1, config_state%np_xy
+         cell_particles(i,j,k)%particles(n)%weight = &
+            aerosol_initialization_template(n)%weight
+         cell_particles(i,j,k)%particles(n)%mass_aero = &
+            aerosol_initialization_template(n)%mass_aero
+         cell_particles(i,j,k)%particles(n)%aerosol_portions = &
+            aerosol_initialization_template(n)%aerosol_portions
+         cell_particles(i,j,k)%particles(n)%particle_type = &
+            aerosol_initialization_template(n)%particle_type
+         cell_particles(i,j,k)%particles(n)%in_surface_area = &
+            aerosol_initialization_template(n)%in_surface_area
+         cell_particles(i,j,k)%particles(n)%freezing_temperature = &
+            aerosol_initialization_template(n)%freezing_temperature
+      enddo
+   end subroutine copy_aerosol_initialization_template
 
    integer function particle_random_seed_id() result(seed_id)
       seed_id = particle_subdomain_id() + 1
