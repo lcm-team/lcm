@@ -22,6 +22,7 @@ else()
 endif()
 
 set(LCM_CORE_SOURCES
+  "${LCM_SOURCE_DIR}/lcm_parameters.f90"
   "${LCM_SOURCE_DIR}/lcm_types.f90"
   "${LCM_SOURCE_DIR}/lcm_grid_state.f90"
   "${LCM_SOURCE_DIR}/lcm_field_state.f90"
