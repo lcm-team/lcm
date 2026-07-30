@@ -26,6 +26,29 @@ identified and moved behind a cleaner host-model interface.
 See [`docs/building.md`](docs/building.md) for the current standalone build
 instructions.
 
+## Development Checks
+
+This repository uses the Python `pre-commit` framework for lightweight,
+shared checks before each commit.
+
+Install it once in your Python environment:
+
+```sh
+pip install pre-commit
+```
+
+Enable the repository hooks once per clone:
+
+```sh
+pre-commit install
+```
+
+Run the checks manually on all files:
+
+```sh
+pre-commit run --all-files
+```
+
 ## Legacy Notes
 
 The original imported SAM-LCM readme is kept for reference at
