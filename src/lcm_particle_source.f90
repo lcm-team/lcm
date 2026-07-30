@@ -14,6 +14,8 @@ module lcm_particle_source
                                 inverse_error_function_approx, lcm_add_particle, &
                                 lcm_next_particle_id, particle_random_seed_id, &
                                 qsatw_liquid, set_particle_position
+   use lcm_parameters, only: molecular_weight_water, pi, rho_liq, rv, &
+                             surface_tension_water
    use lcm_types, only: lcm_particle_t
    use micro_random, only: randomu
 
@@ -39,11 +41,6 @@ module lcm_particle_source
    real(real64), save :: z_b_source_in(4) = 0.0_real64
    real(real64), save :: z_t_source_in(4) = 0.0_real64
 
-   real(real64), parameter :: pi = 3.141592653589793238462643383279502884_real64
-   real(real64), parameter :: molecular_weight_water = 18.0_real64
-   real(real64), parameter :: rho_liq = 1000.0_real64
-   real(real64), parameter :: rv = 461.5_real64
-   real(real64), parameter :: surface_tension_water = 0.0728_real64
    integer, parameter :: liquid_particle_type = 1
    integer, parameter :: ice_nucleating_particle_type = 2
    integer, parameter :: source_kind_aerosol = 1

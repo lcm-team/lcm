@@ -10,6 +10,8 @@ module lcm_particle_state
    use lcm_config_state, only: config_state
    use lcm_field_state, only: field_state
    use lcm_grid_state, only: grid_state
+   use lcm_parameters, only: epsv, fac_cond, molecular_weight_water, pi, &
+                             rho_liq, rv, surface_tension_water
    use lcm_types, only: lcm_particle_cell_t, lcm_particle_t
    use lcm_user, only: lcm_user_init_particles
    use micro_random, only: randomu
@@ -40,13 +42,6 @@ module lcm_particle_state
    logical, save :: aerosol_initialization_template_is_set = .false.
    logical, protected, save :: particle_id_counter_is_initialized = .false.
 
-   real(real64), parameter :: pi = 3.141592653589793238462643383279502884_real64
-   real(real64), parameter :: epsv = 0.622_real64
-   real(real64), parameter :: fac_cond = 2.5e6_real64 / 1004.0_real64
-   real(real64), parameter :: molecular_weight_water = 18.0_real64
-   real(real64), parameter :: rho_liq = 1000.0_real64
-   real(real64), parameter :: rv = 461.5_real64
-   real(real64), parameter :: surface_tension_water = 0.0728_real64
    integer, parameter :: liquid_particle_type = 1
    integer, parameter :: ice_nucleating_particle_type = 2
    integer, parameter :: n_inv_cdf = 50000000
