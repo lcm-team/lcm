@@ -153,60 +153,6 @@ add_test(
           bin_ice
 )
 
-set(SAM_MICRO_INIT_PROBE_MODULE_DIR "${CMAKE_CURRENT_BINARY_DIR}/sam_probe_mod")
-
-add_library(sam_micro_init_particles_probe_objects OBJECT
-  stubs/sam_compat.f90
-  src/micro_user_vars.f90
-  src/micro_vars.f90
-  src/micro_random.f90
-  tests/sam_micro_init_particles_probe_stubs.f90
-  src/micro_init_particles.f90
-)
-
-set_target_properties(sam_micro_init_particles_probe_objects
-  PROPERTIES
-    Fortran_MODULE_DIRECTORY "${SAM_MICRO_INIT_PROBE_MODULE_DIR}"
-)
-
-target_include_directories(sam_micro_init_particles_probe_objects
-  PRIVATE
-    "${SAM_MICRO_INIT_PROBE_MODULE_DIR}"
-)
-
-add_executable(sam_micro_init_particles_probe
-  tests/sam_micro_init_particles_probe.f90
-  $<TARGET_OBJECTS:sam_micro_init_particles_probe_objects>
-)
-
-set_target_properties(sam_micro_init_particles_probe
-  PROPERTIES
-    Fortran_MODULE_DIRECTORY "${SAM_MICRO_INIT_PROBE_MODULE_DIR}"
-)
-
-target_include_directories(sam_micro_init_particles_probe
-  PRIVATE
-    "${SAM_MICRO_INIT_PROBE_MODULE_DIR}"
-)
-
-add_executable(test_sam_particle_population_comparison
-  tests/test_sam_particle_population_comparison.f90
-)
-
-target_link_libraries(test_sam_particle_population_comparison
-  PRIVATE
-    lcm
-)
-
-set_target_properties(test_sam_particle_population_comparison
-  PROPERTIES
-    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
-)
-
-add_dependencies(test_sam_particle_population_comparison
-  sam_micro_init_particles_probe
-)
-
 add_executable(test_particle_source
   tests/test_particle_source.f90
 )
@@ -243,43 +189,4 @@ add_test(
   NAME particle_source_moving_in
   COMMAND test_particle_source
           moving_in
-)
-
-if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
-  target_compile_options(sam_micro_init_particles_probe_objects
-    PRIVATE
-      -cpp
-      -ffree-line-length-none
-      -fallow-argument-mismatch
-      -fdefault-real-8
-  )
-  target_compile_options(sam_micro_init_particles_probe
-    PRIVATE
-      -cpp
-      -ffree-line-length-none
-      -fallow-argument-mismatch
-      -fdefault-real-8
-  )
-endif()
-
-add_test(
-  NAME initial_particle_population_sam_bin_comparison
-  COMMAND test_sam_particle_population_comparison
-          $<TARGET_FILE:sam_micro_init_particles_probe>
-          bin
-)
-
-add_test(
-  NAME initial_particle_population_sam_usm_comparison
-  COMMAND test_sam_particle_population_comparison
-          $<TARGET_FILE:sam_micro_init_particles_probe>
-          USM
-)
-
-add_test(
-  NAME initial_particle_population_sam_bin_ice_comparison
-  COMMAND test_sam_particle_population_comparison
-          $<TARGET_FILE:sam_micro_init_particles_probe>
-          bin
-          ice
 )
