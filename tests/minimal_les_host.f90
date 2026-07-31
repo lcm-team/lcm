@@ -67,8 +67,10 @@ module minimal_les_host
 
 contains
 
-   subroutine setup_minimal_les_host()
-      call configure_minimal_host_config()
+   subroutine setup_minimal_les_host(case_name)
+      character(len=*), intent(in), optional :: case_name
+
+      call configure_minimal_host_config(case_name)
       call configure_minimal_host_grid()
       call configure_minimal_host_fields()
 
@@ -83,7 +85,10 @@ contains
       call lcm_initialize()
    end subroutine setup_minimal_les_host
 
-   subroutine configure_minimal_host_config()
+   subroutine configure_minimal_host_config(case_name)
+      character(len=*), intent(in), optional :: case_name
+      character(len=32) :: selected_case
+
       call lcm_init_config(minimal_host_config)
 
       minimal_host_config%np_xy = minimal_host_np_xy
@@ -96,6 +101,26 @@ contains
       minimal_host_config%sigma_aero = [1.4, 0.0, 0.0, 0.0]
       minimal_host_config%shares_aero = [1.0, 0.0, 0.0, 0.0]
       minimal_host_config%rho_aero = [2170.0, 0.0, 0.0, 0.0]
+
+      selected_case = "bin"
+      if (present(case_name)) selected_case = case_name
+      select case (trim(selected_case))
+      case ("bin")
+         minimal_host_config%init_aero = "bin"
+      case ("USM")
+         minimal_host_config%init_aero = "USM"
+      case ("random")
+         minimal_host_config%init_aero = "random"
+      case ("bin_ice")
+         minimal_host_config%init_aero = "bin"
+         minimal_host_config%switch_ice = .true.
+         minimal_host_config%frac_ice = 0.999999
+         minimal_host_config%n_ice = [0.0, 0.0, 0.001e6, 0.0]
+         minimal_host_config%rm_in = [1.0e-6, 0.2e-6, 1.0e-6, 0.0]
+         minimal_host_config%sigma_in = [1.4, 1.4, 1.4, 0.0]
+      case default
+         error stop "unknown minimal LES host initialization case"
+      end select
 
       call lcm_set_config(minimal_host_config)
    end subroutine configure_minimal_host_config
