@@ -14,7 +14,7 @@ module lcm_particle_state
                              rho_liq, rv, surface_tension_water
    use lcm_types, only: lcm_particle_cell_t, lcm_particle_t
    use lcm_user, only: lcm_user_init_particles
-   use micro_random, only: randomu
+   use lcm_random, only: randomu
 
    implicit none
 

@@ -17,7 +17,7 @@ module lcm_particle_source
    use lcm_parameters, only: molecular_weight_water, pi, rho_liq, rv, &
                              surface_tension_water
    use lcm_types, only: lcm_particle_t
-   use micro_random, only: randomu
+   use lcm_random, only: randomu
 
    implicit none
 
