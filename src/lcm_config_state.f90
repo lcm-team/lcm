@@ -54,8 +54,10 @@ module lcm_config_state
 
    public :: lcm_set_config
    public :: config_is_set
+   public :: config_state
 
    logical, protected, save :: config_is_set = .false.
+   type(lcm_config_t), protected, save :: config_state
 
 contains
 
@@ -63,6 +65,7 @@ contains
       type(lcm_config_t), intent(in) :: config
 
       call validate_config(config)
+      config_state = config
 
       np_xy = config%np_xy
       nzl = config%nzl

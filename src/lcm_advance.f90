@@ -3,6 +3,7 @@ module lcm_advance_mod
    use iso_fortran_env, only: real64
    use lcm_config_state, only: config_is_set
    use lcm_grid_state, only: grid_state
+   use lcm_initialization_state, only: lcm_is_initialized
 
    implicit none
 
@@ -44,6 +45,10 @@ contains
 
       if (.not. grid_state%is_set) then
          error stop 'LCM grid must be set before lcm_advance'
+      endif
+
+      if (.not. lcm_is_initialized) then
+         error stop 'LCM must be initialized before lcm_advance'
       endif
    end subroutine validate_step_state
 
