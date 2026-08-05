@@ -1,6 +1,6 @@
 !> Standalone LCM initialization lifecycle.
 !!
-!! Hosts may call lcm_prepare after config and grid have been supplied. Hosts
+!! Hosts may call lcm_configure_runtime after config and grid have been supplied. Hosts
 !! call lcm_initialize after atmospheric fields have also been supplied. The
 !! timestep path may then assume LCM-owned storage exists.
 module lcm_initialization_state
@@ -14,15 +14,15 @@ module lcm_initialization_state
 
    private
 
-   public :: lcm_prepare
+   public :: lcm_configure_runtime
    public :: lcm_initialize
-   public :: lcm_is_prepared
+   public :: lcm_runtime_is_configured
    public :: lcm_is_initialized
    public :: lcm_initial_particle_count_local
    public :: lcm_initial_particle_count_global
    public :: lcm_initialization_mode
 
-   logical, protected, save :: lcm_is_prepared = .false.
+   logical, protected, save :: lcm_runtime_is_configured = .false.
    logical, protected, save :: lcm_is_initialized = .false.
    integer(int64), protected, save :: lcm_initial_particle_count_local = 0_int64
    integer(int64), protected, save :: lcm_initial_particle_count_global = 0_int64
@@ -30,24 +30,24 @@ module lcm_initialization_state
 
 contains
 
-   subroutine lcm_prepare()
+   subroutine lcm_configure_runtime()
       if (lcm_is_initialized) then
          error stop "LCM has already been initialized"
       endif
-      if (lcm_is_prepared) return
+      if (lcm_runtime_is_configured) return
 
-      call validate_prepare_inputs()
+      call validate_runtime_configuration_inputs()
 
-      lcm_is_prepared = .true.
-   end subroutine lcm_prepare
+      lcm_runtime_is_configured = .true.
+   end subroutine lcm_configure_runtime
 
    subroutine lcm_initialize()
       if (lcm_is_initialized) then
          error stop "LCM has already been initialized"
       endif
 
-      if (.not. lcm_is_prepared) then
-         call lcm_prepare()
+      if (.not. lcm_runtime_is_configured) then
+         call lcm_configure_runtime()
       endif
       call validate_initialization_fields()
 
@@ -74,19 +74,19 @@ contains
       error stop "LCM restart initialization is not implemented"
    end subroutine initialize_lcm_from_restart
 
-   subroutine validate_prepare_inputs()
+   subroutine validate_runtime_configuration_inputs()
       if (.not. config_is_set) then
-         error stop "LCM config must be set before lcm_prepare"
+         error stop "LCM config must be set before lcm_configure_runtime"
       endif
 
       if (.not. grid_state%is_set) then
-         error stop "LCM grid must be set before lcm_prepare"
+         error stop "LCM grid must be set before lcm_configure_runtime"
       endif
 
       if (config_state%nzl > grid_state%grid%nz) then
          error stop "LCM nzl must not exceed the vertical grid size"
       endif
-   end subroutine validate_prepare_inputs
+   end subroutine validate_runtime_configuration_inputs
 
    subroutine validate_initialization_fields()
       call require_attached_field(field_state%u_is_attached, "u")

@@ -46,7 +46,7 @@ Standalone LCM should keep the same scientific lifecycle but make the branch
 explicit:
 
 ```fortran
-call lcm_prepare()
+call lcm_configure_runtime()
 call validate_initialization_fields()
 
 if (config_state%start_from_restart) then
