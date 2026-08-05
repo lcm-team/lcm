@@ -5,6 +5,8 @@ project(lcm LANGUAGES Fortran)
 option(LCM_BUILD_COMPAT_STUBS "Build LCM with temporary SAM compatibility stubs" ON)
 option(LCM_BUILD_ALL_SAM_SOURCES "Attempt to build all SAM-derived LCM source files" OFF)
 
+enable_testing()
+
 find_package(MPI REQUIRED COMPONENTS Fortran)
 
 set(CMAKE_Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/mod")
@@ -27,7 +29,9 @@ set(LCM_CORE_SOURCES
   "${LCM_SOURCE_DIR}/lcm_grid_state.f90"
   "${LCM_SOURCE_DIR}/lcm_field_state.f90"
   "${LCM_SOURCE_DIR}/lcm_random.f90"
+  "${LCM_SOURCE_DIR}/lcm_user.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_state.f90"
+  "${LCM_SOURCE_DIR}/lcm_particle_source.f90"
   "${LCM_SOURCE_DIR}/micro_user_vars.f90"
   "${LCM_SOURCE_DIR}/micro_vars.f90"
   "${LCM_SOURCE_DIR}/lcm_config_state.f90"
@@ -85,4 +89,104 @@ target_include_directories(lcm
 set_target_properties(lcm lcm_sam_compat
   PROPERTIES
     Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_executable(test_initial_particle_population
+  tests/test_initial_particle_population.f90
+)
+
+target_link_libraries(test_initial_particle_population
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_initial_particle_population
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME initial_particle_population_default_aerosol
+  COMMAND test_initial_particle_population
+          default_aerosol
+)
+
+add_test(
+  NAME initial_particle_population_one_mode
+  COMMAND test_initial_particle_population
+          one_mode
+)
+
+add_test(
+  NAME initial_particle_population_tracking
+  COMMAND test_initial_particle_population
+          tracking
+)
+
+add_test(
+  NAME initial_particle_population_multi_mode
+  COMMAND test_initial_particle_population
+          multi_mode
+)
+
+add_test(
+  NAME initial_particle_population_zero_weight_split
+  COMMAND test_initial_particle_population
+          zero_weight_split
+)
+
+add_test(
+  NAME initial_particle_population_usm_aerosol
+  COMMAND test_initial_particle_population
+          usm_aerosol
+)
+
+add_test(
+  NAME initial_particle_population_random_aerosol
+  COMMAND test_initial_particle_population
+          random_aerosol
+)
+
+add_test(
+  NAME initial_particle_population_bin_ice
+  COMMAND test_initial_particle_population
+          bin_ice
+)
+
+add_executable(test_particle_source
+  tests/test_particle_source.f90
+)
+
+target_link_libraries(test_particle_source
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_particle_source
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME particle_source_aerosol
+  COMMAND test_particle_source
+          aerosol
+)
+
+add_test(
+  NAME particle_source_in
+  COMMAND test_particle_source
+          in
+)
+
+add_test(
+  NAME particle_source_moving_aerosol
+  COMMAND test_particle_source
+          moving_aerosol
+)
+
+add_test(
+  NAME particle_source_moving_in
+  COMMAND test_particle_source
+          moving_in
 )

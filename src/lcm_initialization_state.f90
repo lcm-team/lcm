@@ -8,7 +8,8 @@ module lcm_initialization_state
    use lcm_config_state, only: config_is_set, config_state
    use lcm_field_state, only: field_state
    use lcm_grid_state, only: grid_state
-   use lcm_particle_state, only: lcm_allocate_particle_cells
+   use lcm_particle_state, only: lcm_allocate_particle_cells, &
+                                 lcm_initialize_computational_particles
 
    implicit none
 
@@ -63,6 +64,7 @@ contains
    subroutine initialize_lcm_from_config()
       call initialize_particle_count_state()
       call lcm_allocate_particle_cells(initial_capacity_per_cell=config_state%np_xy)
+      call lcm_initialize_computational_particles()
 
       ! SAM-LCM micro_set also initialized grid-helper geometry. In standalone
       ! LCM that responsibility belongs to lcm_set_grid.
