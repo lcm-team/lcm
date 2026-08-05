@@ -46,7 +46,8 @@ Standalone LCM should keep the same scientific lifecycle but make the branch
 explicit:
 
 ```fortran
-call validate_initialization_inputs()
+call lcm_prepare()
+call validate_initialization_fields()
 
 if (config_state%start_from_restart) then
    call initialize_lcm_from_restart()
@@ -59,6 +60,7 @@ lcm_is_initialized = .true.
 
 Fresh initialization should:
 
+- run after config/grid preparation and atmospheric field attachment
 - allocate LCM-owned particle cell storage
 - record expected local and global particle counts
 - later call the initial particle population path from issue #43

@@ -1,7 +1,8 @@
 !> Standalone LCM initialization lifecycle.
 !!
-!! Hosts call lcm_initialize after config, grid, and atmospheric fields have
-!! been supplied. The timestep path may then assume LCM-owned storage exists.
+!! Hosts may call lcm_prepare after config and grid have been supplied. Hosts
+!! call lcm_initialize after atmospheric fields have also been supplied. The
+!! timestep path may then assume LCM-owned storage exists.
 module lcm_initialization_state
    use iso_fortran_env, only: int64
    use lcm_config_state, only: config_is_set, config_state
@@ -13,12 +14,15 @@ module lcm_initialization_state
 
    private
 
+   public :: lcm_prepare
    public :: lcm_initialize
+   public :: lcm_is_prepared
    public :: lcm_is_initialized
    public :: lcm_initial_particle_count_local
    public :: lcm_initial_particle_count_global
    public :: lcm_initialization_mode
 
+   logical, protected, save :: lcm_is_prepared = .false.
    logical, protected, save :: lcm_is_initialized = .false.
    integer(int64), protected, save :: lcm_initial_particle_count_local = 0_int64
    integer(int64), protected, save :: lcm_initial_particle_count_global = 0_int64
@@ -26,12 +30,26 @@ module lcm_initialization_state
 
 contains
 
+   subroutine lcm_prepare()
+      if (lcm_is_initialized) then
+         error stop "LCM has already been initialized"
+      endif
+      if (lcm_is_prepared) return
+
+      call validate_prepare_inputs()
+
+      lcm_is_prepared = .true.
+   end subroutine lcm_prepare
+
    subroutine lcm_initialize()
       if (lcm_is_initialized) then
          error stop "LCM has already been initialized"
       endif
 
-      call validate_initialization_inputs()
+      if (.not. lcm_is_prepared) then
+         call lcm_prepare()
+      endif
+      call validate_initialization_fields()
 
       if (config_state%start_from_restart) then
          call initialize_lcm_from_restart()
@@ -56,19 +74,21 @@ contains
       error stop "LCM restart initialization is not implemented"
    end subroutine initialize_lcm_from_restart
 
-   subroutine validate_initialization_inputs()
+   subroutine validate_prepare_inputs()
       if (.not. config_is_set) then
-         error stop "LCM config must be set before lcm_initialize"
+         error stop "LCM config must be set before lcm_prepare"
       endif
 
       if (.not. grid_state%is_set) then
-         error stop "LCM grid must be set before lcm_initialize"
+         error stop "LCM grid must be set before lcm_prepare"
       endif
 
       if (config_state%nzl > grid_state%grid%nz) then
          error stop "LCM nzl must not exceed the vertical grid size"
       endif
+   end subroutine validate_prepare_inputs
 
+   subroutine validate_initialization_fields()
       call require_attached_field(field_state%u_is_attached, "u")
       call require_attached_field(field_state%v_is_attached, "v")
       call require_attached_field(field_state%w_is_attached, "w")
@@ -79,7 +99,7 @@ contains
       call require_attached_field(field_state%qv_is_attached, "qv")
       call require_attached_field(field_state%pressure_is_attached, "pressure")
       call require_attached_field(field_state%density_is_attached, "density")
-   end subroutine validate_initialization_inputs
+   end subroutine validate_initialization_fields
 
    subroutine require_attached_field(is_attached, field_name)
       logical, intent(in) :: is_attached

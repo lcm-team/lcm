@@ -3,7 +3,7 @@
 This note tracks how the old SAM-LCM `micro_set` responsibilities map onto
 the standalone LCM host-facing lifecycle.
 
-The intended host call order is:
+The simplest host call order is:
 
 ```fortran
 call lcm_set_config(...)
@@ -12,6 +12,26 @@ call lcm_attach_fields(...)
 call lcm_initialize()
 call lcm_advance(dt)
 ```
+
+Hosts that have an early microphysics setup phase before atmospheric fields are
+valid can split this into a prepare phase and a field-dependent initialization
+phase:
+
+```fortran
+call lcm_set_config(...)
+call lcm_set_grid(...)
+call lcm_prepare()
+
+! later, after the host has computed/provided atmospheric fields
+call lcm_attach_fields(...)
+call lcm_initialize()
+call lcm_advance(dt)
+```
+
+`lcm_prepare` only validates config and grid state. `lcm_initialize` validates
+attached atmospheric fields, allocates LCM-owned storage, and records the fresh
+or restart initialization mode. If a host does not call `lcm_prepare` explicitly,
+`lcm_initialize` calls it automatically.
 
 Fresh initialization is the default. A host can request restart initialization
 through `lcm_config_t%start_from_restart`, which should be filled from the host
@@ -36,6 +56,7 @@ restart lifecycle is implemented.
 | Allocate velocity and atmospheric working arrays | Future atmospheric/internal state refactor | Not implemented in #42. The standalone direction is to use attached host fields and only allocate LCM-owned derived state where needed. |
 | Initialize output/history state | Future diagnostics/output work | Not implemented in #42. |
 | Choose fresh initialization vs restart read | `lcm_config_t` / `lcm_initialize` | Covered for lifecycle selection. Fresh initialization is the default; `config_state%start_from_restart` selects restart mode and stops with a clear error until restart lifecycle work exists. |
+| Host-independent setup readiness | `lcm_prepare` / `lcm_is_prepared` | Covered. This lets hosts with DALES-like setup order validate config/grid before atmospheric fields are available. |
 | Set `flag_LCM_init` | `lcm_is_initialized` | Partly covered. `lcm_is_initialized` records that host setup and LCM-owned storage initialization are complete before `lcm_advance`. |
 
 ## Derived Grid/Helper Audit
@@ -77,17 +98,19 @@ boundary issue.
 
 Issue #42 introduces the explicit lifecycle boundary:
 
-- `lcm_initialize` validates that config, grid, and required atmospheric fields
-  have been supplied.
+- `lcm_prepare` validates that config and grid have been supplied.
+- `lcm_initialize` calls `lcm_prepare` automatically if needed, then validates
+  that required atmospheric fields have been attached.
 - `lcm_initialize` allocates LCM-owned cell particle containers with
   `config_state%np_xy` as the initial per-cell capacity.
 - `lcm_initialize` records expected local and global initial particle counts.
 - `lcm_initialize` fails explicitly when
   `config_state%start_from_restart=.true.` because restart initialization is not
   implemented yet.
-- `lcm_is_initialized` records that this setup has completed.
+- `lcm_is_prepared` records that host-independent setup is complete.
+- `lcm_is_initialized` records that field-dependent initialization has completed.
 - `lcm_advance` rejects calls before `lcm_initialize`.
-- `lcm_host_interface` exports `lcm_initialize`.
+- `lcm_host_interface` exports `lcm_prepare` and `lcm_initialize`.
 
 ## What Remains Outside #42
 
