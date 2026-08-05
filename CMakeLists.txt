@@ -153,6 +153,46 @@ add_test(
           bin_ice
 )
 
+add_executable(test_minimal_les_host_initialization
+  tests/minimal_les_host.f90
+  tests/minimal_les_host_references.f90
+  tests/test_minimal_les_host_initialization.f90
+)
+
+target_link_libraries(test_minimal_les_host_initialization
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_minimal_les_host_initialization
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME minimal_les_host_initialization_bin
+  COMMAND test_minimal_les_host_initialization
+          bin
+)
+
+add_test(
+  NAME minimal_les_host_initialization_usm
+  COMMAND test_minimal_les_host_initialization
+          USM
+)
+
+add_test(
+  NAME minimal_les_host_initialization_random
+  COMMAND test_minimal_les_host_initialization
+          random
+)
+
+add_test(
+  NAME minimal_les_host_initialization_bin_ice
+  COMMAND test_minimal_les_host_initialization
+          bin_ice
+)
+
 add_executable(test_particle_source
   tests/test_particle_source.f90
 )
