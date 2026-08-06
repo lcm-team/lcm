@@ -29,6 +29,7 @@ set(LCM_CORE_SOURCES
   "${LCM_SOURCE_DIR}/lcm_grid_state.f90"
   "${LCM_SOURCE_DIR}/lcm_field_state.f90"
   "${LCM_SOURCE_DIR}/lcm_random.f90"
+  "${LCM_SOURCE_DIR}/lcm_particle_location.f90"
   "${LCM_SOURCE_DIR}/lcm_user.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_state.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_source.f90"
@@ -191,6 +192,26 @@ add_test(
   NAME minimal_les_host_initialization_bin_ice
   COMMAND test_minimal_les_host_initialization
           bin_ice
+)
+
+add_executable(test_particle_location
+  tests/minimal_les_host.f90
+  tests/test_particle_location.f90
+)
+
+target_link_libraries(test_particle_location
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_particle_location
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME particle_location
+  COMMAND test_particle_location
 )
 
 add_executable(test_particle_source
