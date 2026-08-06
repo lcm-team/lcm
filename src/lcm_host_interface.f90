@@ -5,7 +5,7 @@ module lcm_host_interface
    use lcm_grid_state, only: lcm_set_grid
    use lcm_initialization_state, only: lcm_configure_runtime, lcm_initialize
    use lcm_advance_mod, only: lcm_advance
-   use lcm_field_state, only: lcm_attach_fields
+   use lcm_field_state, only: lcm_attach_field, lcm_attach_fields
 
    implicit none
 
@@ -20,6 +20,7 @@ module lcm_host_interface
    public :: lcm_configure_runtime
    public :: lcm_initialize
    public :: lcm_advance
+   public :: lcm_attach_field
    public :: lcm_attach_fields
 
 end module lcm_host_interface
