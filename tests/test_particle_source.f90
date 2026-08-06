@@ -1,8 +1,9 @@
 program test_particle_source
    use iso_fortran_env, only: int64, real64
-   use lcm_host_interface, only: lcm_advance, lcm_attach_fields, lcm_config_t, &
-                                 lcm_grid_t, lcm_init_config, lcm_init_grid,  &
-                                 lcm_initialize, lcm_set_config, lcm_set_grid
+   use lcm_host_interface, only: lcm_advance, lcm_attach_field, &
+                                 lcm_attach_fields, lcm_config_t, lcm_grid_t, &
+                                 lcm_init_config, lcm_init_grid, lcm_initialize, &
+                                 lcm_set_config, lcm_set_grid
    use lcm_particle_source, only: nin_prof
    use lcm_particle_state, only: cell_particles
 
@@ -16,9 +17,9 @@ program test_particle_source
 
    type(lcm_config_t) :: config
    type(lcm_grid_t) :: grid
-   real(real64), target :: u(nx_local, ny_local, nz)
-   real(real64), target :: v(nx_local, ny_local, nz)
-   real(real64), target :: w(nx_local, ny_local, nz)
+   real(real64), target :: u(nx_local + 1, ny_local, nz)
+   real(real64), target :: v(nx_local, ny_local + 1, nz)
+   real(real64), target :: w(nx_local, ny_local, nz + 1)
    real(real64), target :: static_energy(nx_local, ny_local, nz)
    real(real64), target :: temperature(nx_local, ny_local, nz)
    real(real64), target :: qv(nx_local, ny_local, nz)
@@ -156,8 +157,11 @@ contains
       pressure = [100000.0_real64, 99000.0_real64, 98000.0_real64]
       density = [1.2_real64, 1.1_real64, 1.0_real64]
 
-      call lcm_attach_fields(u=u, v=v, w=w, static_energy=static_energy, &
-                             temperature=temperature, qv=qv,             &
+      call lcm_attach_field("u", u)
+      call lcm_attach_field("v", v)
+      call lcm_attach_field("w", w)
+      call lcm_attach_fields(static_energy=static_energy, &
+                             temperature=temperature, qv=qv, &
                              pressure=pressure, density=density)
    end subroutine configure_grid_and_fields
 

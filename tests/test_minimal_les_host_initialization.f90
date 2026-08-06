@@ -1,5 +1,6 @@
 program test_minimal_les_host_initialization
    use iso_fortran_env, only: int64, real64
+   use lcm_host_interface, only: lcm_advance
    use lcm_initialization_state, only: lcm_initial_particle_count_global, &
                                        lcm_initial_particle_count_local
    use lcm_particle_state, only: cell_particles
@@ -7,6 +8,7 @@ program test_minimal_les_host_initialization
                                minimal_host_dy, minimal_host_np_xy, &
                                minimal_host_nx_local, minimal_host_ny_local, &
                                minimal_host_nz, minimal_host_nzl, &
+                               minimal_host_u, minimal_host_v, minimal_host_w, &
                                minimal_host_z_face, setup_minimal_les_host
    use minimal_les_host_references, only: pi, reference_aerosol_radius, &
                                           reference_bin_aerosol,        &
@@ -36,6 +38,8 @@ program test_minimal_les_host_initialization
    call assert_true(lcm_initial_particle_count_global == expected_count, &
                     "minimal host global particle count")
    call assert_particle_cells(trim(case_name))
+   call lcm_advance(1.0_real64)
+   call assert_particle_velocities()
 
 contains
 
@@ -143,6 +147,31 @@ contains
                        minimal_host_z_face(k + 1), &
                        "minimal host particle z upper bound")
    end subroutine assert_particle_position
+
+   subroutine assert_particle_velocities()
+      integer :: i
+      integer :: j
+      integer :: k
+      integer :: n
+
+      do k = 1, minimal_host_nzl
+         do j = 1, minimal_host_ny_local
+            do i = 1, minimal_host_nx_local
+               do n = 1, cell_particles(i,j,k)%count
+                  call assert_near(cell_particles(i,j,k)%particles(n)%u, &
+                                   minimal_host_u(1,1,1), &
+                                   "minimal host prepared particle u")
+                  call assert_near(cell_particles(i,j,k)%particles(n)%v, &
+                                   minimal_host_v(1,1,1), &
+                                   "minimal host prepared particle v")
+                  call assert_near(cell_particles(i,j,k)%particles(n)%w, &
+                                   minimal_host_w(1,1,1), &
+                                   "minimal host prepared particle w")
+               enddo
+            enddo
+         enddo
+      enddo
+   end subroutine assert_particle_velocities
 
    subroutine assert_exact_aerosol_state(i, j, k, n, reference_mode)
       integer, intent(in) :: i
@@ -321,6 +350,14 @@ contains
       call assert_true(size(actual) == size(expected), message // " shape")
       call assert_true(maxval(abs(actual - expected)) <= 1.0e-12_real64, message)
    end subroutine assert_near_array
+
+   subroutine assert_near(actual, expected, message)
+      real(real64), intent(in) :: actual
+      real(real64), intent(in) :: expected
+      character(len=*), intent(in) :: message
+
+      call assert_true(abs(actual - expected) <= 1.0e-12_real64, message)
+   end subroutine assert_near
 
    subroutine assert_near_relative(actual, expected, message)
       real(real64), intent(in) :: actual

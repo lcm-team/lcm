@@ -1,13 +1,14 @@
 !> Minimal host-model fixture for exercising the public LCM host interface.
 !!
 !! The arrays in this module represent host-owned LES fields. They are module
-!! variables with the TARGET attribute because lcm_attach_fields stores pointers
+!! variables with the TARGET attribute because LCM stores pointers
 !! to them; tests must keep the host fields alive for the full LCM run.
 module minimal_les_host
    use iso_fortran_env, only: real64
-   use lcm_host_interface, only: lcm_attach_fields, lcm_config_t, lcm_grid_t, &
-                                 lcm_init_config, lcm_init_grid,             &
-                                 lcm_initialize, lcm_set_config, lcm_set_grid
+   use lcm_host_interface, only: lcm_attach_field, lcm_attach_fields, &
+                                 lcm_config_t, lcm_grid_t, lcm_init_config, &
+                                 lcm_init_grid, lcm_initialize, &
+                                 lcm_set_config, lcm_set_grid
 
    implicit none
 
@@ -47,11 +48,11 @@ module minimal_les_host
    type(lcm_grid_t), save :: minimal_host_grid
 
    real(real64), target, save :: minimal_host_u( &
-      minimal_host_nx_local, minimal_host_ny_local, minimal_host_nz)
+      minimal_host_nx_local + 1, minimal_host_ny_local, minimal_host_nz)
    real(real64), target, save :: minimal_host_v( &
-      minimal_host_nx_local, minimal_host_ny_local, minimal_host_nz)
+      minimal_host_nx_local, minimal_host_ny_local + 1, minimal_host_nz)
    real(real64), target, save :: minimal_host_w( &
-      minimal_host_nx_local, minimal_host_ny_local, minimal_host_nz)
+      minimal_host_nx_local, minimal_host_ny_local, minimal_host_nz + 1)
    real(real64), target, save :: minimal_host_static_energy( &
       minimal_host_nx_local, minimal_host_ny_local, minimal_host_nz)
    real(real64), target, save :: minimal_host_temperature( &
@@ -74,9 +75,10 @@ contains
       call configure_minimal_host_grid()
       call configure_minimal_host_fields()
 
-      call lcm_attach_fields(u=minimal_host_u, v=minimal_host_v, &
-                             w=minimal_host_w,                   &
-                             static_energy=minimal_host_static_energy, &
+      call lcm_attach_field("u", minimal_host_u)
+      call lcm_attach_field("v", minimal_host_v)
+      call lcm_attach_field("w", minimal_host_w)
+      call lcm_attach_fields(static_energy=minimal_host_static_energy, &
                              temperature=minimal_host_temperature, &
                              qv=minimal_host_qv,                  &
                              pressure=minimal_host_pressure,      &

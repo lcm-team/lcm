@@ -14,6 +14,7 @@ module lcm_particle_state
                              rho_liq, rv, surface_tension_water
    use lcm_types, only: lcm_particle_cell_t, lcm_particle_t
    use lcm_user, only: lcm_user_init_particles
+   use lcm_velocity_interpolation, only: lcm_interpolate_particle_velocity
    use lcm_random, only: randomu
 
    implicit none
@@ -27,6 +28,7 @@ module lcm_particle_state
    public :: lcm_initialize_particle_id_counter
    public :: lcm_next_particle_id
    public :: lcm_initialize_computational_particles
+   public :: lcm_prepare_particle_velocities
    public :: set_particle_position
    public :: particle_random_seed_id
    public :: cell_tabs_lcm
@@ -171,6 +173,35 @@ contains
       particle_id = n_id
       n_id = n_id + 1_int64
    end function lcm_next_particle_id
+
+   subroutine lcm_prepare_particle_velocities()
+      integer :: i
+      integer :: j
+      integer :: k
+      integer :: n
+      logical :: is_local
+
+      call require_particle_cells_allocated()
+
+      do k = 1, size(cell_particles, 3)
+         do j = 1, size(cell_particles, 2)
+            do i = 1, size(cell_particles, 1)
+               do n = 1, cell_particles(i,j,k)%count
+                  call lcm_interpolate_particle_velocity( &
+                     cell_particles(i,j,k)%particles(n)%x, &
+                     cell_particles(i,j,k)%particles(n)%y, &
+                     cell_particles(i,j,k)%particles(n)%z, &
+                     cell_particles(i,j,k)%particles(n)%u, &
+                     cell_particles(i,j,k)%particles(n)%v, &
+                     cell_particles(i,j,k)%particles(n)%w, is_local)
+                  if (.not. is_local) then
+                     error stop "LCM particle velocity preparation found a nonlocal particle"
+                  endif
+               enddo
+            enddo
+         enddo
+      enddo
+   end subroutine lcm_prepare_particle_velocities
 
    subroutine init_particle_properties(i, j, k, cell_particle_index, particle)
       integer, intent(in) :: i
