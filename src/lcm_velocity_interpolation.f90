@@ -13,7 +13,8 @@ module lcm_velocity_interpolation
 
 contains
 
-   subroutine lcm_interpolate_particle_velocity(x, y, z, u, v, w, is_local)
+   subroutine lcm_interpolate_particle_velocity(x, y, z, u, v, w, is_local, &
+                                                clamp_to_local)
       real(real64), intent(in) :: x
       real(real64), intent(in) :: y
       real(real64), intent(in) :: z
@@ -21,10 +22,12 @@ contains
       real(real64), intent(out) :: v
       real(real64), intent(out) :: w
       logical, intent(out) :: is_local
+      logical, intent(in), optional :: clamp_to_local
 
       integer :: i
       integer :: j
       integer :: k
+      logical :: use_clamped_cell
       real(real64) :: alpha
       real(real64) :: beta
       real(real64) :: gamma
@@ -33,10 +36,18 @@ contains
 
       call lcm_locate_particle_cell(x, y, z, i, j, k, is_local)
       if (.not. is_local) then
-         u = 0.0_real64
-         v = 0.0_real64
-         w = 0.0_real64
-         return
+         use_clamped_cell = .false.
+         if (present(clamp_to_local)) use_clamped_cell = clamp_to_local
+         if (use_clamped_cell) then
+            i = max(min(i, grid_state%grid%nx_local), 1)
+            j = max(min(j, grid_state%grid%ny_local), 1)
+            k = max(min(k, grid_state%grid%nz), 1)
+         else
+            u = 0.0_real64
+            v = 0.0_real64
+            w = 0.0_real64
+            return
+         endif
       endif
 
       alpha = clamp_unit_interval((x - real(grid_state%gpxs(i), real64)) / &

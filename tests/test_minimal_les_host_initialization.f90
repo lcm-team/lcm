@@ -153,25 +153,122 @@ contains
       integer :: j
       integer :: k
       integer :: n
+      real(real64) :: expected_u
+      real(real64) :: expected_v
+      real(real64) :: expected_w
 
       do k = 1, minimal_host_nzl
          do j = 1, minimal_host_ny_local
             do i = 1, minimal_host_nx_local
                do n = 1, cell_particles(i,j,k)%count
+                  call expected_particle_velocity( &
+                     cell_particles(i,j,k)%particles(n)%x, &
+                     cell_particles(i,j,k)%particles(n)%y, &
+                     cell_particles(i,j,k)%particles(n)%z, &
+                     expected_u, expected_v, expected_w)
                   call assert_near(cell_particles(i,j,k)%particles(n)%u, &
-                                   minimal_host_u(1,1,1), &
+                                   expected_u, &
                                    "minimal host prepared particle u")
                   call assert_near(cell_particles(i,j,k)%particles(n)%v, &
-                                   minimal_host_v(1,1,1), &
+                                   expected_v, &
                                    "minimal host prepared particle v")
                   call assert_near(cell_particles(i,j,k)%particles(n)%w, &
-                                   minimal_host_w(1,1,1), &
+                                   expected_w, &
                                    "minimal host prepared particle w")
                enddo
             enddo
          enddo
       enddo
    end subroutine assert_particle_velocities
+
+   subroutine expected_particle_velocity(x, y, z, expected_u, expected_v, &
+                                         expected_w)
+      real(real64), intent(in) :: x
+      real(real64), intent(in) :: y
+      real(real64), intent(in) :: z
+      real(real64), intent(out) :: expected_u
+      real(real64), intent(out) :: expected_v
+      real(real64), intent(out) :: expected_w
+
+      integer :: iteration
+      real(real64) :: predicted_u
+      real(real64) :: predicted_v
+      real(real64) :: predicted_w
+      real(real64) :: unow
+      real(real64) :: vnow
+      real(real64) :: wnow
+      real(real64) :: xp
+      real(real64) :: yp
+      real(real64) :: zp
+
+      call interpolate_expected_velocity(x, y, z, expected_u, expected_v, &
+                                         expected_w)
+      unow = expected_u
+      vnow = expected_v
+      wnow = expected_w
+
+      do iteration = 1, minimal_host_config%n_uvw_iteration
+         xp = x + expected_u
+         yp = y + expected_v
+         zp = z + expected_w
+         call interpolate_expected_velocity(xp, yp, zp, predicted_u, predicted_v, &
+                                            predicted_w)
+         expected_u = 0.5_real64 * (unow + predicted_u)
+         expected_v = 0.5_real64 * (vnow + predicted_v)
+         expected_w = 0.5_real64 * (wnow + predicted_w)
+      enddo
+   end subroutine expected_particle_velocity
+
+   subroutine interpolate_expected_velocity(x, y, z, expected_u, expected_v, &
+                                            expected_w)
+      real(real64), intent(in) :: x
+      real(real64), intent(in) :: y
+      real(real64), intent(in) :: z
+      real(real64), intent(out) :: expected_u
+      real(real64), intent(out) :: expected_v
+      real(real64), intent(out) :: expected_w
+
+      integer :: i
+      integer :: j
+      integer :: k
+      real(real64) :: alpha
+      real(real64) :: beta
+      real(real64) :: gamma
+
+      i = max(min(floor(x / minimal_host_dx) + 1, minimal_host_nx_local), 1)
+      j = max(min(floor(y / minimal_host_dy) + 1, minimal_host_ny_local), 1)
+      k = expected_vertical_index(z)
+
+      alpha = max(min((x - real(i - 1, real64) * minimal_host_dx) / &
+                      minimal_host_dx, 1.0_real64), 0.0_real64)
+      beta = max(min((y - real(j - 1, real64) * minimal_host_dy) / &
+                     minimal_host_dy, 1.0_real64), 0.0_real64)
+      gamma = max(min((z - minimal_host_z_face(k)) / &
+                      (minimal_host_z_face(k + 1) - minimal_host_z_face(k)), &
+                      1.0_real64), 0.0_real64)
+
+      expected_u = minimal_host_u(i,j,k) * (1.0_real64 - alpha) + &
+                   minimal_host_u(i + 1,j,k) * alpha
+      expected_v = minimal_host_v(i,j,k) * (1.0_real64 - beta) + &
+                   minimal_host_v(i,j + 1,k) * beta
+      expected_w = minimal_host_w(i,j,k) * (1.0_real64 - gamma) + &
+                   minimal_host_w(i,j,k + 1) * gamma
+   end subroutine interpolate_expected_velocity
+
+   integer function expected_vertical_index(z) result(index)
+      real(real64), intent(in) :: z
+
+      integer :: kk
+
+      index = minimal_host_nz
+      do kk = 1, minimal_host_nz
+         if (z < minimal_host_z_face(kk + 1)) then
+            index = kk
+            exit
+         endif
+      enddo
+      index = max(min(index, minimal_host_nz), 1)
+   end function expected_vertical_index
 
    subroutine assert_exact_aerosol_state(i, j, k, n, reference_mode)
       integer, intent(in) :: i

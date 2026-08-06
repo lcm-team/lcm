@@ -147,9 +147,34 @@ contains
    end subroutine configure_minimal_host_grid
 
    subroutine configure_minimal_host_fields()
-      minimal_host_u = 0.10_real64
-      minimal_host_v = -0.05_real64
-      minimal_host_w = 0.02_real64
+      integer :: i
+      integer :: j
+      integer :: k
+
+      do k = 1, minimal_host_nz
+         do j = 1, minimal_host_ny_local
+            do i = 1, minimal_host_nx_local + 1
+               minimal_host_u(i,j,k) = 0.10_real64 + &
+                                       0.01_real64 * real(i - 1, real64)
+            enddo
+         enddo
+      enddo
+      do k = 1, minimal_host_nz
+         do j = 1, minimal_host_ny_local + 1
+            do i = 1, minimal_host_nx_local
+               minimal_host_v(i,j,k) = -0.05_real64 + &
+                                       0.02_real64 * real(j - 1, real64)
+            enddo
+         enddo
+      enddo
+      do k = 1, minimal_host_nz + 1
+         do j = 1, minimal_host_ny_local
+            do i = 1, minimal_host_nx_local
+               minimal_host_w(i,j,k) = 0.02_real64 + &
+                                       0.005_real64 * real(k - 1, real64)
+            enddo
+         enddo
+      enddo
 
       minimal_host_temperature(:,:,1) = 280.0_real64
       minimal_host_temperature(:,:,2) = 278.0_real64

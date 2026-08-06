@@ -29,6 +29,7 @@ module lcm_particle_state
    public :: lcm_next_particle_id
    public :: lcm_initialize_computational_particles
    public :: lcm_prepare_particle_velocities
+   public :: lcm_refine_particle_velocities
    public :: set_particle_position
    public :: particle_random_seed_id
    public :: cell_tabs_lcm
@@ -202,6 +203,62 @@ contains
          enddo
       enddo
    end subroutine lcm_prepare_particle_velocities
+
+   subroutine lcm_refine_particle_velocities(time_step)
+      real(real64), intent(in) :: time_step
+
+      integer :: i
+      integer :: j
+      integer :: k
+      integer :: n
+      integer :: iteration
+      logical :: is_local
+      real(real64) :: predicted_u
+      real(real64) :: predicted_v
+      real(real64) :: predicted_w
+      real(real64) :: unow
+      real(real64) :: vnow
+      real(real64) :: wnow
+      real(real64) :: xp
+      real(real64) :: yp
+      real(real64) :: zp
+
+      call require_particle_cells_allocated()
+
+      if (config_state%n_uvw_iteration < 1) return
+
+      do k = 1, size(cell_particles, 3)
+         do j = 1, size(cell_particles, 2)
+            do i = 1, size(cell_particles, 1)
+               do n = 1, cell_particles(i,j,k)%count
+                  unow = cell_particles(i,j,k)%particles(n)%u
+                  vnow = cell_particles(i,j,k)%particles(n)%v
+                  wnow = cell_particles(i,j,k)%particles(n)%w
+
+                  do iteration = 1, config_state%n_uvw_iteration
+                     xp = cell_particles(i,j,k)%particles(n)%x + &
+                          cell_particles(i,j,k)%particles(n)%u * time_step
+                     yp = cell_particles(i,j,k)%particles(n)%y + &
+                          cell_particles(i,j,k)%particles(n)%v * time_step * &
+                          real(grid_state%grid%y_dimension, real64)
+                     zp = cell_particles(i,j,k)%particles(n)%z + &
+                          cell_particles(i,j,k)%particles(n)%w * time_step
+
+                     call lcm_interpolate_particle_velocity( &
+                        xp, yp, zp, predicted_u, predicted_v, predicted_w, &
+                        is_local, clamp_to_local=.true.)
+                     cell_particles(i,j,k)%particles(n)%u = &
+                        0.5_real64 * (unow + predicted_u)
+                     cell_particles(i,j,k)%particles(n)%v = &
+                        0.5_real64 * (vnow + predicted_v)
+                     cell_particles(i,j,k)%particles(n)%w = &
+                        0.5_real64 * (wnow + predicted_w)
+                  enddo
+               enddo
+            enddo
+         enddo
+      enddo
+   end subroutine lcm_refine_particle_velocities
 
    subroutine init_particle_properties(i, j, k, cell_particle_index, particle)
       integer, intent(in) :: i
