@@ -30,6 +30,7 @@ set(LCM_CORE_SOURCES
   "${LCM_SOURCE_DIR}/lcm_field_state.f90"
   "${LCM_SOURCE_DIR}/lcm_random.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_location.f90"
+  "${LCM_SOURCE_DIR}/lcm_velocity_interpolation.f90"
   "${LCM_SOURCE_DIR}/lcm_user.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_state.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_source.f90"
@@ -231,6 +232,25 @@ set_target_properties(test_field_attachment
 add_test(
   NAME field_attachment
   COMMAND test_field_attachment
+)
+
+add_executable(test_velocity_interpolation
+  tests/test_velocity_interpolation.f90
+)
+
+target_link_libraries(test_velocity_interpolation
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_velocity_interpolation
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME velocity_interpolation
+  COMMAND test_velocity_interpolation
 )
 
 add_executable(test_particle_source
