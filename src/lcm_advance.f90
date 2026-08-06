@@ -5,7 +5,8 @@ module lcm_advance_mod
    use lcm_grid_state, only: grid_state
    use lcm_initialization_state, only: lcm_is_initialized
    use lcm_particle_state, only: lcm_prepare_particle_velocities, &
-                                 lcm_refine_particle_velocities
+                                 lcm_refine_particle_velocities, &
+                                 lcm_update_particle_positions
    use lcm_particle_source, only: lcm_apply_particle_sources
 
    implicit none
@@ -77,6 +78,7 @@ contains
 
       call lcm_prepare_particle_velocities()
       call lcm_refine_particle_velocities(time_step)
+      call lcm_update_particle_positions(time_step, current_lcm_step)
    end subroutine advance_lcm_particles
 
    subroutine apply_lcm_particle_boundaries()

@@ -27,6 +27,9 @@ program test_minimal_les_host_initialization
       int(minimal_host_np_xy, int64)
 
    character(len=32) :: case_name
+   real(real64), allocatable :: initial_x(:,:,:,:)
+   real(real64), allocatable :: initial_y(:,:,:,:)
+   real(real64), allocatable :: initial_z(:,:,:,:)
 
    call get_command_argument(1, case_name)
    if (len_trim(case_name) == 0) case_name = "bin"
@@ -38,8 +41,9 @@ program test_minimal_les_host_initialization
    call assert_true(lcm_initial_particle_count_global == expected_count, &
                     "minimal host global particle count")
    call assert_particle_cells(trim(case_name))
+   call store_initial_particle_positions()
    call lcm_advance(1.0_real64)
-   call assert_particle_velocities()
+   call assert_particle_velocities_and_positions(1.0_real64)
 
 contains
 
@@ -148,7 +152,35 @@ contains
                        "minimal host particle z upper bound")
    end subroutine assert_particle_position
 
-   subroutine assert_particle_velocities()
+   subroutine store_initial_particle_positions()
+      integer :: i
+      integer :: j
+      integer :: k
+      integer :: n
+
+      allocate(initial_x(minimal_host_nx_local, minimal_host_ny_local, &
+                         minimal_host_nzl, minimal_host_np_xy))
+      allocate(initial_y(minimal_host_nx_local, minimal_host_ny_local, &
+                         minimal_host_nzl, minimal_host_np_xy))
+      allocate(initial_z(minimal_host_nx_local, minimal_host_ny_local, &
+                         minimal_host_nzl, minimal_host_np_xy))
+
+      do k = 1, minimal_host_nzl
+         do j = 1, minimal_host_ny_local
+            do i = 1, minimal_host_nx_local
+               do n = 1, cell_particles(i,j,k)%count
+                  initial_x(i,j,k,n) = cell_particles(i,j,k)%particles(n)%x
+                  initial_y(i,j,k,n) = cell_particles(i,j,k)%particles(n)%y
+                  initial_z(i,j,k,n) = cell_particles(i,j,k)%particles(n)%z
+               enddo
+            enddo
+         enddo
+      enddo
+   end subroutine store_initial_particle_positions
+
+   subroutine assert_particle_velocities_and_positions(time_step)
+      real(real64), intent(in) :: time_step
+
       integer :: i
       integer :: j
       integer :: k
@@ -162,9 +194,8 @@ contains
             do i = 1, minimal_host_nx_local
                do n = 1, cell_particles(i,j,k)%count
                   call expected_particle_velocity( &
-                     cell_particles(i,j,k)%particles(n)%x, &
-                     cell_particles(i,j,k)%particles(n)%y, &
-                     cell_particles(i,j,k)%particles(n)%z, &
+                     initial_x(i,j,k,n), initial_y(i,j,k,n), &
+                     initial_z(i,j,k,n), &
                      expected_u, expected_v, expected_w)
                   call assert_near(cell_particles(i,j,k)%particles(n)%u, &
                                    expected_u, &
@@ -175,11 +206,20 @@ contains
                   call assert_near(cell_particles(i,j,k)%particles(n)%w, &
                                    expected_w, &
                                    "minimal host prepared particle w")
+                  call assert_near(cell_particles(i,j,k)%particles(n)%x, &
+                                   initial_x(i,j,k,n) + expected_u * time_step, &
+                                   "minimal host particle x after micro_xyz")
+                  call assert_near(cell_particles(i,j,k)%particles(n)%y, &
+                                   initial_y(i,j,k,n) + expected_v * time_step, &
+                                   "minimal host particle y after micro_xyz")
+                  call assert_near(cell_particles(i,j,k)%particles(n)%z, &
+                                   initial_z(i,j,k,n) + expected_w * time_step, &
+                                   "minimal host particle z after micro_xyz")
                enddo
             enddo
          enddo
       enddo
-   end subroutine assert_particle_velocities
+   end subroutine assert_particle_velocities_and_positions
 
    subroutine expected_particle_velocity(x, y, z, expected_u, expected_v, &
                                          expected_w)

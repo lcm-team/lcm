@@ -30,6 +30,7 @@ module lcm_particle_state
    public :: lcm_initialize_computational_particles
    public :: lcm_prepare_particle_velocities
    public :: lcm_refine_particle_velocities
+   public :: lcm_update_particle_positions
    public :: set_particle_position
    public :: particle_random_seed_id
    public :: cell_tabs_lcm
@@ -259,6 +260,57 @@ contains
          enddo
       enddo
    end subroutine lcm_refine_particle_velocities
+
+   subroutine lcm_update_particle_positions(time_step, current_step)
+      real(real64), intent(in) :: time_step
+      integer, intent(in) :: current_step
+
+      integer :: i
+      integer :: j
+      integer :: k
+      integer :: n
+
+      call require_particle_cells_allocated()
+
+      do k = 1, size(cell_particles, 3)
+         do j = 1, size(cell_particles, 2)
+            do i = 1, size(cell_particles, 1)
+               do n = 1, cell_particles(i,j,k)%count
+                  cell_particles(i,j,k)%particles(n)%x = &
+                     cell_particles(i,j,k)%particles(n)%x + &
+                     cell_particles(i,j,k)%particles(n)%u * time_step
+                  cell_particles(i,j,k)%particles(n)%y = &
+                     cell_particles(i,j,k)%particles(n)%y + &
+                     cell_particles(i,j,k)%particles(n)%v * time_step * &
+                     real(grid_state%grid%y_dimension, real64)
+                  cell_particles(i,j,k)%particles(n)%z = &
+                     cell_particles(i,j,k)%particles(n)%z + &
+                     cell_particles(i,j,k)%particles(n)%w * time_step
+
+                  if (config_state%switch_sgs_velocities) then
+                     cell_particles(i,j,k)%particles(n)%x = &
+                        cell_particles(i,j,k)%particles(n)%x + &
+                        cell_particles(i,j,k)%particles(n)%u_sgs * time_step
+                     cell_particles(i,j,k)%particles(n)%y = &
+                        cell_particles(i,j,k)%particles(n)%y + &
+                        cell_particles(i,j,k)%particles(n)%v_sgs * time_step * &
+                        real(grid_state%grid%y_dimension, real64)
+                     cell_particles(i,j,k)%particles(n)%z = &
+                        cell_particles(i,j,k)%particles(n)%z + &
+                        cell_particles(i,j,k)%particles(n)%w_sgs * time_step
+                  endif
+
+                  if (config_state%switch_sedimentation .and. &
+                      current_step >= config_state%start_sedimentation) then
+                     cell_particles(i,j,k)%particles(n)%z = &
+                        cell_particles(i,j,k)%particles(n)%z - &
+                        cell_particles(i,j,k)%particles(n)%w_sedi * time_step
+                  endif
+               enddo
+            enddo
+         enddo
+      enddo
+   end subroutine lcm_update_particle_positions
 
    subroutine init_particle_properties(i, j, k, cell_particle_index, particle)
       integer, intent(in) :: i
