@@ -215,6 +215,25 @@ add_test(
   COMMAND test_particle_location
 )
 
+add_executable(test_particle_cell_ownership
+  tests/test_particle_cell_ownership.f90
+)
+
+target_link_libraries(test_particle_cell_ownership
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_particle_cell_ownership
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME particle_cell_ownership
+  COMMAND test_particle_cell_ownership
+)
+
 add_executable(test_field_attachment
   tests/test_field_attachment.f90
 )

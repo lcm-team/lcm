@@ -12,6 +12,7 @@ module lcm_particle_state
    use lcm_grid_state, only: grid_state
    use lcm_parameters, only: epsv, fac_cond, molecular_weight_water, pi, &
                              rho_liq, rv, surface_tension_water
+   use lcm_particle_location, only: lcm_locate_particle_cell
    use lcm_types, only: lcm_particle_cell_t, lcm_particle_t
    use lcm_user, only: lcm_user_init_particles
    use lcm_velocity_interpolation, only: lcm_interpolate_particle_velocity
@@ -31,6 +32,7 @@ module lcm_particle_state
    public :: lcm_prepare_particle_velocities
    public :: lcm_refine_particle_velocities
    public :: lcm_update_particle_positions
+   public :: lcm_update_particle_cell_ownership
    public :: set_particle_position
    public :: particle_random_seed_id
    public :: cell_tabs_lcm
@@ -311,6 +313,58 @@ contains
          enddo
       enddo
    end subroutine lcm_update_particle_positions
+
+   subroutine lcm_update_particle_cell_ownership()
+      type(lcm_particle_cell_t), allocatable :: updated_cells(:,:,:)
+      integer :: i
+      integer :: j
+      integer :: k
+      integer :: n
+      integer :: new_i
+      integer :: new_j
+      integer :: new_k
+      logical :: is_local
+
+      call require_particle_cells_allocated()
+
+      allocate(updated_cells(size(cell_particles, 1), size(cell_particles, 2), &
+                             size(cell_particles, 3)))
+
+      do k = 1, size(cell_particles, 3)
+         do j = 1, size(cell_particles, 2)
+            do i = 1, size(cell_particles, 1)
+               if (cell_particles(i,j,k)%capacity > 0) then
+                  call resize_cell_storage(updated_cells(i,j,k), &
+                                           cell_particles(i,j,k)%capacity)
+               endif
+            enddo
+         enddo
+      enddo
+
+      do k = 1, size(cell_particles, 3)
+         do j = 1, size(cell_particles, 2)
+            do i = 1, size(cell_particles, 1)
+               do n = 1, cell_particles(i,j,k)%count
+                  call lcm_locate_particle_cell( &
+                     cell_particles(i,j,k)%particles(n)%x, &
+                     cell_particles(i,j,k)%particles(n)%y, &
+                     cell_particles(i,j,k)%particles(n)%z, &
+                     new_i, new_j, new_k, is_local)
+
+                  if (is_local) then
+                     call append_particle_to_cell(updated_cells(new_i,new_j,new_k), &
+                                                  cell_particles(i,j,k)%particles(n))
+                  else
+                     call append_particle_to_cell(updated_cells(i,j,k), &
+                                                  cell_particles(i,j,k)%particles(n))
+                  endif
+               enddo
+            enddo
+         enddo
+      enddo
+
+      call move_alloc(updated_cells, cell_particles)
+   end subroutine lcm_update_particle_cell_ownership
 
    subroutine init_particle_properties(i, j, k, cell_particle_index, particle)
       integer, intent(in) :: i
@@ -1346,5 +1400,17 @@ contains
       endif
       cell%capacity = new_capacity
    end subroutine resize_cell_storage
+
+   subroutine append_particle_to_cell(cell, particle)
+      type(lcm_particle_cell_t), intent(inout) :: cell
+      type(lcm_particle_t), intent(in) :: particle
+
+      if (cell%count == cell%capacity) then
+         call resize_cell_storage(cell, next_capacity(cell%capacity))
+      endif
+
+      cell%count = cell%count + 1
+      cell%particles(cell%count) = particle
+   end subroutine append_particle_to_cell
 
 end module lcm_particle_state

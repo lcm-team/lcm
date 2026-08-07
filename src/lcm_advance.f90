@@ -6,6 +6,7 @@ module lcm_advance_mod
    use lcm_initialization_state, only: lcm_is_initialized
    use lcm_particle_state, only: lcm_prepare_particle_velocities, &
                                  lcm_refine_particle_velocities, &
+                                 lcm_update_particle_cell_ownership, &
                                  lcm_update_particle_positions
    use lcm_particle_source, only: lcm_apply_particle_sources
 
@@ -96,7 +97,7 @@ contains
    end subroutine exchange_lcm_particles
 
    subroutine update_lcm_particle_cell_ownership()
-      ! Future local cell ownership update after particle motion and exchange.
+      call lcm_update_particle_cell_ownership()
    end subroutine update_lcm_particle_cell_ownership
 
    subroutine prepare_lcm_feedback()
