@@ -1,13 +1,14 @@
 !> Minimal host-model fixture for exercising the public LCM host interface.
 !!
 !! The arrays in this module represent host-owned LES fields. They are module
-!! variables with the TARGET attribute because lcm_attach_fields stores pointers
+!! variables with the TARGET attribute because LCM stores pointers
 !! to them; tests must keep the host fields alive for the full LCM run.
 module minimal_les_host
    use iso_fortran_env, only: real64
-   use lcm_host_interface, only: lcm_attach_fields, lcm_config_t, lcm_grid_t, &
-                                 lcm_init_config, lcm_init_grid,             &
-                                 lcm_initialize, lcm_set_config, lcm_set_grid
+   use lcm_host_interface, only: lcm_attach_field, lcm_attach_fields, &
+                                 lcm_config_t, lcm_grid_t, lcm_init_config, &
+                                 lcm_init_grid, lcm_initialize, &
+                                 lcm_set_config, lcm_set_grid
 
    implicit none
 
@@ -47,11 +48,11 @@ module minimal_les_host
    type(lcm_grid_t), save :: minimal_host_grid
 
    real(real64), target, save :: minimal_host_u( &
-      minimal_host_nx_local, minimal_host_ny_local, minimal_host_nz)
+      minimal_host_nx_local + 1, minimal_host_ny_local, minimal_host_nz)
    real(real64), target, save :: minimal_host_v( &
-      minimal_host_nx_local, minimal_host_ny_local, minimal_host_nz)
+      minimal_host_nx_local, minimal_host_ny_local + 1, minimal_host_nz)
    real(real64), target, save :: minimal_host_w( &
-      minimal_host_nx_local, minimal_host_ny_local, minimal_host_nz)
+      minimal_host_nx_local, minimal_host_ny_local, minimal_host_nz + 1)
    real(real64), target, save :: minimal_host_static_energy( &
       minimal_host_nx_local, minimal_host_ny_local, minimal_host_nz)
    real(real64), target, save :: minimal_host_temperature( &
@@ -67,16 +68,23 @@ module minimal_les_host
 
 contains
 
-   subroutine setup_minimal_les_host(case_name)
+   subroutine setup_minimal_les_host(case_name, use_internal_subdomain)
       character(len=*), intent(in), optional :: case_name
+      logical, intent(in), optional :: use_internal_subdomain
+      logical :: internal_subdomain
 
       call configure_minimal_host_config(case_name)
-      call configure_minimal_host_grid()
+      internal_subdomain = .false.
+      if (present(use_internal_subdomain)) then
+         internal_subdomain = use_internal_subdomain
+      endif
+      call configure_minimal_host_grid(internal_subdomain)
       call configure_minimal_host_fields()
 
-      call lcm_attach_fields(u=minimal_host_u, v=minimal_host_v, &
-                             w=minimal_host_w,                   &
-                             static_energy=minimal_host_static_energy, &
+      call lcm_attach_field("u", minimal_host_u)
+      call lcm_attach_field("v", minimal_host_v)
+      call lcm_attach_field("w", minimal_host_w)
+      call lcm_attach_fields(static_energy=minimal_host_static_energy, &
                              temperature=minimal_host_temperature, &
                              qv=minimal_host_qv,                  &
                              pressure=minimal_host_pressure,      &
@@ -125,29 +133,68 @@ contains
       call lcm_set_config(minimal_host_config)
    end subroutine configure_minimal_host_config
 
-   subroutine configure_minimal_host_grid()
+   subroutine configure_minimal_host_grid(use_internal_subdomain)
+      logical, intent(in) :: use_internal_subdomain
+
       minimal_host_dz = [100.0_real64, 120.0_real64]
       minimal_host_z_face = [0.0_real64, 100.0_real64, 220.0_real64]
       minimal_host_z_center = [50.0_real64, 160.0_real64]
 
-      call lcm_init_grid(minimal_host_grid,                         &
-                         minimal_host_nx_local, minimal_host_ny_local, &
-                         minimal_host_nz,                           &
-                         minimal_host_nx_local, minimal_host_ny_local, &
-                         1, minimal_host_nx_local,                  &
-                         1, minimal_host_ny_local,                  &
-                         minimal_host_dx, minimal_host_dy,          &
-                         minimal_host_z_center, minimal_host_z_face,&
-                         minimal_host_dz,                           &
-                         0, 0, 0, 0, 0, 1, 1, 1, 1,                &
-                         -1, -1, -1, -1, .true., .true., 1)
+      if (use_internal_subdomain) then
+         call lcm_init_grid(minimal_host_grid,                         &
+                            minimal_host_nx_local, minimal_host_ny_local, &
+                            minimal_host_nz,                           &
+                            6, 6, 3, 4, 3, 4,                          &
+                            minimal_host_dx, minimal_host_dy,          &
+                            minimal_host_z_center, minimal_host_z_face,&
+                            minimal_host_dz,                           &
+                            0, 0, 0, 1, 1, 3, 3, 3, 3,                &
+                            3, 5, 1, 7, .false., .false., 1)
+      else
+         call lcm_init_grid(minimal_host_grid,                         &
+                            minimal_host_nx_local, minimal_host_ny_local, &
+                            minimal_host_nz,                           &
+                            minimal_host_nx_local, minimal_host_ny_local, &
+                            1, minimal_host_nx_local,                  &
+                            1, minimal_host_ny_local,                  &
+                            minimal_host_dx, minimal_host_dy,          &
+                            minimal_host_z_center, minimal_host_z_face,&
+                            minimal_host_dz,                           &
+                            0, 0, 0, 0, 0, 1, 1, 1, 1,                &
+                            -1, -1, -1, -1, .true., .true., 1)
+      endif
       call lcm_set_grid(minimal_host_grid)
    end subroutine configure_minimal_host_grid
 
    subroutine configure_minimal_host_fields()
-      minimal_host_u = 0.10_real64
-      minimal_host_v = -0.05_real64
-      minimal_host_w = 0.02_real64
+      integer :: i
+      integer :: j
+      integer :: k
+
+      do k = 1, minimal_host_nz
+         do j = 1, minimal_host_ny_local
+            do i = 1, minimal_host_nx_local + 1
+               minimal_host_u(i,j,k) = 0.10_real64 + &
+                                       0.01_real64 * real(i - 1, real64)
+            enddo
+         enddo
+      enddo
+      do k = 1, minimal_host_nz
+         do j = 1, minimal_host_ny_local + 1
+            do i = 1, minimal_host_nx_local
+               minimal_host_v(i,j,k) = -0.05_real64 + &
+                                       0.02_real64 * real(j - 1, real64)
+            enddo
+         enddo
+      enddo
+      do k = 1, minimal_host_nz + 1
+         do j = 1, minimal_host_ny_local
+            do i = 1, minimal_host_nx_local
+               minimal_host_w(i,j,k) = 0.02_real64 + &
+                                       0.005_real64 * real(k - 1, real64)
+            enddo
+         enddo
+      enddo
 
       minimal_host_temperature(:,:,1) = 280.0_real64
       minimal_host_temperature(:,:,2) = 278.0_real64

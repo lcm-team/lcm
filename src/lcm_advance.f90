@@ -4,6 +4,10 @@ module lcm_advance_mod
    use lcm_config_state, only: config_is_set, config_state
    use lcm_grid_state, only: grid_state
    use lcm_initialization_state, only: lcm_is_initialized
+   use lcm_particle_state, only: lcm_prepare_particle_velocities, &
+                                 lcm_refine_particle_velocities, &
+                                 lcm_update_particle_cell_ownership, &
+                                 lcm_update_particle_positions
    use lcm_particle_source, only: lcm_apply_particle_sources
 
    implicit none
@@ -32,8 +36,8 @@ contains
       call prepare_lcm_atmosphere()
       call advance_lcm_particles(time_step)
       call apply_lcm_particle_boundaries()
-      call exchange_lcm_particles()
       call update_lcm_particle_cell_ownership()
+      call exchange_lcm_particles()
       call lcm_apply_particle_sources(time_step, current_lcm_step)
       call apply_lcm_microphysics(time_step)
       call prepare_lcm_feedback()
@@ -73,7 +77,9 @@ contains
    subroutine advance_lcm_particles(time_step)
       real(real64), intent(in) :: time_step
 
-      ! Future particle advection step.
+      call lcm_prepare_particle_velocities()
+      call lcm_refine_particle_velocities(time_step)
+      call lcm_update_particle_positions(time_step, current_lcm_step)
    end subroutine advance_lcm_particles
 
    subroutine apply_lcm_particle_boundaries()
@@ -91,7 +97,7 @@ contains
    end subroutine exchange_lcm_particles
 
    subroutine update_lcm_particle_cell_ownership()
-      ! Future local cell ownership update after particle motion and exchange.
+      call lcm_update_particle_cell_ownership()
    end subroutine update_lcm_particle_cell_ownership
 
    subroutine prepare_lcm_feedback()

@@ -12,8 +12,10 @@ module lcm_particle_state
    use lcm_grid_state, only: grid_state
    use lcm_parameters, only: epsv, fac_cond, molecular_weight_water, pi, &
                              rho_liq, rv, surface_tension_water
+   use lcm_particle_location, only: lcm_locate_particle_cell
    use lcm_types, only: lcm_particle_cell_t, lcm_particle_t
    use lcm_user, only: lcm_user_init_particles
+   use lcm_velocity_interpolation, only: lcm_interpolate_particle_velocity
    use lcm_random, only: randomu
 
    implicit none
@@ -23,10 +25,17 @@ module lcm_particle_state
    public :: cell_particles
    public :: lcm_allocate_particle_cells
    public :: lcm_add_particle
+   public :: lcm_move_particle
+   public :: lcm_remove_particle
    public :: lcm_reset_particle_cells
    public :: lcm_initialize_particle_id_counter
    public :: lcm_next_particle_id
    public :: lcm_initialize_computational_particles
+   public :: lcm_prepare_particle_velocities
+   public :: lcm_refine_particle_velocities
+   public :: lcm_update_particle_positions
+   public :: lcm_update_particle_cell_ownership
+   public :: lcm_clear_outgoing_particles
    public :: set_particle_position
    public :: particle_random_seed_id
    public :: cell_tabs_lcm
@@ -34,9 +43,20 @@ module lcm_particle_state
    public :: qsatw_liquid
    public :: inverse_error_function_approx
    public :: ice_freezing_temperature
+   public :: lcm_outgoing_particle_t
+   public :: outgoing_particles
+   public :: n_outgoing_particles
+
+   type :: lcm_outgoing_particle_t
+      type(lcm_particle_t) :: particle
+      integer :: x_direction = 0
+      integer :: y_direction = 0
+   end type lcm_outgoing_particle_t
 
    type(lcm_particle_cell_t), allocatable, protected, save :: cell_particles(:,:,:)
+   type(lcm_outgoing_particle_t), allocatable, protected, save :: outgoing_particles(:)
    type(lcm_particle_t), allocatable, save :: aerosol_initialization_template(:)
+   integer, protected, save :: n_outgoing_particles = 0
    integer(int64), protected, save :: n_step_id = 0_int64
    integer(int64), protected, save :: n_id = 0_int64
    logical, save :: aerosol_initialization_template_is_set = .false.
@@ -73,6 +93,7 @@ contains
       allocate(cell_particles(grid_state%grid%nx_local, &
                               grid_state%grid%ny_local, &
                               grid_state%grid%nz))
+      call lcm_clear_outgoing_particles()
 
       if (capacity > 0) then
          do k = 1, grid_state%grid%nz
@@ -94,14 +115,58 @@ contains
       call require_particle_cells_allocated()
       call validate_cell_index(i, j, k)
 
-      if (cell_particles(i,j,k)%count == cell_particles(i,j,k)%capacity) then
-         call resize_cell_storage(cell_particles(i,j,k), &
-                                  next_capacity(cell_particles(i,j,k)%capacity))
+      call append_particle_to_cell(cell_particles(i,j,k), particle)
+   end subroutine lcm_add_particle
+
+   subroutine lcm_remove_particle(i, j, k, particle_index)
+      integer, intent(in) :: i
+      integer, intent(in) :: j
+      integer, intent(in) :: k
+      integer, intent(in) :: particle_index
+      integer :: count
+
+      call require_particle_cells_allocated()
+      call validate_cell_index(i, j, k)
+
+      count = cell_particles(i,j,k)%count
+      call validate_particle_index(particle_index, count)
+
+      ! Keep the remaining order stable for particle tracking and exchange.
+      if (particle_index < count) then
+         cell_particles(i,j,k)%particles(particle_index:count - 1) = &
+            cell_particles(i,j,k)%particles(particle_index + 1:count)
       endif
 
-      cell_particles(i,j,k)%count = cell_particles(i,j,k)%count + 1
-      cell_particles(i,j,k)%particles(cell_particles(i,j,k)%count) = particle
-   end subroutine lcm_add_particle
+      cell_particles(i,j,k)%particles(count) = lcm_particle_t()
+      cell_particles(i,j,k)%count = count - 1
+   end subroutine lcm_remove_particle
+
+   subroutine lcm_move_particle(source_i, source_j, source_k, particle_index, &
+                                destination_i, destination_j, destination_k)
+      integer, intent(in) :: source_i
+      integer, intent(in) :: source_j
+      integer, intent(in) :: source_k
+      integer, intent(in) :: particle_index
+      integer, intent(in) :: destination_i
+      integer, intent(in) :: destination_j
+      integer, intent(in) :: destination_k
+      type(lcm_particle_t) :: particle
+
+      call require_particle_cells_allocated()
+      call validate_cell_index(source_i, source_j, source_k)
+      call validate_cell_index(destination_i, destination_j, destination_k)
+      call validate_particle_index(particle_index, &
+                                   cell_particles(source_i,source_j,source_k)%count)
+
+      if (source_i == destination_i .and. source_j == destination_j .and. &
+          source_k == destination_k) then
+         return
+      endif
+
+      particle = cell_particles(source_i,source_j,source_k)%particles(particle_index)
+      call lcm_add_particle(destination_i, destination_j, destination_k, particle)
+      call lcm_remove_particle(source_i, source_j, source_k, particle_index)
+   end subroutine lcm_move_particle
 
    subroutine lcm_reset_particle_cells()
       integer :: i, j, k
@@ -116,6 +181,10 @@ contains
          enddo
       enddo
    end subroutine lcm_reset_particle_cells
+
+   subroutine lcm_clear_outgoing_particles()
+      n_outgoing_particles = 0
+   end subroutine lcm_clear_outgoing_particles
 
    subroutine lcm_initialize_computational_particles()
       integer :: i, j, k, n
@@ -171,6 +240,184 @@ contains
       particle_id = n_id
       n_id = n_id + 1_int64
    end function lcm_next_particle_id
+
+   subroutine lcm_prepare_particle_velocities()
+      integer :: i
+      integer :: j
+      integer :: k
+      integer :: n
+      logical :: is_local
+
+      call require_particle_cells_allocated()
+
+      do k = 1, size(cell_particles, 3)
+         do j = 1, size(cell_particles, 2)
+            do i = 1, size(cell_particles, 1)
+               do n = 1, cell_particles(i,j,k)%count
+                  call lcm_interpolate_particle_velocity( &
+                     cell_particles(i,j,k)%particles(n)%x, &
+                     cell_particles(i,j,k)%particles(n)%y, &
+                     cell_particles(i,j,k)%particles(n)%z, &
+                     cell_particles(i,j,k)%particles(n)%u, &
+                     cell_particles(i,j,k)%particles(n)%v, &
+                     cell_particles(i,j,k)%particles(n)%w, is_local)
+                  if (.not. is_local) then
+                     error stop "LCM particle velocity preparation found a nonlocal particle"
+                  endif
+               enddo
+            enddo
+         enddo
+      enddo
+   end subroutine lcm_prepare_particle_velocities
+
+   subroutine lcm_refine_particle_velocities(time_step)
+      real(real64), intent(in) :: time_step
+
+      integer :: i
+      integer :: j
+      integer :: k
+      integer :: n
+      integer :: iteration
+      logical :: is_local
+      real(real64) :: predicted_u
+      real(real64) :: predicted_v
+      real(real64) :: predicted_w
+      real(real64) :: unow
+      real(real64) :: vnow
+      real(real64) :: wnow
+      real(real64) :: xp
+      real(real64) :: yp
+      real(real64) :: zp
+
+      call require_particle_cells_allocated()
+
+      if (config_state%n_uvw_iteration < 1) return
+
+      do k = 1, size(cell_particles, 3)
+         do j = 1, size(cell_particles, 2)
+            do i = 1, size(cell_particles, 1)
+               do n = 1, cell_particles(i,j,k)%count
+                  unow = cell_particles(i,j,k)%particles(n)%u
+                  vnow = cell_particles(i,j,k)%particles(n)%v
+                  wnow = cell_particles(i,j,k)%particles(n)%w
+
+                  do iteration = 1, config_state%n_uvw_iteration
+                     xp = cell_particles(i,j,k)%particles(n)%x + &
+                          cell_particles(i,j,k)%particles(n)%u * time_step
+                     yp = cell_particles(i,j,k)%particles(n)%y + &
+                          cell_particles(i,j,k)%particles(n)%v * time_step * &
+                          real(grid_state%grid%y_dimension, real64)
+                     zp = cell_particles(i,j,k)%particles(n)%z + &
+                          cell_particles(i,j,k)%particles(n)%w * time_step
+
+                     call lcm_interpolate_particle_velocity( &
+                        xp, yp, zp, predicted_u, predicted_v, predicted_w, &
+                        is_local, clamp_to_local=.true.)
+                     cell_particles(i,j,k)%particles(n)%u = &
+                        0.5_real64 * (unow + predicted_u)
+                     cell_particles(i,j,k)%particles(n)%v = &
+                        0.5_real64 * (vnow + predicted_v)
+                     cell_particles(i,j,k)%particles(n)%w = &
+                        0.5_real64 * (wnow + predicted_w)
+                  enddo
+               enddo
+            enddo
+         enddo
+      enddo
+   end subroutine lcm_refine_particle_velocities
+
+   subroutine lcm_update_particle_positions(time_step, current_step)
+      real(real64), intent(in) :: time_step
+      integer, intent(in) :: current_step
+
+      integer :: i
+      integer :: j
+      integer :: k
+      integer :: n
+
+      call require_particle_cells_allocated()
+
+      do k = 1, size(cell_particles, 3)
+         do j = 1, size(cell_particles, 2)
+            do i = 1, size(cell_particles, 1)
+               do n = 1, cell_particles(i,j,k)%count
+                  cell_particles(i,j,k)%particles(n)%x = &
+                     cell_particles(i,j,k)%particles(n)%x + &
+                     cell_particles(i,j,k)%particles(n)%u * time_step
+                  cell_particles(i,j,k)%particles(n)%y = &
+                     cell_particles(i,j,k)%particles(n)%y + &
+                     cell_particles(i,j,k)%particles(n)%v * time_step * &
+                     real(grid_state%grid%y_dimension, real64)
+                  cell_particles(i,j,k)%particles(n)%z = &
+                     cell_particles(i,j,k)%particles(n)%z + &
+                     cell_particles(i,j,k)%particles(n)%w * time_step
+
+                  if (config_state%switch_sgs_velocities) then
+                     cell_particles(i,j,k)%particles(n)%x = &
+                        cell_particles(i,j,k)%particles(n)%x + &
+                        cell_particles(i,j,k)%particles(n)%u_sgs * time_step
+                     cell_particles(i,j,k)%particles(n)%y = &
+                        cell_particles(i,j,k)%particles(n)%y + &
+                        cell_particles(i,j,k)%particles(n)%v_sgs * time_step * &
+                        real(grid_state%grid%y_dimension, real64)
+                     cell_particles(i,j,k)%particles(n)%z = &
+                        cell_particles(i,j,k)%particles(n)%z + &
+                        cell_particles(i,j,k)%particles(n)%w_sgs * time_step
+                  endif
+
+                  if (config_state%switch_sedimentation .and. &
+                      current_step >= config_state%start_sedimentation) then
+                     cell_particles(i,j,k)%particles(n)%z = &
+                        cell_particles(i,j,k)%particles(n)%z - &
+                        cell_particles(i,j,k)%particles(n)%w_sedi * time_step
+                  endif
+               enddo
+            enddo
+         enddo
+      enddo
+   end subroutine lcm_update_particle_positions
+
+   subroutine lcm_update_particle_cell_ownership()
+      integer :: i
+      integer :: j
+      integer :: k
+      integer :: n
+      integer :: new_i
+      integer :: new_j
+      integer :: new_k
+      integer :: x_direction
+      integer :: y_direction
+      logical :: is_local
+
+      call require_particle_cells_allocated()
+
+      do k = 1, size(cell_particles, 3)
+         do j = 1, size(cell_particles, 2)
+            do i = 1, size(cell_particles, 1)
+               n = 1
+               do while (n <= cell_particles(i,j,k)%count)
+                  call lcm_locate_particle_cell( &
+                     cell_particles(i,j,k)%particles(n)%x, &
+                     cell_particles(i,j,k)%particles(n)%y, &
+                     cell_particles(i,j,k)%particles(n)%z, &
+                     new_i, new_j, new_k, is_local)
+
+                  if (is_local .and. (new_i /= i .or. new_j /= j .or. &
+                                       new_k /= k)) then
+                     call lcm_move_particle(i, j, k, n, new_i, new_j, new_k)
+                  elseif (particle_leaves_to_neighbor_rank(new_i, new_j, new_k, &
+                                                           x_direction, y_direction)) then
+                     call append_outgoing_particle( &
+                        cell_particles(i,j,k)%particles(n), x_direction, y_direction)
+                     call lcm_remove_particle(i, j, k, n)
+                  else
+                     n = n + 1
+                  endif
+               enddo
+            enddo
+         enddo
+      enddo
+   end subroutine lcm_update_particle_cell_ownership
 
    subroutine init_particle_properties(i, j, k, cell_particle_index, particle)
       integer, intent(in) :: i
@@ -1175,6 +1422,15 @@ contains
       endif
    end subroutine validate_cell_index
 
+   subroutine validate_particle_index(particle_index, count)
+      integer, intent(in) :: particle_index
+      integer, intent(in) :: count
+
+      if (particle_index < 1 .or. particle_index > count) then
+         error stop "LCM particle index is outside the cell container"
+      endif
+   end subroutine validate_particle_index
+
    integer function next_capacity(current_capacity)
       integer, intent(in) :: current_capacity
 
@@ -1206,5 +1462,75 @@ contains
       endif
       cell%capacity = new_capacity
    end subroutine resize_cell_storage
+
+   subroutine append_particle_to_cell(cell, particle)
+      type(lcm_particle_cell_t), intent(inout) :: cell
+      type(lcm_particle_t), intent(in) :: particle
+
+      if (cell%count == cell%capacity) then
+         call resize_cell_storage(cell, next_capacity(cell%capacity))
+      endif
+
+      cell%count = cell%count + 1
+      cell%particles(cell%count) = particle
+   end subroutine append_particle_to_cell
+
+   logical function particle_leaves_to_neighbor_rank(new_i, new_j, new_k, &
+                                                     x_direction, y_direction)
+      integer, intent(in) :: new_i
+      integer, intent(in) :: new_j
+      integer, intent(in) :: new_k
+      integer, intent(out) :: x_direction
+      integer, intent(out) :: y_direction
+
+      x_direction = 0
+      y_direction = 0
+      particle_leaves_to_neighbor_rank = .false.
+
+      if (new_k < 1 .or. new_k > grid_state%grid%nz) return
+
+      if (new_i < 1) x_direction = -1
+      if (new_i > grid_state%grid%nx_local) x_direction = 1
+      if (new_j < 1) y_direction = -1
+      if (new_j > grid_state%grid%ny_local) y_direction = 1
+
+      if (x_direction == 0 .and. y_direction == 0) return
+      if (x_direction < 0 .and. grid_state%grid%west_rank < 0) return
+      if (x_direction > 0 .and. grid_state%grid%east_rank < 0) return
+      if (y_direction < 0 .and. grid_state%grid%south_rank < 0) return
+      if (y_direction > 0 .and. grid_state%grid%north_rank < 0) return
+
+      particle_leaves_to_neighbor_rank = .true.
+   end function particle_leaves_to_neighbor_rank
+
+   subroutine append_outgoing_particle(particle, x_direction, y_direction)
+      type(lcm_particle_t), intent(in) :: particle
+      integer, intent(in) :: x_direction
+      integer, intent(in) :: y_direction
+
+      call ensure_outgoing_particle_capacity(n_outgoing_particles + 1)
+
+      n_outgoing_particles = n_outgoing_particles + 1
+      outgoing_particles(n_outgoing_particles)%particle = particle
+      outgoing_particles(n_outgoing_particles)%x_direction = x_direction
+      outgoing_particles(n_outgoing_particles)%y_direction = y_direction
+   end subroutine append_outgoing_particle
+
+   subroutine ensure_outgoing_particle_capacity(required_capacity)
+      integer, intent(in) :: required_capacity
+      type(lcm_outgoing_particle_t), allocatable :: previous_particles(:)
+      integer :: new_capacity
+
+      if (.not. allocated(outgoing_particles)) then
+         allocate(outgoing_particles(max(1, required_capacity)))
+         return
+      endif
+      if (required_capacity <= size(outgoing_particles)) return
+
+      new_capacity = max(required_capacity, 2 * size(outgoing_particles))
+      call move_alloc(outgoing_particles, previous_particles)
+      allocate(outgoing_particles(new_capacity))
+      outgoing_particles(1:n_outgoing_particles) = previous_particles(1:n_outgoing_particles)
+   end subroutine ensure_outgoing_particle_capacity
 
 end module lcm_particle_state
