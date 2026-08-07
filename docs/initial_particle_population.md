@@ -339,7 +339,7 @@ actual routine.
 
 ### Test Coverage
 
-`tests/test_initial_particle_population.f90` now covers:
+`tests/integration/test_initial_particle_population.f90` now covers:
 
 - default aerosol configuration from `lcm_init_config`
 - one active bin aerosol mode

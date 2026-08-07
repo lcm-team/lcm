@@ -94,7 +94,7 @@ set_target_properties(lcm lcm_sam_compat
 )
 
 add_executable(test_initial_particle_population
-  tests/test_initial_particle_population.f90
+  tests/integration/test_initial_particle_population.f90
 )
 
 target_link_libraries(test_initial_particle_population
@@ -156,9 +156,9 @@ add_test(
 )
 
 add_executable(test_minimal_les_host_initialization
-  tests/minimal_les_host.f90
-  tests/minimal_les_host_references.f90
-  tests/test_minimal_les_host_initialization.f90
+  tests/integration/minimal_les_host.f90
+  tests/integration/minimal_les_host_references.f90
+  tests/integration/test_minimal_les_host_initialization.f90
 )
 
 target_link_libraries(test_minimal_les_host_initialization
@@ -196,8 +196,8 @@ add_test(
 )
 
 add_executable(test_particle_location
-  tests/minimal_les_host.f90
-  tests/test_particle_location.f90
+  tests/integration/minimal_les_host.f90
+  tests/unit/test_particle_location.f90
 )
 
 target_link_libraries(test_particle_location
@@ -216,7 +216,7 @@ add_test(
 )
 
 add_executable(test_particle_cell_ownership
-  tests/test_particle_cell_ownership.f90
+  tests/unit/test_particle_cell_ownership.f90
 )
 
 target_link_libraries(test_particle_cell_ownership
@@ -234,8 +234,41 @@ add_test(
   COMMAND test_particle_cell_ownership
 )
 
+add_executable(test_minimal_les_host_cell_crossing
+  tests/integration/minimal_les_host.f90
+  tests/integration/test_minimal_les_host_cell_crossing.f90
+)
+
+target_link_libraries(test_minimal_les_host_cell_crossing
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_minimal_les_host_cell_crossing
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME minimal_les_host_cell_crossing_x
+  COMMAND test_minimal_les_host_cell_crossing
+          x
+)
+
+add_test(
+  NAME minimal_les_host_cell_crossing_y
+  COMMAND test_minimal_les_host_cell_crossing
+          y
+)
+
+add_test(
+  NAME minimal_les_host_cell_crossing_z
+  COMMAND test_minimal_les_host_cell_crossing
+          z
+)
+
 add_executable(test_field_attachment
-  tests/test_field_attachment.f90
+  tests/unit/test_field_attachment.f90
 )
 
 target_link_libraries(test_field_attachment
@@ -254,7 +287,7 @@ add_test(
 )
 
 add_executable(test_velocity_interpolation
-  tests/test_velocity_interpolation.f90
+  tests/unit/test_velocity_interpolation.f90
 )
 
 target_link_libraries(test_velocity_interpolation
@@ -273,7 +306,7 @@ add_test(
 )
 
 add_executable(test_particle_source
-  tests/test_particle_source.f90
+  tests/integration/test_particle_source.f90
 )
 
 target_link_libraries(test_particle_source
