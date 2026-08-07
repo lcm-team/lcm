@@ -267,6 +267,26 @@ add_test(
           z
 )
 
+add_executable(test_minimal_les_host_outgoing_particles
+  tests/integration/minimal_les_host.f90
+  tests/integration/test_minimal_les_host_outgoing_particles.f90
+)
+
+target_link_libraries(test_minimal_les_host_outgoing_particles
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_minimal_les_host_outgoing_particles
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME minimal_les_host_outgoing_particles
+  COMMAND test_minimal_les_host_outgoing_particles
+)
+
 add_executable(test_field_attachment
   tests/unit/test_field_attachment.f90
 )

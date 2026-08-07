@@ -35,6 +35,7 @@ module lcm_particle_state
    public :: lcm_refine_particle_velocities
    public :: lcm_update_particle_positions
    public :: lcm_update_particle_cell_ownership
+   public :: lcm_clear_outgoing_particles
    public :: set_particle_position
    public :: particle_random_seed_id
    public :: cell_tabs_lcm
@@ -42,9 +43,20 @@ module lcm_particle_state
    public :: qsatw_liquid
    public :: inverse_error_function_approx
    public :: ice_freezing_temperature
+   public :: lcm_outgoing_particle_t
+   public :: outgoing_particles
+   public :: n_outgoing_particles
+
+   type :: lcm_outgoing_particle_t
+      type(lcm_particle_t) :: particle
+      integer :: x_direction = 0
+      integer :: y_direction = 0
+   end type lcm_outgoing_particle_t
 
    type(lcm_particle_cell_t), allocatable, protected, save :: cell_particles(:,:,:)
+   type(lcm_outgoing_particle_t), allocatable, protected, save :: outgoing_particles(:)
    type(lcm_particle_t), allocatable, save :: aerosol_initialization_template(:)
+   integer, protected, save :: n_outgoing_particles = 0
    integer(int64), protected, save :: n_step_id = 0_int64
    integer(int64), protected, save :: n_id = 0_int64
    logical, save :: aerosol_initialization_template_is_set = .false.
@@ -81,6 +93,7 @@ contains
       allocate(cell_particles(grid_state%grid%nx_local, &
                               grid_state%grid%ny_local, &
                               grid_state%grid%nz))
+      call lcm_clear_outgoing_particles()
 
       if (capacity > 0) then
          do k = 1, grid_state%grid%nz
@@ -168,6 +181,10 @@ contains
          enddo
       enddo
    end subroutine lcm_reset_particle_cells
+
+   subroutine lcm_clear_outgoing_particles()
+      n_outgoing_particles = 0
+   end subroutine lcm_clear_outgoing_particles
 
    subroutine lcm_initialize_computational_particles()
       integer :: i, j, k, n
@@ -368,6 +385,8 @@ contains
       integer :: new_i
       integer :: new_j
       integer :: new_k
+      integer :: x_direction
+      integer :: y_direction
       logical :: is_local
 
       call require_particle_cells_allocated()
@@ -386,6 +405,11 @@ contains
                   if (is_local .and. (new_i /= i .or. new_j /= j .or. &
                                        new_k /= k)) then
                      call lcm_move_particle(i, j, k, n, new_i, new_j, new_k)
+                  elseif (particle_leaves_to_neighbor_rank(new_i, new_j, new_k, &
+                                                           x_direction, y_direction)) then
+                     call append_outgoing_particle( &
+                        cell_particles(i,j,k)%particles(n), x_direction, y_direction)
+                     call lcm_remove_particle(i, j, k, n)
                   else
                      n = n + 1
                   endif
@@ -1450,5 +1474,63 @@ contains
       cell%count = cell%count + 1
       cell%particles(cell%count) = particle
    end subroutine append_particle_to_cell
+
+   logical function particle_leaves_to_neighbor_rank(new_i, new_j, new_k, &
+                                                     x_direction, y_direction)
+      integer, intent(in) :: new_i
+      integer, intent(in) :: new_j
+      integer, intent(in) :: new_k
+      integer, intent(out) :: x_direction
+      integer, intent(out) :: y_direction
+
+      x_direction = 0
+      y_direction = 0
+      particle_leaves_to_neighbor_rank = .false.
+
+      if (new_k < 1 .or. new_k > grid_state%grid%nz) return
+
+      if (new_i < 1) x_direction = -1
+      if (new_i > grid_state%grid%nx_local) x_direction = 1
+      if (new_j < 1) y_direction = -1
+      if (new_j > grid_state%grid%ny_local) y_direction = 1
+
+      if (x_direction == 0 .and. y_direction == 0) return
+      if (x_direction < 0 .and. grid_state%grid%west_rank < 0) return
+      if (x_direction > 0 .and. grid_state%grid%east_rank < 0) return
+      if (y_direction < 0 .and. grid_state%grid%south_rank < 0) return
+      if (y_direction > 0 .and. grid_state%grid%north_rank < 0) return
+
+      particle_leaves_to_neighbor_rank = .true.
+   end function particle_leaves_to_neighbor_rank
+
+   subroutine append_outgoing_particle(particle, x_direction, y_direction)
+      type(lcm_particle_t), intent(in) :: particle
+      integer, intent(in) :: x_direction
+      integer, intent(in) :: y_direction
+
+      call ensure_outgoing_particle_capacity(n_outgoing_particles + 1)
+
+      n_outgoing_particles = n_outgoing_particles + 1
+      outgoing_particles(n_outgoing_particles)%particle = particle
+      outgoing_particles(n_outgoing_particles)%x_direction = x_direction
+      outgoing_particles(n_outgoing_particles)%y_direction = y_direction
+   end subroutine append_outgoing_particle
+
+   subroutine ensure_outgoing_particle_capacity(required_capacity)
+      integer, intent(in) :: required_capacity
+      type(lcm_outgoing_particle_t), allocatable :: previous_particles(:)
+      integer :: new_capacity
+
+      if (.not. allocated(outgoing_particles)) then
+         allocate(outgoing_particles(max(1, required_capacity)))
+         return
+      endif
+      if (required_capacity <= size(outgoing_particles)) return
+
+      new_capacity = max(required_capacity, 2 * size(outgoing_particles))
+      call move_alloc(outgoing_particles, previous_particles)
+      allocate(outgoing_particles(new_capacity))
+      outgoing_particles(1:n_outgoing_particles) = previous_particles(1:n_outgoing_particles)
+   end subroutine ensure_outgoing_particle_capacity
 
 end module lcm_particle_state

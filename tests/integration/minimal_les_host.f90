@@ -68,11 +68,17 @@ module minimal_les_host
 
 contains
 
-   subroutine setup_minimal_les_host(case_name)
+   subroutine setup_minimal_les_host(case_name, use_internal_subdomain)
       character(len=*), intent(in), optional :: case_name
+      logical, intent(in), optional :: use_internal_subdomain
+      logical :: internal_subdomain
 
       call configure_minimal_host_config(case_name)
-      call configure_minimal_host_grid()
+      internal_subdomain = .false.
+      if (present(use_internal_subdomain)) then
+         internal_subdomain = use_internal_subdomain
+      endif
+      call configure_minimal_host_grid(internal_subdomain)
       call configure_minimal_host_fields()
 
       call lcm_attach_field("u", minimal_host_u)
@@ -127,22 +133,36 @@ contains
       call lcm_set_config(minimal_host_config)
    end subroutine configure_minimal_host_config
 
-   subroutine configure_minimal_host_grid()
+   subroutine configure_minimal_host_grid(use_internal_subdomain)
+      logical, intent(in) :: use_internal_subdomain
+
       minimal_host_dz = [100.0_real64, 120.0_real64]
       minimal_host_z_face = [0.0_real64, 100.0_real64, 220.0_real64]
       minimal_host_z_center = [50.0_real64, 160.0_real64]
 
-      call lcm_init_grid(minimal_host_grid,                         &
-                         minimal_host_nx_local, minimal_host_ny_local, &
-                         minimal_host_nz,                           &
-                         minimal_host_nx_local, minimal_host_ny_local, &
-                         1, minimal_host_nx_local,                  &
-                         1, minimal_host_ny_local,                  &
-                         minimal_host_dx, minimal_host_dy,          &
-                         minimal_host_z_center, minimal_host_z_face,&
-                         minimal_host_dz,                           &
-                         0, 0, 0, 0, 0, 1, 1, 1, 1,                &
-                         -1, -1, -1, -1, .true., .true., 1)
+      if (use_internal_subdomain) then
+         call lcm_init_grid(minimal_host_grid,                         &
+                            minimal_host_nx_local, minimal_host_ny_local, &
+                            minimal_host_nz,                           &
+                            6, 6, 3, 4, 3, 4,                          &
+                            minimal_host_dx, minimal_host_dy,          &
+                            minimal_host_z_center, minimal_host_z_face,&
+                            minimal_host_dz,                           &
+                            0, 0, 0, 1, 1, 3, 3, 3, 3,                &
+                            3, 5, 1, 7, .false., .false., 1)
+      else
+         call lcm_init_grid(minimal_host_grid,                         &
+                            minimal_host_nx_local, minimal_host_ny_local, &
+                            minimal_host_nz,                           &
+                            minimal_host_nx_local, minimal_host_ny_local, &
+                            1, minimal_host_nx_local,                  &
+                            1, minimal_host_ny_local,                  &
+                            minimal_host_dx, minimal_host_dy,          &
+                            minimal_host_z_center, minimal_host_z_face,&
+                            minimal_host_dz,                           &
+                            0, 0, 0, 0, 0, 1, 1, 1, 1,                &
+                            -1, -1, -1, -1, .true., .true., 1)
+      endif
       call lcm_set_grid(minimal_host_grid)
    end subroutine configure_minimal_host_grid
 
