@@ -25,6 +25,7 @@ module lcm_particle_state
    public :: cell_particles
    public :: lcm_allocate_particle_cells
    public :: lcm_add_particle
+   public :: lcm_remove_particle
    public :: lcm_reset_particle_cells
    public :: lcm_initialize_particle_id_counter
    public :: lcm_next_particle_id
@@ -108,6 +109,29 @@ contains
       cell_particles(i,j,k)%count = cell_particles(i,j,k)%count + 1
       cell_particles(i,j,k)%particles(cell_particles(i,j,k)%count) = particle
    end subroutine lcm_add_particle
+
+   subroutine lcm_remove_particle(i, j, k, particle_index)
+      integer, intent(in) :: i
+      integer, intent(in) :: j
+      integer, intent(in) :: k
+      integer, intent(in) :: particle_index
+      integer :: count
+
+      call require_particle_cells_allocated()
+      call validate_cell_index(i, j, k)
+
+      count = cell_particles(i,j,k)%count
+      call validate_particle_index(particle_index, count)
+
+      ! Keep the remaining order stable for particle tracking and exchange.
+      if (particle_index < count) then
+         cell_particles(i,j,k)%particles(particle_index:count - 1) = &
+            cell_particles(i,j,k)%particles(particle_index + 1:count)
+      endif
+
+      cell_particles(i,j,k)%particles(count) = lcm_particle_t()
+      cell_particles(i,j,k)%count = count - 1
+   end subroutine lcm_remove_particle
 
    subroutine lcm_reset_particle_cells()
       integer :: i, j, k
@@ -1368,6 +1392,15 @@ contains
          error stop "LCM particle cell index is outside the local grid"
       endif
    end subroutine validate_cell_index
+
+   subroutine validate_particle_index(particle_index, count)
+      integer, intent(in) :: particle_index
+      integer, intent(in) :: count
+
+      if (particle_index < 1 .or. particle_index > count) then
+         error stop "LCM particle index is outside the cell container"
+      endif
+   end subroutine validate_particle_index
 
    integer function next_capacity(current_capacity)
       integer, intent(in) :: current_capacity

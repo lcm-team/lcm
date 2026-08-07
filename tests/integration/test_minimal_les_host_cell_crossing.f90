@@ -1,7 +1,8 @@
 program test_minimal_les_host_cell_crossing
    use iso_fortran_env, only: int64, real64
    use lcm_host_interface, only: lcm_advance
-   use lcm_particle_state, only: cell_particles, lcm_add_particle
+   use lcm_particle_state, only: cell_particles, lcm_add_particle, &
+                                 lcm_remove_particle
    use lcm_types, only: lcm_particle_t
    use minimal_les_host, only: minimal_host_dx, minimal_host_dy, &
                                minimal_host_np_xy, minimal_host_u, &
@@ -25,6 +26,7 @@ program test_minimal_les_host_cell_crossing
 
    call assert_final_cell_counts(trim(direction))
    call assert_crossing_particle_in_new_cell(trim(direction))
+   call remove_crossing_particle_from_new_cell(trim(direction))
 
 contains
 
@@ -141,6 +143,51 @@ contains
 
       call assert_true(found, "crossing particle found in new cell")
    end subroutine assert_crossing_particle_in_new_cell
+
+   subroutine remove_crossing_particle_from_new_cell(direction)
+      character(len=*), intent(in) :: direction
+      integer :: n
+      integer :: particle_index
+      integer :: target_i
+      integer :: target_j
+      integer :: target_k
+      logical :: found
+      real(real64) :: expected_x
+      real(real64) :: expected_y
+      real(real64) :: expected_z
+
+      call expected_crossing_state(direction, target_i, target_j, target_k, &
+                                   expected_x, expected_y, expected_z)
+
+      found = .false.
+      particle_index = 0
+      do n = 1, cell_particles(target_i,target_j,target_k)%count
+         if (cell_particles(target_i,target_j,target_k)%particles(n)%id == &
+             crossing_particle_id) then
+            found = .true.
+            particle_index = n
+            exit
+         endif
+      enddo
+
+      call assert_true(found, "crossing particle available for removal")
+      call lcm_remove_particle(target_i, target_j, target_k, particle_index)
+
+      if (target_k == 2) then
+         call assert_true(cell_particles(target_i,target_j,target_k)%count == 0, &
+                          "removed crossing particle leaves upper cell empty")
+      else
+         call assert_true(cell_particles(target_i,target_j,target_k)%count == &
+                          minimal_host_np_xy, &
+                          "removed crossing particle restores target cell count")
+      endif
+
+      do n = 1, cell_particles(target_i,target_j,target_k)%count
+         call assert_true(cell_particles(target_i,target_j,target_k)%particles(n)%id /= &
+                          crossing_particle_id, &
+                          "removed crossing particle is absent from target cell")
+      enddo
+   end subroutine remove_crossing_particle_from_new_cell
 
    subroutine expected_crossing_state(direction, target_i, target_j, target_k, &
                                      expected_x, expected_y, expected_z)
