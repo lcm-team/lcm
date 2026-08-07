@@ -25,6 +25,7 @@ module lcm_particle_state
    public :: cell_particles
    public :: lcm_allocate_particle_cells
    public :: lcm_add_particle
+   public :: lcm_move_particle
    public :: lcm_remove_particle
    public :: lcm_reset_particle_cells
    public :: lcm_initialize_particle_id_counter
@@ -101,13 +102,7 @@ contains
       call require_particle_cells_allocated()
       call validate_cell_index(i, j, k)
 
-      if (cell_particles(i,j,k)%count == cell_particles(i,j,k)%capacity) then
-         call resize_cell_storage(cell_particles(i,j,k), &
-                                  next_capacity(cell_particles(i,j,k)%capacity))
-      endif
-
-      cell_particles(i,j,k)%count = cell_particles(i,j,k)%count + 1
-      cell_particles(i,j,k)%particles(cell_particles(i,j,k)%count) = particle
+      call append_particle_to_cell(cell_particles(i,j,k), particle)
    end subroutine lcm_add_particle
 
    subroutine lcm_remove_particle(i, j, k, particle_index)
@@ -132,6 +127,33 @@ contains
       cell_particles(i,j,k)%particles(count) = lcm_particle_t()
       cell_particles(i,j,k)%count = count - 1
    end subroutine lcm_remove_particle
+
+   subroutine lcm_move_particle(source_i, source_j, source_k, particle_index, &
+                                destination_i, destination_j, destination_k)
+      integer, intent(in) :: source_i
+      integer, intent(in) :: source_j
+      integer, intent(in) :: source_k
+      integer, intent(in) :: particle_index
+      integer, intent(in) :: destination_i
+      integer, intent(in) :: destination_j
+      integer, intent(in) :: destination_k
+      type(lcm_particle_t) :: particle
+
+      call require_particle_cells_allocated()
+      call validate_cell_index(source_i, source_j, source_k)
+      call validate_cell_index(destination_i, destination_j, destination_k)
+      call validate_particle_index(particle_index, &
+                                   cell_particles(source_i,source_j,source_k)%count)
+
+      if (source_i == destination_i .and. source_j == destination_j .and. &
+          source_k == destination_k) then
+         return
+      endif
+
+      particle = cell_particles(source_i,source_j,source_k)%particles(particle_index)
+      call lcm_add_particle(destination_i, destination_j, destination_k, particle)
+      call lcm_remove_particle(source_i, source_j, source_k, particle_index)
+   end subroutine lcm_move_particle
 
    subroutine lcm_reset_particle_cells()
       integer :: i, j, k
@@ -339,7 +361,6 @@ contains
    end subroutine lcm_update_particle_positions
 
    subroutine lcm_update_particle_cell_ownership()
-      type(lcm_particle_cell_t), allocatable :: updated_cells(:,:,:)
       integer :: i
       integer :: j
       integer :: k
@@ -351,43 +372,27 @@ contains
 
       call require_particle_cells_allocated()
 
-      allocate(updated_cells(size(cell_particles, 1), size(cell_particles, 2), &
-                             size(cell_particles, 3)))
-
       do k = 1, size(cell_particles, 3)
          do j = 1, size(cell_particles, 2)
             do i = 1, size(cell_particles, 1)
-               if (cell_particles(i,j,k)%capacity > 0) then
-                  call resize_cell_storage(updated_cells(i,j,k), &
-                                           cell_particles(i,j,k)%capacity)
-               endif
-            enddo
-         enddo
-      enddo
-
-      do k = 1, size(cell_particles, 3)
-         do j = 1, size(cell_particles, 2)
-            do i = 1, size(cell_particles, 1)
-               do n = 1, cell_particles(i,j,k)%count
+               n = 1
+               do while (n <= cell_particles(i,j,k)%count)
                   call lcm_locate_particle_cell( &
                      cell_particles(i,j,k)%particles(n)%x, &
                      cell_particles(i,j,k)%particles(n)%y, &
                      cell_particles(i,j,k)%particles(n)%z, &
                      new_i, new_j, new_k, is_local)
 
-                  if (is_local) then
-                     call append_particle_to_cell(updated_cells(new_i,new_j,new_k), &
-                                                  cell_particles(i,j,k)%particles(n))
+                  if (is_local .and. (new_i /= i .or. new_j /= j .or. &
+                                       new_k /= k)) then
+                     call lcm_move_particle(i, j, k, n, new_i, new_j, new_k)
                   else
-                     call append_particle_to_cell(updated_cells(i,j,k), &
-                                                  cell_particles(i,j,k)%particles(n))
+                     n = n + 1
                   endif
                enddo
             enddo
          enddo
       enddo
-
-      call move_alloc(updated_cells, cell_particles)
    end subroutine lcm_update_particle_cell_ownership
 
    subroutine init_particle_properties(i, j, k, cell_particle_index, particle)
