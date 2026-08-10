@@ -115,6 +115,38 @@ derived limit is in-domain; only `z < zbottom` or `z > ztop` invokes a
 vertical-boundary rule. The inset keeps boundary-processed particles inside
 the raw face interval that the later cell-location routine uses.
 
+## Cell-owned boundary mutation contract
+
+SAM-LCM copies surviving particles into a temporary flat array and replaces
+`particle(:)` after the loop. Standalone LCM does not rebuild a flat array.
+Each particle stays in its current `cell_particles(i,j,k)` container while
+boundary rules are evaluated:
+
+- an in-domain or reflected particle is retained in the current container;
+- a deleted particle is removed with `lcm_remove_particle(i,j,k,n)`;
+- removal preserves the order of surviving particles by shifting later
+  entries down; and
+- the caller must **not** increment `n` after removal, because the next
+  unprocessed particle has shifted into that index.
+
+The intended traversal is therefore:
+
+```fortran
+n = 1
+do while (n <= cell_particles(i,j,k)%count)
+   if (particle_is_deleted) then
+      call lcm_remove_particle(i, j, k, n)
+   else
+      n = n + 1
+   endif
+enddo
+```
+
+This is the standalone replacement for SAM's flat-array compaction. It does
+not move reflected particles to their final cell and does not transfer them to
+another rank; those responsibilities stay with the later ownership and MPI
+steps.
+
 ### Required observable behavior
 
 For the initial DALES scope:

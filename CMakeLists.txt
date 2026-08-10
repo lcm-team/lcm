@@ -383,6 +383,25 @@ add_test(
   COMMAND test_vertical_boundary_bounds
 )
 
+add_executable(test_particle_cell_removal
+  tests/unit/test_particle_cell_removal.f90
+)
+
+target_link_libraries(test_particle_cell_removal
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_particle_cell_removal
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME particle_cell_removal
+  COMMAND test_particle_cell_removal
+)
+
 add_executable(test_particle_source
   tests/integration/test_particle_source.f90
 )
