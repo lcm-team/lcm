@@ -47,8 +47,8 @@ step moves it, if necessary.
 | `boundary_distance` | SAM uses a 0.001 m inset when deriving limits. | Already represented by `grid_state%zbottom = z_face(1)+0.001` and `grid_state%ztop = z_face(nz+1)-0.001`. Keep the policy centralized in grid setup. |
 | `get_r_particle`, `particle%var(iM)`, `particle%ivar(iA)`, `rho_liq` | Determine whether a particle is larger than 1 micrometre at the bottom. | `lcm_particle_radius` uses named fields and preserves SAM's volume approximation. |
 | `particle%var(iWsgs)` | On reflection, force subgrid vertical velocity away from the wall. | `lcm_particle_t%w_sgs`; required if reflection is included. The resolved `w` is not changed by SAM. |
-| `np_deleted` | Number of particles removed in the call. | Add an LCM-owned per-step boundary diagnostic if needed; do not retain a SAM global. |
-| `total_water_prec`, `dx_LCM`, `dy_LCM` | SAM records the change in total liquid-particle mass per horizontal area across its compaction pass. | Needs an explicit LCM diagnostics/feedback design. Do not update DALES or SAM globals from the boundary routine. |
+| `np_deleted` | Number of particles removed in the call. | `boundary_diagnostics%deleted_particle_count`, reset for each boundary call. |
+| `total_water_prec`, `dx_LCM`, `dy_LCM` | SAM records the change in total liquid-particle mass per horizontal area across its compaction pass. | `boundary_diagnostics%deleted_water_mass` retains raw local mass. A later host adapter owns reduction and flux conversion; the boundary routine does not update DALES or SAM globals. |
 | Pi-chamber wall limits and switches | `wall_x_*_pichamber`, `wall_y_*_pichamber`, `switch_walls_pichamber`, `switch_reflective_walls_pichamber`. | Do not add to the first DALES boundary configuration. A future generic wall-policy interface can model this without Pi-chamber names. |
 | Reinjection switches and bounds | `switch_steady_aerosol`, `switch_steady_pichamber`, `inject_bottom`, `inject_top`. | Postpone. These are experiment-specific source/recycling policies, not a default atmospheric boundary. |
 | `randomu(rank+1)` | Select reinjection height. | Postpone with reinjection; future use must go through standalone LCM RNG, never an MPI-rank-indexed SAM call. |
@@ -261,6 +261,33 @@ deletion, so compacted consecutive out-of-domain particles are all processed.
 This does not include reinjection, precipitation diagnostics, MPI exchange, or
 final cell ownership updates.
 
+## Implemented boundary-loss diagnostics
+
+`lcm_boundary_diagnostics` owns the losses from the most recent
+`lcm_apply_particle_boundaries()` call. The routine resets this state before it
+applies physical rules, so the values are per-call rather than implicitly
+cumulative or restart-persistent:
+
+| Field | Meaning | Units |
+| --- | --- | --- |
+| `deleted_particle_count` | Number of removed computational particles. | count |
+| `deleted_water_mass` | Sum of `mass_water` for removed particles. | kg |
+| `deleted_aerosol_mass` | Sum of `mass_aero` for removed particles. | kg |
+
+The current vertical policy only removes large particles crossing the bottom,
+but the diagnostic names are intentionally general enough for a future
+physical-wall policy. Values are local to the rank; they are deliberately not
+divided by horizontal area or timestep and are not MPI-reduced. This preserves
+the raw physical loss without assuming how a host interprets it. A later DALES
+feedback adapter may reduce the values, normalize them, and expose an
+appropriate precipitation or mass-budget diagnostic.
+
+This differs from SAM's `total_water_prec` update, which calculates a
+before/after flat-array mass difference divided by `dx_LCM * dy_LCM` and writes
+directly to a SAM global. The standalone bottom-boundary integration test
+verifies that a deleted particle contributes its water and aerosol mass while
+reflected particles contribute neither.
+
 ## SAM reflection/deletion compatibility
 
 The baseline rules intentionally preserve the executable comparisons in
@@ -289,7 +316,9 @@ For the initial DALES scope:
 4. Mirror `z` about the violated limit and set `w_sgs` away from it on
    reflection.
 5. Remove deleted particles in place from their current cell container.
-6. Leave horizontal wrapping, MPI transfer, and final cell reassignment to
+6. Record each removed particle's count, water mass, and aerosol mass in the
+   LCM-owned per-call boundary diagnostics.
+7. Leave horizontal wrapping, MPI transfer, and final cell reassignment to
    their respective later routines.
 
 The implementation tests for this policy must demonstrate that a particle
@@ -307,8 +336,9 @@ The following must not be silently included in this first implementation:
 
 ## Follow-up decisions exposed by this audit
 
-- Define an LCM-owned boundary diagnostics state for deleted count and removed
-  water mass, then let the DALES adapter consume it deliberately.
+- Define the DALES feedback adapter that consumes local boundary diagnostics,
+  including MPI reduction, area/timestep normalization, and restart/output
+  semantics.
 - Decide whether the 1-micrometre bottom criterion is the desired DALES
   default, and specify its treatment for ice particles.
 - Add a generic boundary-policy configuration only when more than the default
