@@ -6,11 +6,13 @@ module lcm_types
    private
 
    public :: lcm_grid_t
+   public :: lcm_parallel_t
    public :: lcm_config_t
    public :: lcm_field_state_t
    public :: lcm_particle_t
    public :: lcm_particle_cell_t
    public :: lcm_init_grid
+   public :: lcm_init_parallel
    public :: lcm_init_config
 
    type :: lcm_grid_t
@@ -55,6 +57,16 @@ module lcm_types
       logical :: periodic_x = .false.
       logical :: periodic_y = .false.
    end type lcm_grid_t
+
+   !> Host-neutral MPI context.
+   !>
+   !> Grid geometry and decomposition remain in lcm_grid_t: local bounds,
+   !> processor coordinates, neighbor ranks, and periodicity must not be
+   !> repeated here.  This context holds only the communicator identity;
+   !> exchange uses the neighbor ranks already supplied with the grid.
+   type :: lcm_parallel_t
+      integer :: communicator = 0
+   end type lcm_parallel_t
 
    type :: lcm_config_t
       integer :: np_xy = 50
@@ -245,6 +257,13 @@ module lcm_types
    end type lcm_particle_cell_t
 
 contains
+
+   subroutine lcm_init_parallel(parallel, communicator)
+      type(lcm_parallel_t), intent(out) :: parallel
+      integer, intent(in) :: communicator
+
+      parallel%communicator = communicator
+   end subroutine lcm_init_parallel
 
    subroutine lcm_init_config(config)
       type(lcm_config_t), intent(out) :: config
