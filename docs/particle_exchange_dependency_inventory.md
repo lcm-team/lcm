@@ -87,6 +87,12 @@ count and grows as needed.  Buffers are cleared at the start of a later
 exchange operation but retain their allocation for reuse.  They are only
 temporary MPI-transfer state: they do not change cell-owned particle storage.
 
+After classification removes an outgoing particle from its local cell, LCM
+calculates its exact global horizontal cell indices from position, packs those
+indices and `k` with the particle payload, and appends the message to the send
+buffer identified by its exchange direction.  The later MPI transfer sends
+these buffers unchanged.
+
 SAM performs all eight directions in a 3-D horizontal run and only east/west
 in its two-dimensional mode. For standalone DALES, Issue #40 selects direct
 eight-direction exchange from the first MPI implementation: particles can
