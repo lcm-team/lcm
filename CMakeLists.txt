@@ -298,6 +298,25 @@ add_test(
   COMMAND test_exchange_directions
 )
 
+add_executable(test_local_subdomain_bounds
+  tests/unit/test_local_subdomain_bounds.f90
+)
+
+target_link_libraries(test_local_subdomain_bounds
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_local_subdomain_bounds
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME local_subdomain_bounds
+  COMMAND test_local_subdomain_bounds
+)
+
 add_executable(test_minimal_les_host_cell_crossing
   tests/integration/minimal_les_host.f90
   tests/integration/test_minimal_les_host_cell_crossing.f90

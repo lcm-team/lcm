@@ -24,6 +24,9 @@ module lcm_types
       integer :: nx_global = 0
       integer :: ny_global = 0
 
+      !> Interior indices in the host model's local arrays.  For example,
+      !> a DALES adapter can pass i=2:i1 and j=2:j1.  These indices describe
+      !> the host array layout; they are not LCM particle-cell indices.
       integer :: i_start = 0
       integer :: i_end = 0
       integer :: j_start = 0
@@ -45,6 +48,9 @@ module lcm_types
       integer :: n_subdomains_x = 1
       integer :: n_subdomains_y = 1
 
+      !> One-based global indices of LCM local cell (1,1).  Together with
+      !> nx_local and ny_local, these define the physical MPI subdomain used
+      !> for particle location and outgoing-particle classification.
       integer :: global_i_start = 0
       integer :: global_j_start = 0
 
