@@ -117,6 +117,7 @@ module lcm_types
       logical :: track_some_particles = .false.
       logical :: horiz_average_spec = .true.
       logical :: start_from_restart = .false.
+      real(real64) :: bottom_removal_radius = 1.0e-6_real64
       real :: r_separate_micro = 25.0e-6
       real :: supersat_threshold = 0.0
       real :: alpha_spec = 0.5
