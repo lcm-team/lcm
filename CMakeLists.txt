@@ -337,6 +337,25 @@ add_test(
   COMMAND test_particle_exchange_buffers
 )
 
+add_executable(test_outgoing_particle_message_packing
+  tests/unit/test_outgoing_particle_message_packing.f90
+)
+
+target_link_libraries(test_outgoing_particle_message_packing
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_outgoing_particle_message_packing
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME outgoing_particle_message_packing
+  COMMAND test_outgoing_particle_message_packing
+)
+
 add_executable(test_minimal_les_host_cell_crossing
   tests/integration/minimal_les_host.f90
   tests/integration/test_minimal_les_host_cell_crossing.f90

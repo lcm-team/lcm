@@ -14,8 +14,12 @@ module lcm_particle_state
                              rho_liq, rv, surface_tension_water
    use lcm_particle_location, only: lcm_locate_particle_cell
    use lcm_exchange_directions, only: lcm_exchange_direction_from_offsets
+   use lcm_particle_exchange_buffers, only: lcm_append_send_particle_message, &
+                                            lcm_clear_particle_exchange_buffers
+   use lcm_particle_mpi_messages, only: lcm_pack_particle_mpi_message
    use lcm_particle_properties, only: lcm_particle_radius
-   use lcm_types, only: lcm_particle_cell_t, lcm_particle_t
+   use lcm_types, only: lcm_particle_cell_t, lcm_particle_mpi_message_t, &
+                        lcm_particle_t
    use lcm_user, only: lcm_user_init_particles
    use lcm_velocity_interpolation, only: lcm_interpolate_particle_velocity
    use lcm_random, only: randomu
@@ -482,12 +486,15 @@ contains
       integer :: new_i
       integer :: new_j
       integer :: new_k
+      integer :: global_i
+      integer :: global_j
       integer :: x_direction
       integer :: y_direction
       logical :: is_local
 
       call require_particle_cells_allocated()
       call lcm_clear_outgoing_particles()
+      call lcm_clear_particle_exchange_buffers()
 
       do k = 1, size(cell_particles, 3)
          do j = 1, size(cell_particles, 2)
@@ -498,12 +505,13 @@ contains
                      cell_particles(i,j,k)%particles(n)%x, &
                      cell_particles(i,j,k)%particles(n)%y, &
                      cell_particles(i,j,k)%particles(n)%z, &
-                     new_i, new_j, new_k, is_local)
+                     new_i, new_j, new_k, is_local, global_i, global_j)
 
                   if (particle_leaves_to_neighbor_rank(new_i, new_j, new_k, &
                                                        x_direction, y_direction)) then
                      call append_outgoing_particle( &
-                        cell_particles(i,j,k)%particles(n), x_direction, y_direction)
+                        cell_particles(i,j,k)%particles(n), global_i, global_j, new_k, &
+                        x_direction, y_direction)
                      call lcm_remove_particle(i, j, k, n)
                   else
                      n = n + 1
@@ -1633,17 +1641,25 @@ contains
       particle_leaves_to_neighbor_rank = .true.
    end function particle_leaves_to_neighbor_rank
 
-   subroutine append_outgoing_particle(particle, x_direction, y_direction)
+   subroutine append_outgoing_particle(particle, global_i, global_j, k, x_direction, y_direction)
       type(lcm_particle_t), intent(in) :: particle
+      integer, intent(in) :: global_i
+      integer, intent(in) :: global_j
+      integer, intent(in) :: k
       integer, intent(in) :: x_direction
       integer, intent(in) :: y_direction
+      integer :: direction
+      type(lcm_particle_mpi_message_t) :: message
 
       call ensure_outgoing_particle_capacity(n_outgoing_particles + 1)
 
       n_outgoing_particles = n_outgoing_particles + 1
       outgoing_particles(n_outgoing_particles)%particle = particle
-      outgoing_particles(n_outgoing_particles)%direction = &
-         lcm_exchange_direction_from_offsets(x_direction, y_direction)
+      direction = lcm_exchange_direction_from_offsets(x_direction, y_direction)
+      outgoing_particles(n_outgoing_particles)%direction = direction
+
+      call lcm_pack_particle_mpi_message(global_i, global_j, k, particle, message)
+      call lcm_append_send_particle_message(direction, message)
    end subroutine append_outgoing_particle
 
    subroutine ensure_outgoing_particle_capacity(required_capacity)
