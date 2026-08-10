@@ -4,6 +4,7 @@ program test_minimal_les_host_bottom_particle_boundary
    use lcm_grid_state, only: grid_state
    use lcm_host_interface, only: lcm_advance
    use lcm_parameters, only: pi, rho_liq
+   use lcm_particle_properties, only: lcm_particle_radius
    use lcm_particle_state, only: cell_particles, lcm_add_particle, &
                                  lcm_reset_particle_cells
    use lcm_types, only: lcm_particle_t
@@ -15,19 +16,25 @@ program test_minimal_les_host_bottom_particle_boundary
 
    integer(int64), parameter :: reflected_particle_id = 9301_int64
    integer(int64), parameter :: deleted_particle_id = 9302_int64
+   integer(int64), parameter :: threshold_particle_id = 9303_int64
+   real(real64) :: threshold_radius
 
-   call setup_minimal_les_host("bin")
+   threshold_radius = water_particle_radius(1.0e-6_real64)
+   call setup_minimal_les_host("bin", bottom_removal_radius=threshold_radius)
    call lcm_reset_particle_cells()
    call configure_downward_host_velocity()
    call add_reflected_particle()
    call add_deleted_particle()
+   call add_threshold_particle()
 
    call lcm_advance(1.0_real64)
 
-   call assert_true(cell_particles(1,1,1)%count == 1, &
-                    "only the small particle remains after bottom handling")
+   call assert_true(cell_particles(1,1,1)%count == 2, &
+                    "small and threshold particles remain after bottom handling")
    call assert_particle(reflected_particle_id, 1.251_real64, 0.25_real64, &
                         "small particle is reflected at the bottom")
+   call assert_particle(threshold_particle_id, 1.501_real64, 0.50_real64, &
+                        "threshold-radius particle is reflected at the bottom")
    call assert_particle_absent(deleted_particle_id, &
                                "large particle is removed at the bottom")
 
@@ -63,6 +70,29 @@ contains
       call set_water_radius(particle, 2.0e-6_real64)
       call lcm_add_particle(1, 1, 1, particle)
    end subroutine add_deleted_particle
+
+   subroutine add_threshold_particle()
+      type(lcm_particle_t) :: particle
+
+      particle = lcm_particle_t()
+      particle%id = threshold_particle_id
+      particle%x = 0.5_real64 * minimal_host_dx
+      particle%y = 0.5_real64 * minimal_host_dy
+      particle%z = grid_state%zbottom + 1.0_real64
+      particle%w_sgs = -0.50_real64
+      call set_water_radius(particle, 1.0e-6_real64)
+      call lcm_add_particle(1, 1, 1, particle)
+   end subroutine add_threshold_particle
+
+   real(real64) function water_particle_radius(nominal_radius) result(radius)
+      real(real64), intent(in) :: nominal_radius
+      type(lcm_particle_t) :: particle
+
+      particle = lcm_particle_t()
+      call set_water_radius(particle, nominal_radius)
+      radius = lcm_particle_radius(particle, [0.0_real64, 0.0_real64, &
+                                              0.0_real64, 0.0_real64])
+   end function water_particle_radius
 
    subroutine set_water_radius(particle, radius)
       type(lcm_particle_t), intent(inout) :: particle
