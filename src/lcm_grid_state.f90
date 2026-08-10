@@ -1,5 +1,6 @@
 !> LCM-owned grid state for the current structured-grid implementation.
 module lcm_grid_state
+   use iso_fortran_env, only: real64
    use lcm_types, only: lcm_grid_t
 
    implicit none
@@ -9,6 +10,10 @@ module lcm_grid_state
    public :: t_lcm_grid_state
    public :: grid_state
    public :: lcm_set_grid
+   public :: lcm_vertical_boundary_inset
+
+   !> Keep particles away from the exact physical z faces before ownership.
+   real(real64), parameter :: lcm_vertical_boundary_inset = 1.0e-3_real64
 
    type :: t_lcm_grid_state
       type(lcm_grid_t) :: grid
@@ -65,8 +70,8 @@ module lcm_grid_state
       real :: ywidth = 0.0
       real :: idx = 0.0
       real :: idy = 0.0
-      real :: ztop = 0.0
-      real :: zbottom = 0.0
+      real(real64) :: ztop = 0.0_real64
+      real(real64) :: zbottom = 0.0_real64
    end type t_lcm_grid_state
 
    type(t_lcm_grid_state), protected, save :: grid_state
@@ -155,8 +160,10 @@ contains
 
       grid_state%xwidth = real(grid_state%grid%nx_global) * real(grid_state%grid%dx)
       grid_state%ywidth = real(grid_state%grid%ny_global) * real(grid_state%grid%dy)
-      grid_state%ztop = grid_state%gpzs(grid_state%grid%nz + 1) - 0.001
-      grid_state%zbottom = grid_state%gpzs(1) + 0.001
+      grid_state%zbottom = grid_state%grid%z_face(1) + &
+                           lcm_vertical_boundary_inset
+      grid_state%ztop = grid_state%grid%z_face(grid_state%grid%nz + 1) - &
+                        lcm_vertical_boundary_inset
    end subroutine initialize_geometry
 
 end module lcm_grid_state
