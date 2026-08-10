@@ -147,6 +147,21 @@ not move reflected particles to their final cell and does not transfer them to
 another rank; those responsibilities stay with the later ownership and MPI
 steps.
 
+## Implemented top-boundary rule
+
+The standalone top rule preserves the SAM-LCM `micro_boundaries` behavior for
+`z > ztop` using named fields:
+
+```fortran
+particle%z = ztop + (ztop - particle%z)
+particle%w_sgs = -abs(particle%w_sgs)
+```
+
+It retains the reflected particle in its current cell container. The later
+ownership step is responsible for any local cell reassignment, and MPI is not
+involved. The bottom rule is intentionally not applied by this implementation
+until its dedicated task is complete.
+
 ### Required observable behavior
 
 For the initial DALES scope:

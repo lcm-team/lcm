@@ -34,6 +34,7 @@ set(LCM_CORE_SOURCES
   "${LCM_SOURCE_DIR}/lcm_velocity_interpolation.f90"
   "${LCM_SOURCE_DIR}/lcm_user.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_state.f90"
+  "${LCM_SOURCE_DIR}/lcm_particle_boundaries.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_source.f90"
   "${LCM_SOURCE_DIR}/micro_user_vars.f90"
   "${LCM_SOURCE_DIR}/micro_vars.f90"
@@ -400,6 +401,26 @@ set_target_properties(test_particle_cell_removal
 add_test(
   NAME particle_cell_removal
   COMMAND test_particle_cell_removal
+)
+
+add_executable(test_minimal_les_host_top_particle_boundary
+  tests/integration/minimal_les_host.f90
+  tests/integration/test_minimal_les_host_top_particle_boundary.f90
+)
+
+target_link_libraries(test_minimal_les_host_top_particle_boundary
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_minimal_les_host_top_particle_boundary
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME minimal_les_host_top_particle_boundary
+  COMMAND test_minimal_les_host_top_particle_boundary
 )
 
 add_executable(test_particle_source

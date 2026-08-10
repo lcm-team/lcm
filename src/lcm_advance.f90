@@ -4,6 +4,7 @@ module lcm_advance_mod
    use lcm_config_state, only: config_is_set, config_state
    use lcm_grid_state, only: grid_state
    use lcm_initialization_state, only: lcm_is_initialized
+   use lcm_particle_boundaries, only: lcm_apply_particle_boundaries
    use lcm_particle_state, only: lcm_prepare_particle_velocities, &
                                  lcm_refine_particle_velocities, &
                                  lcm_update_particle_cell_ownership, &
@@ -83,7 +84,7 @@ contains
    end subroutine advance_lcm_particles
 
    subroutine apply_lcm_particle_boundaries()
-      ! Future boundary handling for particles outside the local physical domain.
+      call lcm_apply_particle_boundaries()
    end subroutine apply_lcm_particle_boundaries
 
    subroutine apply_lcm_microphysics(time_step)
