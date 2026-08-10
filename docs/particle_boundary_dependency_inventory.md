@@ -96,6 +96,44 @@ positive. `ztop` and `zbottom` remain derived grid state. This keeps the
 preserved SAM threshold named and testable without exposing experiment-specific
 wall or reinjection settings.
 
+## Deferred SAM-LCM Pi-chamber wall behavior
+
+SAM-LCM implements a separate, optional horizontal wall model in
+`MICRO_LAGRANGE/micro_boundaries.f90`. It is enabled by
+`switch_walls_pichamber`; its wall positions are configured with
+`wall_x_w_pichamber`, `wall_x_e_pichamber`, `wall_y_s_pichamber`, and
+`wall_y_n_pichamber`. The mode is inactive by default.
+
+The wall test is applied only after SAM has established that a particle is
+inside the normal vertical interval `zbottom <= z <= ztop`. A particle inside
+the configured x/y rectangle survives unchanged. For a particle outside that
+rectangle, SAM selects one of two behaviors using
+`switch_reflective_walls_pichamber`:
+
+| Wall policy | SAM-LCM behavior |
+| --- | --- |
+| Absorbing walls (the default) | Delete the particle while rebuilding the legacy flat `particle(:)` array. |
+| Reflective walls | Keep the particle, mirror each coordinate that crossed a wall, and reverse the corresponding SGS velocity component. |
+
+For example, a west-wall crossing becomes
+`x = 2 * wall_x_w_pichamber - x` and `u_sgs = -u_sgs`; an east-wall crossing
+uses the east-wall coordinate. South and north crossings use the equivalent
+`y`/`v_sgs` formulas. A particle that crosses a corner is reflected in both
+coordinates. SAM changes the SGS components only; it does not modify the
+resolved horizontal velocity in this branch.
+
+This is deliberately **out of scope for Issue #39**. Pi-chamber walls describe
+a particular laboratory geometry, rather than the normal DALES atmospheric
+horizontal domain. In the DALES integration, horizontal-domain crossings are
+handled by the later periodic/MPI exchange design, not as particle loss at a
+physical x/y wall. Introducing SAM's Pi-chamber switches directly would also
+make the standalone LCM configuration experiment-specific.
+
+If a future host requires physical horizontal walls, introduce a generic,
+host-configured wall-policy interface with explicit planar limits and
+absorb/reflect behavior. It can reproduce the SAM Pi-chamber case without
+embedding Pi-chamber names or assumptions in the standalone LCM core.
+
 ## Vertical-grid boundary contract
 
 `lcm_grid_t%z_face(:)` is the authoritative host-provided vertical geometry.
