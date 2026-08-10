@@ -57,15 +57,16 @@ SAM copies the outgoing buffer locally instead of using MPI.
 | 8 | northeast | southwest |
 
 SAM performs all eight directions in a 3-D horizontal run and only east/west
-in its two-dimensional mode. Issue #40 has not yet selected whether the first
-standalone DALES implementation supports only cardinal directions or also
-direct diagonal transfer.
+in its two-dimensional mode. For standalone DALES, Issue #40 selects direct
+eight-direction exchange from the first MPI implementation: particles can
+cross both local horizontal boundaries in one motion step, so a cardinal-only
+contract would leave corner crossings undefined.
 
 ## SAM dependencies and standalone decisions
 
 | SAM dependency | Role in SAM | Standalone LCM decision |
 | --- | --- | --- |
-| `MPI_COMM_WORLD`, `rank`, `rankee`, `rankww`, `rankss`, `ranknn`, and diagonal ranks | Communicator and neighbor topology. | Replace with host-provided, neutral parallel state. LCM must never assume `MPI_COMM_WORLD`. |
+| `MPI_COMM_WORLD`, `rank`, `rankee`, `rankww`, `rankss`, `ranknn`, and diagonal ranks | Communicator and neighbor topology. | The host supplies its Cartesian communicator through `lcm_parallel_t` and cardinal ranks through `lcm_grid_t`. LCM derives diagonal ranks with `MPI_CART_GET` and `MPI_CART_RANK`, so it correctly handles rank reordering. LCM must never assume `MPI_COMM_WORLD`. |
 | `gpxs`, `gpys`, `xwidth`, `ywidth` | Classify local vs outgoing by coordinate and wrap periodic global coordinates. | Receive local x/y bounds and periodicity through grid/parallel state. Keep wrapping explicitly separate from physical vertical boundaries. |
 | `particle(:)`, linked-list heads/tails, `particle_in(:)` | Separate outgoing/local particles and rebuild legacy storage. | Traverse `cell_particles(:,:,:)`; use flat temporary communication buffers only. Remove outgoing particles and append incoming particles without rebuilding all permanent storage. |
 | `n_out(:)`, `n_in(:)`, `np_out`, `np_in` | Directional count exchange and allocation. | Retain directional counts as temporary exchange metadata. |
@@ -115,13 +116,14 @@ permanent physical properties of `lcm_particle_t`.
 
 ## Follow-up design decisions
 
-1. Define the neutral `lcm_parallel_t` state and setter, including communicator,
-   cardinal neighbors, periodicity, and local processor geometry.
-2. Decide the first implementation's direction set. The recommended baseline is
-   cardinal west/east/south/north exchange; direct diagonal exchange can be
-   introduced only with a defined DALES-adapter contract.
+1. Define the neutral `lcm_parallel_t` state and setter. **Done:** it contains
+   only the host communicator; grid decomposition remains in `lcm_grid_t`.
+2. Decide the first implementation's direction set. **Done:** use all eight
+   directions. LCM derives diagonal ranks from the host Cartesian communicator,
+   while the DALES adapter continues to supply cardinal ranks through
+   `lcm_grid_t`.
 3. Define local x/y bounds used for classification and their relationship to
    the host grid's interior/halo cells.
 4. Define portable typed packing/unpacking and count/payload exchange semantics.
-5. Update `lcm_advance` to call exchange before ownership once exchange becomes
-   functional.
+5. Update `lcm_advance` to call exchange before ownership. **Done:** exchange
+   preparation extracts outgoing particles before local ownership reassignment.

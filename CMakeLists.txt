@@ -245,6 +245,7 @@ add_executable(test_parallel_state
 target_link_libraries(test_parallel_state
   PRIVATE
     lcm
+    MPI::MPI_Fortran
 )
 
 set_target_properties(test_parallel_state
