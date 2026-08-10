@@ -134,6 +134,52 @@ host-configured wall-policy interface with explicit planar limits and
 absorb/reflect behavior. It can reproduce the SAM Pi-chamber case without
 embedding Pi-chamber names or assumptions in the standalone LCM core.
 
+## Deferred SAM-LCM steady aerosol/chamber reinjection
+
+SAM-LCM provides two optional recycling modes:
+`switch_steady_aerosol` and `switch_steady_pichamber`. Both are disabled by
+default. Either switch changes the treatment of a particle that has crossed
+the bottom and has radius greater than `1 micrometre`; without either switch,
+SAM deletes that particle.
+
+With either switch enabled, SAM does not simply move the same droplet upward.
+It copies the particle, then performs the following reinitialization in
+`micro_boundaries.f90`:
+
+1. Draw a uniform value from `randomu(rank + 1)` and place the copy uniformly
+   between `inject_bottom` and `inject_top`.
+2. Set `w_sgs` to zero.
+3. Determine the particle's host-grid location and obtain the local
+   temperature, pressure, and water-vapor state.
+4. Compute a bounded subsaturation (`-0.20 <= SS_gb <= -0.01`), obtain the
+   equilibrium/aerosol radius, and rebuild the particle water mass from that
+   radius and liquid-water density.
+5. Convert the particle type to its non-ice sign, reset monomer count to one,
+   and reset rime mass to zero.
+
+Thus, SAM describes this mode as reinjecting absorbed droplets **as aerosols**:
+it is a particle source/recycling and microphysical-initialization policy, not
+a simple physical boundary condition. The implementation depends on SAM's
+random stream, rank, host thermodynamic arrays, saturation calculation,
+equilibrium-radius routine, aerosol radius routine, and legacy cell-location
+logic. In the current SAM code, the vertical index lookup uses the source
+particle's pre-reinjection `z` value even though the copied particle has
+already received its new injection height; any future design should specify
+the intended sampling location explicitly rather than inheriting this detail.
+
+This behavior is deliberately **out of scope for Issue #39**. Adding it now
+would require standalone contracts for reproducible random-number generation,
+an injection-layer configuration, host atmospheric sampling, particle
+reinitialization, diagnostics, and ownership after insertion. Those decisions
+belong in a separate particle-source/recycling feature, after the basic
+physical-boundary routine is stable.
+
+A future implementation should expose a generic source policy rather than
+SAM-specific `steady_aerosol` or `steady_pichamber` flags. Its interface must
+state the injection distribution, RNG/restart guarantees, host fields sampled,
+microphysical reset rules, mass/number diagnostics, and whether insertion
+occurs before or after MPI exchange and local ownership assignment.
+
 ## Vertical-grid boundary contract
 
 `lcm_grid_t%z_face(:)` is the authoritative host-provided vertical geometry.
