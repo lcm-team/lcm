@@ -1,6 +1,8 @@
 program test_minimal_les_host_outgoing_particles
    use iso_fortran_env, only: int64, real64
    use lcm_host_interface, only: lcm_advance
+   use lcm_exchange_directions, only: lcm_exchange_east, lcm_exchange_north, &
+                                      lcm_exchange_northeast
    use lcm_particle_state, only: cell_particles, lcm_add_particle, &
                                  lcm_reset_particle_cells, &
                                  n_outgoing_particles, outgoing_particles
@@ -28,9 +30,9 @@ program test_minimal_les_host_outgoing_particles
    call assert_true(cell_particles(2,2,1)%count == 0, "north-east particle removed")
    call assert_true(n_outgoing_particles == 3, "outgoing particle count")
 
-   call assert_outgoing_particle(9101_int64, 1, 0, "east outgoing particle")
-   call assert_outgoing_particle(9102_int64, 0, 1, "north outgoing particle")
-   call assert_outgoing_particle(9103_int64, 1, 1, "north-east outgoing particle")
+   call assert_outgoing_particle(9101_int64, lcm_exchange_east, "east outgoing particle")
+   call assert_outgoing_particle(9102_int64, lcm_exchange_north, "north outgoing particle")
+   call assert_outgoing_particle(9103_int64, lcm_exchange_northeast, "north-east outgoing particle")
 
 contains
 
@@ -50,11 +52,9 @@ contains
       call lcm_add_particle(i, j, 1, particle)
    end subroutine add_outgoing_particle
 
-   subroutine assert_outgoing_particle(id, expected_x_direction, &
-                                       expected_y_direction, message)
+   subroutine assert_outgoing_particle(id, expected_direction, message)
       integer(int64), intent(in) :: id
-      integer, intent(in) :: expected_x_direction
-      integer, intent(in) :: expected_y_direction
+      integer, intent(in) :: expected_direction
       character(len=*), intent(in) :: message
       integer :: n
       logical :: found
@@ -63,10 +63,8 @@ contains
       do n = 1, n_outgoing_particles
          if (outgoing_particles(n)%particle%id == id) then
             found = .true.
-            call assert_true(outgoing_particles(n)%x_direction == &
-                             expected_x_direction, message // " x direction")
-            call assert_true(outgoing_particles(n)%y_direction == &
-                             expected_y_direction, message // " y direction")
+            call assert_true(outgoing_particles(n)%direction == expected_direction, &
+                             message // " direction")
          endif
       enddo
 

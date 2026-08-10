@@ -31,6 +31,7 @@ set(LCM_CORE_SOURCES
   "${LCM_SOURCE_DIR}/lcm_boundary_diagnostics.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_properties.f90"
   "${LCM_SOURCE_DIR}/lcm_grid_state.f90"
+  "${LCM_SOURCE_DIR}/lcm_exchange_directions.f90"
   "${LCM_SOURCE_DIR}/lcm_field_state.f90"
   "${LCM_SOURCE_DIR}/lcm_random.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_location.f90"
@@ -276,6 +277,25 @@ set_target_properties(test_particle_message
 add_test(
   NAME particle_message
   COMMAND test_particle_message
+)
+
+add_executable(test_exchange_directions
+  tests/unit/test_exchange_directions.f90
+)
+
+target_link_libraries(test_exchange_directions
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_exchange_directions
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME exchange_directions
+  COMMAND test_exchange_directions
 )
 
 add_executable(test_minimal_les_host_cell_crossing

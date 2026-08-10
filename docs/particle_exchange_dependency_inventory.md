@@ -56,6 +56,11 @@ SAM copies the outgoing buffer locally instead of using MPI.
 | 7 | southwest | northeast |
 | 8 | northeast | southwest |
 
+Standalone LCM uses the same eight integer direction identifiers. A single
+`direction` value is stored in each temporary outgoing record; it replaces the
+previous independent x/y-direction pair and is the key for directional
+communication buffers.
+
 SAM performs all eight directions in a 3-D horizontal run and only east/west
 in its two-dimensional mode. For standalone DALES, Issue #40 selects direct
 eight-direction exchange from the first MPI implementation: particles can

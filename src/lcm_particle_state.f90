@@ -13,6 +13,7 @@ module lcm_particle_state
    use lcm_parameters, only: epsv, fac_cond, molecular_weight_water, pi, &
                              rho_liq, rv, surface_tension_water
    use lcm_particle_location, only: lcm_locate_particle_cell
+   use lcm_exchange_directions, only: lcm_exchange_direction_from_offsets
    use lcm_particle_properties, only: lcm_particle_radius
    use lcm_types, only: lcm_particle_cell_t, lcm_particle_t
    use lcm_user, only: lcm_user_init_particles
@@ -53,8 +54,7 @@ module lcm_particle_state
 
    type :: lcm_outgoing_particle_t
       type(lcm_particle_t) :: particle
-      integer :: x_direction = 0
-      integer :: y_direction = 0
+      integer :: direction = 0
    end type lcm_outgoing_particle_t
 
    type(lcm_particle_cell_t), allocatable, protected, save :: cell_particles(:,:,:)
@@ -1642,8 +1642,8 @@ contains
 
       n_outgoing_particles = n_outgoing_particles + 1
       outgoing_particles(n_outgoing_particles)%particle = particle
-      outgoing_particles(n_outgoing_particles)%x_direction = x_direction
-      outgoing_particles(n_outgoing_particles)%y_direction = y_direction
+      outgoing_particles(n_outgoing_particles)%direction = &
+         lcm_exchange_direction_from_offsets(x_direction, y_direction)
    end subroutine append_outgoing_particle
 
    subroutine ensure_outgoing_particle_capacity(required_capacity)
