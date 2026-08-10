@@ -7,6 +7,7 @@ module lcm_advance_mod
    use lcm_particle_boundaries, only: lcm_apply_particle_boundaries
    use lcm_particle_state, only: lcm_prepare_particle_velocities, &
                                  lcm_refine_particle_velocities, &
+                                 lcm_extract_outgoing_particles, &
                                  lcm_update_particle_cell_ownership, &
                                  lcm_update_particle_positions
    use lcm_particle_source, only: lcm_apply_particle_sources
@@ -37,8 +38,8 @@ contains
       call prepare_lcm_atmosphere()
       call advance_lcm_particles(time_step)
       call apply_lcm_particle_boundaries()
-      call update_lcm_particle_cell_ownership()
       call exchange_lcm_particles()
+      call update_lcm_particle_cell_ownership()
       call lcm_apply_particle_sources(time_step, current_lcm_step)
       call apply_lcm_microphysics(time_step)
       call prepare_lcm_feedback()
@@ -94,7 +95,10 @@ contains
    end subroutine apply_lcm_microphysics
 
    subroutine exchange_lcm_particles()
-      ! Future particle exchange step for particles crossing rank boundaries.
+      ! Classify and remove particles that leave this rank before the later
+      ! MPI transport step.  Local particles remain cell-owned until the
+      ! ownership update that follows exchange in the advance sequence.
+      call lcm_extract_outgoing_particles()
    end subroutine exchange_lcm_particles
 
    subroutine update_lcm_particle_cell_ownership()

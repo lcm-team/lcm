@@ -37,6 +37,7 @@ module lcm_particle_state
    public :: lcm_update_particle_positions
    public :: lcm_reflect_particles_at_top
    public :: lcm_apply_particles_at_bottom
+   public :: lcm_extract_outgoing_particles
    public :: lcm_update_particle_cell_ownership
    public :: lcm_clear_outgoing_particles
    public :: set_particle_position
@@ -473,7 +474,7 @@ contains
       enddo
    end subroutine lcm_apply_particles_at_bottom
 
-   subroutine lcm_update_particle_cell_ownership()
+   subroutine lcm_extract_outgoing_particles()
       integer :: i
       integer :: j
       integer :: k
@@ -483,6 +484,44 @@ contains
       integer :: new_k
       integer :: x_direction
       integer :: y_direction
+      logical :: is_local
+
+      call require_particle_cells_allocated()
+      call lcm_clear_outgoing_particles()
+
+      do k = 1, size(cell_particles, 3)
+         do j = 1, size(cell_particles, 2)
+            do i = 1, size(cell_particles, 1)
+               n = 1
+               do while (n <= cell_particles(i,j,k)%count)
+                  call lcm_locate_particle_cell( &
+                     cell_particles(i,j,k)%particles(n)%x, &
+                     cell_particles(i,j,k)%particles(n)%y, &
+                     cell_particles(i,j,k)%particles(n)%z, &
+                     new_i, new_j, new_k, is_local)
+
+                  if (particle_leaves_to_neighbor_rank(new_i, new_j, new_k, &
+                                                       x_direction, y_direction)) then
+                     call append_outgoing_particle( &
+                        cell_particles(i,j,k)%particles(n), x_direction, y_direction)
+                     call lcm_remove_particle(i, j, k, n)
+                  else
+                     n = n + 1
+                  endif
+               enddo
+            enddo
+         enddo
+      enddo
+   end subroutine lcm_extract_outgoing_particles
+
+   subroutine lcm_update_particle_cell_ownership()
+      integer :: i
+      integer :: j
+      integer :: k
+      integer :: n
+      integer :: new_i
+      integer :: new_j
+      integer :: new_k
       logical :: is_local
 
       call require_particle_cells_allocated()
@@ -501,11 +540,6 @@ contains
                   if (is_local .and. (new_i /= i .or. new_j /= j .or. &
                                        new_k /= k)) then
                      call lcm_move_particle(i, j, k, n, new_i, new_j, new_k)
-                  elseif (particle_leaves_to_neighbor_rank(new_i, new_j, new_k, &
-                                                           x_direction, y_direction)) then
-                     call append_outgoing_particle( &
-                        cell_particles(i,j,k)%particles(n), x_direction, y_direction)
-                     call lcm_remove_particle(i, j, k, n)
                   else
                      n = n + 1
                   endif
