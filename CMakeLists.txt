@@ -26,6 +26,7 @@ endif()
 set(LCM_CORE_SOURCES
   "${LCM_SOURCE_DIR}/lcm_parameters.f90"
   "${LCM_SOURCE_DIR}/lcm_types.f90"
+  "${LCM_SOURCE_DIR}/lcm_parallel_state.f90"
   "${LCM_SOURCE_DIR}/lcm_boundary_diagnostics.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_properties.f90"
   "${LCM_SOURCE_DIR}/lcm_grid_state.f90"
@@ -235,6 +236,25 @@ set_target_properties(test_particle_cell_ownership
 add_test(
   NAME particle_cell_ownership
   COMMAND test_particle_cell_ownership
+)
+
+add_executable(test_parallel_state
+  tests/unit/test_parallel_state.f90
+)
+
+target_link_libraries(test_parallel_state
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_parallel_state
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME parallel_state
+  COMMAND test_parallel_state
 )
 
 add_executable(test_minimal_les_host_cell_crossing
