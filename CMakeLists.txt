@@ -26,6 +26,7 @@ endif()
 set(LCM_CORE_SOURCES
   "${LCM_SOURCE_DIR}/lcm_parameters.f90"
   "${LCM_SOURCE_DIR}/lcm_types.f90"
+  "${LCM_SOURCE_DIR}/lcm_particle_properties.f90"
   "${LCM_SOURCE_DIR}/lcm_grid_state.f90"
   "${LCM_SOURCE_DIR}/lcm_field_state.f90"
   "${LCM_SOURCE_DIR}/lcm_random.f90"
@@ -323,6 +324,44 @@ set_target_properties(test_velocity_interpolation
 add_test(
   NAME velocity_interpolation
   COMMAND test_velocity_interpolation
+)
+
+add_executable(test_particle_radius
+  tests/unit/test_particle_radius.f90
+)
+
+target_link_libraries(test_particle_radius
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_particle_radius
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME particle_radius
+  COMMAND test_particle_radius
+)
+
+add_executable(test_boundary_config
+  tests/unit/test_boundary_config.f90
+)
+
+target_link_libraries(test_boundary_config
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_boundary_config
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME boundary_config
+  COMMAND test_boundary_config
 )
 
 add_executable(test_particle_source

@@ -191,6 +191,10 @@ contains
          error stop 'LCM config n_uvw_iteration must not be negative'
       endif
 
+      if (config%bottom_removal_radius <= 0.0) then
+         error stop 'LCM config bottom_removal_radius must be positive'
+      endif
+
       if (trim(config%init_aero) /= 'bin' .and. &
           trim(config%init_aero) /= 'random' .and. &
           trim(config%init_aero) /= 'USM') then
