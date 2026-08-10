@@ -79,6 +79,14 @@ DALES, usually `2:i1` and `2:j1`); they must not be used as LCM particle-cell
 indices.  This avoids duplicating the derived global end indices and keeps the
 DALES array layout separate from LCM cell-owned storage.
 
+### Directional message buffers
+
+LCM owns temporary, flat send and receive buffers for each of the eight
+directions.  Each entry is an `lcm_particle_mpi_message_t`; the buffer holds a
+count and grows as needed.  Buffers are cleared at the start of a later
+exchange operation but retain their allocation for reuse.  They are only
+temporary MPI-transfer state: they do not change cell-owned particle storage.
+
 SAM performs all eight directions in a 3-D horizontal run and only east/west
 in its two-dimensional mode. For standalone DALES, Issue #40 selects direct
 eight-direction exchange from the first MPI implementation: particles can
