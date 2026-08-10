@@ -177,6 +177,23 @@ deletion, so compacted consecutive out-of-domain particles are all processed.
 This does not include reinjection, precipitation diagnostics, MPI exchange, or
 final cell ownership updates.
 
+## SAM reflection/deletion compatibility
+
+The baseline rules intentionally preserve the executable comparisons in
+SAM-LCM `micro_boundaries`:
+
+| Condition | Standalone behavior | SAM behavior |
+| --- | --- | --- |
+| `z > ztop` | Mirror about `ztop`; set `w_sgs = -abs(w_sgs)`. | Same top-reflection formula. |
+| `z < zbottom` and `radius > bottom_removal_radius` | Remove the particle. | SAM's `radius > 1.0E-6` deletion branch. |
+| `z < zbottom` and `radius <= bottom_removal_radius` | Mirror about `zbottom`; set `w_sgs = abs(w_sgs)`. | SAM's remaining-particle reflection branch. |
+| `z == zbottom` or `z == ztop` | Leave unchanged. | SAM treats both limits as in-domain. |
+
+The strict greater-than comparison is significant: a particle exactly at the
+configured removal radius reflects rather than being deleted. The minimal-host
+bottom-boundary integration test covers this edge case alongside the smaller
+reflected and larger deleted cases.
+
 ### Required observable behavior
 
 For the initial DALES scope:
