@@ -32,6 +32,7 @@ set(LCM_CORE_SOURCES
   "${LCM_SOURCE_DIR}/lcm_particle_properties.f90"
   "${LCM_SOURCE_DIR}/lcm_grid_state.f90"
   "${LCM_SOURCE_DIR}/lcm_exchange_directions.f90"
+  "${LCM_SOURCE_DIR}/lcm_particle_exchange_buffers.f90"
   "${LCM_SOURCE_DIR}/lcm_field_state.f90"
   "${LCM_SOURCE_DIR}/lcm_random.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_location.f90"
@@ -315,6 +316,25 @@ set_target_properties(test_local_subdomain_bounds
 add_test(
   NAME local_subdomain_bounds
   COMMAND test_local_subdomain_bounds
+)
+
+add_executable(test_particle_exchange_buffers
+  tests/unit/test_particle_exchange_buffers.f90
+)
+
+target_link_libraries(test_particle_exchange_buffers
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_particle_exchange_buffers
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME particle_exchange_buffers
+  COMMAND test_particle_exchange_buffers
 )
 
 add_executable(test_minimal_les_host_cell_crossing

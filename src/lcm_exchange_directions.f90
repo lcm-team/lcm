@@ -15,6 +15,7 @@ module lcm_exchange_directions
    integer, parameter, public :: lcm_exchange_north = 6
    integer, parameter, public :: lcm_exchange_southwest = 7
    integer, parameter, public :: lcm_exchange_northeast = 8
+   integer, parameter, public :: lcm_exchange_direction_count = 8
 
    public :: lcm_exchange_direction_from_offsets
    public :: lcm_exchange_neighbor_rank
