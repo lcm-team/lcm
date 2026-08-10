@@ -10,6 +10,7 @@ module lcm_types
    public :: lcm_config_t
    public :: lcm_field_state_t
    public :: lcm_particle_t
+   public :: lcm_particle_mpi_message_t
    public :: lcm_particle_cell_t
    public :: lcm_init_grid
    public :: lcm_init_parallel
@@ -249,6 +250,17 @@ module lcm_types
       integer :: spray_marker = -999
       integer :: track_marker = -999
    end type lcm_particle_t
+
+   !> Temporary particle-exchange payload.
+   !>
+   !> global_i, global_j, and k identify the receiving cell. They are message
+   !> metadata only: lcm_particle_t remains free of permanent ownership fields.
+   type :: lcm_particle_mpi_message_t
+      integer :: global_i = 0
+      integer :: global_j = 0
+      integer :: k = 0
+      type(lcm_particle_t) :: particle
+   end type lcm_particle_mpi_message_t
 
    type :: lcm_particle_cell_t
       integer :: count = 0

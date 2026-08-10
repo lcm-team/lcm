@@ -103,16 +103,18 @@ Temporary exchange messages require destination metadata because a receiving
 rank must know where to insert the payload:
 
 ```fortran
-type :: lcm_particle_message_t
-   integer :: i
-   integer :: j
+type :: lcm_particle_mpi_message_t
+   integer :: global_i
+   integer :: global_j
    integer :: k
    type(lcm_particle_t) :: particle
-end type lcm_particle_message_t
+end type lcm_particle_mpi_message_t
 ```
 
-The message indices are communication metadata only. They must not become
-permanent physical properties of `lcm_particle_t`.
+The horizontal message indices are global destination indices, so sender and
+receiver never confuse their local cell numbering. All message indices are
+communication metadata only. They must not become permanent physical
+properties of `lcm_particle_t`.
 
 ## Follow-up design decisions
 
