@@ -13,6 +13,7 @@ module lcm_particle_state
    use lcm_parameters, only: epsv, fac_cond, molecular_weight_water, pi, &
                              rho_liq, rv, surface_tension_water
    use lcm_particle_location, only: lcm_locate_particle_cell
+   use lcm_particle_properties, only: lcm_particle_radius
    use lcm_types, only: lcm_particle_cell_t, lcm_particle_t
    use lcm_user, only: lcm_user_init_particles
    use lcm_velocity_interpolation, only: lcm_interpolate_particle_velocity
@@ -35,6 +36,7 @@ module lcm_particle_state
    public :: lcm_refine_particle_velocities
    public :: lcm_update_particle_positions
    public :: lcm_reflect_particles_at_top
+   public :: lcm_apply_particles_at_bottom
    public :: lcm_update_particle_cell_ownership
    public :: lcm_clear_outgoing_particles
    public :: set_particle_position
@@ -404,6 +406,46 @@ contains
          enddo
       enddo
    end subroutine lcm_reflect_particles_at_top
+
+   subroutine lcm_apply_particles_at_bottom(zbottom, removal_radius, aerosol_density)
+      real(real64), intent(in) :: zbottom
+      real(real64), intent(in) :: removal_radius
+      real(real64), intent(in) :: aerosol_density(:)
+
+      integer :: i
+      integer :: j
+      integer :: k
+      integer :: n
+      real(real64) :: radius
+
+      call require_particle_cells_allocated()
+
+      do k = 1, size(cell_particles, 3)
+         do j = 1, size(cell_particles, 2)
+            do i = 1, size(cell_particles, 1)
+               n = 1
+               do while (n <= cell_particles(i,j,k)%count)
+                  if (cell_particles(i,j,k)%particles(n)%z < zbottom) then
+                     radius = lcm_particle_radius( &
+                        cell_particles(i,j,k)%particles(n), aerosol_density)
+                     if (radius > removal_radius) then
+                        call lcm_remove_particle(i, j, k, n)
+                     else
+                        ! SAM-LCM: zbottom + (zbottom - z), abs(w_sgs).
+                        cell_particles(i,j,k)%particles(n)%z = zbottom + &
+                           (zbottom - cell_particles(i,j,k)%particles(n)%z)
+                        cell_particles(i,j,k)%particles(n)%w_sgs = &
+                           abs(cell_particles(i,j,k)%particles(n)%w_sgs)
+                        n = n + 1
+                     endif
+                  else
+                     n = n + 1
+                  endif
+               enddo
+            enddo
+         enddo
+      enddo
+   end subroutine lcm_apply_particles_at_bottom
 
    subroutine lcm_update_particle_cell_ownership()
       integer :: i
