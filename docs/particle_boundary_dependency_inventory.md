@@ -96,6 +96,25 @@ positive. `ztop` and `zbottom` remain derived grid state. This keeps the
 preserved SAM threshold named and testable without exposing experiment-specific
 wall or reinjection settings.
 
+## Vertical-grid boundary contract
+
+`lcm_grid_t%z_face(:)` is the authoritative host-provided vertical geometry.
+For `nz` local vertical cells, the physical domain is bounded by
+`z_face(1)` and `z_face(nz + 1)`; vertical MPI decomposition is not assumed.
+When `lcm_set_grid` initializes `grid_state`, it derives the particle-boundary
+limits directly from those `real64` endpoints:
+
+```fortran
+zbottom = z_face(1)      + lcm_vertical_boundary_inset
+ztop    = z_face(nz + 1) - lcm_vertical_boundary_inset
+```
+
+`lcm_vertical_boundary_inset` is the named standalone equivalent of SAM-LCM's
+`boundary_distance` and is currently `0.001 m`. A particle exactly at either
+derived limit is in-domain; only `z < zbottom` or `z > ztop` invokes a
+vertical-boundary rule. The inset keeps boundary-processed particles inside
+the raw face interval that the later cell-location routine uses.
+
 ### Required observable behavior
 
 For the initial DALES scope:

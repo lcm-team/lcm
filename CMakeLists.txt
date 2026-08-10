@@ -364,6 +364,25 @@ add_test(
   COMMAND test_boundary_config
 )
 
+add_executable(test_vertical_boundary_bounds
+  tests/unit/test_vertical_boundary_bounds.f90
+)
+
+target_link_libraries(test_vertical_boundary_bounds
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_vertical_boundary_bounds
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME vertical_boundary_bounds
+  COMMAND test_vertical_boundary_bounds
+)
+
 add_executable(test_particle_source
   tests/integration/test_particle_source.f90
 )
