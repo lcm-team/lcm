@@ -1,6 +1,7 @@
 !> Verify SAM-compatible bottom removal and reflection through lcm_advance.
 program test_minimal_les_host_bottom_particle_boundary
    use iso_fortran_env, only: int64, real64
+   use lcm_boundary_diagnostics, only: boundary_diagnostics
    use lcm_grid_state, only: grid_state
    use lcm_host_interface, only: lcm_advance
    use lcm_parameters, only: pi, rho_liq
@@ -18,6 +19,8 @@ program test_minimal_les_host_bottom_particle_boundary
    integer(int64), parameter :: deleted_particle_id = 9302_int64
    integer(int64), parameter :: threshold_particle_id = 9303_int64
    real(real64) :: threshold_radius
+   real(real64) :: expected_deleted_water_mass
+   real(real64) :: expected_deleted_aerosol_mass
 
    threshold_radius = water_particle_radius(1.0e-6_real64)
    call setup_minimal_les_host("bin", bottom_removal_radius=threshold_radius)
@@ -37,6 +40,14 @@ program test_minimal_les_host_bottom_particle_boundary
                         "threshold-radius particle is reflected at the bottom")
    call assert_particle_absent(deleted_particle_id, &
                                "large particle is removed at the bottom")
+   call assert_true(boundary_diagnostics%deleted_particle_count == 1_int64, &
+                    "only the large particle contributes to boundary loss")
+   call assert_close(boundary_diagnostics%deleted_water_mass, &
+                     expected_deleted_water_mass, &
+                     "boundary loss records removed water mass")
+   call assert_close(boundary_diagnostics%deleted_aerosol_mass, &
+                     expected_deleted_aerosol_mass, &
+                     "boundary loss records removed aerosol mass")
 
 contains
 
@@ -68,6 +79,9 @@ contains
       particle%y = 0.5_real64 * minimal_host_dy
       particle%z = grid_state%zbottom + 1.0_real64
       call set_water_radius(particle, 2.0e-6_real64)
+      particle%mass_aero = 0.2_real64 * particle%mass_water
+      expected_deleted_water_mass = particle%mass_water
+      expected_deleted_aerosol_mass = particle%mass_aero
       call lcm_add_particle(1, 1, 1, particle)
    end subroutine add_deleted_particle
 
