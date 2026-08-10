@@ -1,7 +1,7 @@
 !> Host-neutral particle location helpers for the standalone cell-owned state.
 module lcm_particle_location
    use iso_fortran_env, only: real64
-   use lcm_grid_state, only: grid_state
+   use lcm_grid_state, only: grid_state, lcm_local_subdomain_bounds
 
    implicit none
 
@@ -19,16 +19,21 @@ contains
       integer, intent(out) :: j
       integer, intent(out) :: k
       logical, intent(out) :: is_local
+      integer :: global_i_first
+      integer :: global_i_last
+      integer :: global_j_first
+      integer :: global_j_last
 
       call require_grid_set()
 
-      i = locate_horizontal_cell(x, grid_state%grid%dx, &
-                                 grid_state%grid%global_i_start, &
-                                 grid_state%grid%nx_local)
+      call lcm_local_subdomain_bounds(global_i_first, global_i_last, &
+                                      global_j_first, global_j_last)
+
+      i = locate_horizontal_cell(x, grid_state%grid%dx, global_i_first, &
+                                 global_i_last - global_i_first + 1)
       if (grid_state%grid%y_dimension == 1) then
-         j = locate_horizontal_cell(y, grid_state%grid%dy, &
-                                    grid_state%grid%global_j_start, &
-                                    grid_state%grid%ny_local)
+         j = locate_horizontal_cell(y, grid_state%grid%dy, global_j_first, &
+                                    global_j_last - global_j_first + 1)
       else
          j = 1
       endif

@@ -61,6 +61,24 @@ Standalone LCM uses the same eight integer direction identifiers. A single
 previous independent x/y-direction pair and is the key for directional
 communication buffers.
 
+### Local subdomain-bound contract
+
+LCM particle cells are always locally indexed as `1:nx_local` and
+`1:ny_local`.  The inclusive global bounds used to locate and classify a
+particle are derived from the grid state:
+
+```fortran
+global_i_first = global_i_start
+global_i_last  = global_i_start + nx_local - 1
+global_j_first = global_j_start
+global_j_last  = global_j_start + ny_local - 1
+```
+
+`i_start:i_end` and `j_start:j_end` remain host-array interior indices (for
+DALES, usually `2:i1` and `2:j1`); they must not be used as LCM particle-cell
+indices.  This avoids duplicating the derived global end indices and keeps the
+DALES array layout separate from LCM cell-owned storage.
+
 SAM performs all eight directions in a 3-D horizontal run and only east/west
 in its two-dimensional mode. For standalone DALES, Issue #40 selects direct
 eight-direction exchange from the first MPI implementation: particles can
