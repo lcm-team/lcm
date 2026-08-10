@@ -162,6 +162,21 @@ ownership step is responsible for any local cell reassignment, and MPI is not
 involved. The bottom rule is intentionally not applied by this implementation
 until its dedicated task is complete.
 
+## Implemented bottom-boundary rule
+
+For `z < zbottom`, standalone LCM preserves SAM-LCM's default split using the
+named radius helper and `lcm_config_t%bottom_removal_radius`:
+
+- if `lcm_particle_radius(particle, rho_aero) > bottom_removal_radius`, remove
+  the particle from its current cell container; otherwise
+- mirror the particle with `zbottom + (zbottom - z)` and set
+  `w_sgs = abs(w_sgs)`.
+
+The removal loop deliberately does not advance its particle index after a
+deletion, so compacted consecutive out-of-domain particles are all processed.
+This does not include reinjection, precipitation diagnostics, MPI exchange, or
+final cell ownership updates.
+
 ### Required observable behavior
 
 For the initial DALES scope:

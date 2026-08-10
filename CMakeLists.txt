@@ -423,6 +423,26 @@ add_test(
   COMMAND test_minimal_les_host_top_particle_boundary
 )
 
+add_executable(test_minimal_les_host_bottom_particle_boundary
+  tests/integration/minimal_les_host.f90
+  tests/integration/test_minimal_les_host_bottom_particle_boundary.f90
+)
+
+target_link_libraries(test_minimal_les_host_bottom_particle_boundary
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_minimal_les_host_bottom_particle_boundary
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME minimal_les_host_bottom_particle_boundary
+  COMMAND test_minimal_les_host_bottom_particle_boundary
+)
+
 add_executable(test_particle_source
   tests/integration/test_particle_source.f90
 )
