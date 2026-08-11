@@ -391,6 +391,13 @@ add_test(
           ${MPIEXEC_POSTFLAGS} nonperiodic
 )
 
+add_test(
+  NAME particle_count_exchange_mpi_4_cartesian
+  COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4
+          ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_particle_count_exchange>
+          ${MPIEXEC_POSTFLAGS} square
+)
+
 add_executable(test_minimal_les_host_cell_crossing
   tests/integration/minimal_les_host.f90
   tests/integration/test_minimal_les_host_cell_crossing.f90

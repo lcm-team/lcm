@@ -104,6 +104,9 @@ buffer's actual message count remains zero until payload transfer completes.
 At non-periodic edges, each unavailable source or destination is mapped
 independently to `MPI_PROC_NULL`, so a rank can still communicate through its
 valid side.  A missing source produces an expected receive count of zero.
+The MPI tests include a four-rank `2x2` Cartesian communicator that checks all
+eight LCM neighbor lookups independently and verifies directional count
+delivery when diagonal neighbors differ from cardinal neighbors.
 
 When no LCM parallel state has been configured, the complete exchange step is
 an explicit no-op: it does not classify or remove particles, clear directional

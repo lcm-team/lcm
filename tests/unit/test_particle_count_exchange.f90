@@ -17,6 +17,7 @@ program test_particle_count_exchange
    include 'mpif.h'
 
    integer :: communicator
+   integer :: coordinates(2)
    integer :: dimensions(2)
    integer :: direction
    integer :: east_rank
@@ -29,6 +30,7 @@ program test_particle_count_exchange
    integer :: source_rank
    character(len=32) :: topology_argument
    logical :: periodic_x
+   logical :: square_topology
    logical :: periodicity(2)
    integer :: west_rank
    type(lcm_grid_t) :: grid
@@ -41,15 +43,24 @@ program test_particle_count_exchange
    call MPI_INIT(ierr)
    call MPI_COMM_SIZE(MPI_COMM_WORLD, size, ierr)
    periodic_x = .true.
+   square_topology = .false.
    if (command_argument_count() > 0) then
       call get_command_argument(1, topology_argument)
       if (trim(topology_argument) == 'nonperiodic') periodic_x = .false.
+      if (trim(topology_argument) == 'square') square_topology = .true.
    endif
-   dimensions = [size, 1]
-   periodicity = [periodic_x, .true.]
+   if (square_topology) then
+      if (size /= 4) error stop 'square count-exchange test requires four ranks'
+      dimensions = [2, 2]
+      periodicity = [.true., .true.]
+   else
+      dimensions = [size, 1]
+      periodicity = [periodic_x, .true.]
+   endif
    call MPI_CART_CREATE(MPI_COMM_WORLD, 2, dimensions, periodicity, .false., &
                         communicator, ierr)
    call MPI_COMM_RANK(communicator, rank, ierr)
+   call MPI_CART_COORDS(communicator, rank, 2, coordinates, ierr)
    call MPI_CART_SHIFT(communicator, 0, 1, west_rank, east_rank, ierr)
    call MPI_CART_SHIFT(communicator, 1, 1, south_rank, north_rank, ierr)
 
@@ -65,6 +76,12 @@ program test_particle_count_exchange
    call lcm_init_parallel(parallel, communicator)
    call lcm_set_parallel(parallel)
 
+   do direction = 1, lcm_exchange_direction_count
+      call assert_equal(normalized_neighbor_rank(lcm_exchange_neighbor_rank(direction)), &
+                        normalized_neighbor_rank(expected_neighbor_rank(direction)), &
+                        'Cartesian neighbor rank')
+   enddo
+
    call lcm_clear_particle_exchange_buffers()
    do direction = 1, lcm_exchange_direction_count
       message = lcm_particle_mpi_message_t()
@@ -76,7 +93,7 @@ program test_particle_count_exchange
 
    do direction = 1, lcm_exchange_direction_count
       opposite_direction = lcm_exchange_opposite_direction(direction)
-      source_rank = lcm_exchange_neighbor_rank(opposite_direction)
+      source_rank = expected_neighbor_rank(opposite_direction)
       if (source_rank < 0) then
          call assert_equal(lcm_expected_receive_particle_message_count(opposite_direction), &
                            0, 'missing neighbor receive count')
@@ -102,6 +119,83 @@ contains
          call lcm_append_send_particle_message(direction, message)
       enddo
    end subroutine append_messages
+
+   integer function expected_neighbor_rank(direction) result(neighbor_rank)
+      integer, intent(in) :: direction
+      integer :: neighbor_coordinates(2)
+      integer :: x_offset
+      integer :: y_offset
+
+      call direction_offsets(direction, x_offset, y_offset)
+      neighbor_coordinates = coordinates + [x_offset, y_offset]
+
+      if (.not. periodicity(1) .and. &
+          (neighbor_coordinates(1) < 0 .or. neighbor_coordinates(1) >= dimensions(1))) then
+         neighbor_rank = MPI_PROC_NULL
+         return
+      endif
+      if (.not. periodicity(2) .and. &
+          (neighbor_coordinates(2) < 0 .or. neighbor_coordinates(2) >= dimensions(2))) then
+         neighbor_rank = MPI_PROC_NULL
+         return
+      endif
+
+      neighbor_coordinates(1) = modulo(neighbor_coordinates(1), dimensions(1))
+      neighbor_coordinates(2) = modulo(neighbor_coordinates(2), dimensions(2))
+      call MPI_CART_RANK(communicator, neighbor_coordinates, neighbor_rank, ierr)
+   end function expected_neighbor_rank
+
+   subroutine direction_offsets(direction, x_offset, y_offset)
+      use lcm_exchange_directions, only: lcm_exchange_east, lcm_exchange_west, &
+                                         lcm_exchange_southeast, &
+                                         lcm_exchange_northwest, &
+                                         lcm_exchange_south, lcm_exchange_north, &
+                                         lcm_exchange_southwest, &
+                                         lcm_exchange_northeast
+
+      integer, intent(in) :: direction
+      integer, intent(out) :: x_offset
+      integer, intent(out) :: y_offset
+
+      select case (direction)
+      case (lcm_exchange_east)
+         x_offset = 1
+         y_offset = 0
+      case (lcm_exchange_west)
+         x_offset = -1
+         y_offset = 0
+      case (lcm_exchange_southeast)
+         x_offset = 1
+         y_offset = -1
+      case (lcm_exchange_northwest)
+         x_offset = -1
+         y_offset = 1
+      case (lcm_exchange_south)
+         x_offset = 0
+         y_offset = -1
+      case (lcm_exchange_north)
+         x_offset = 0
+         y_offset = 1
+      case (lcm_exchange_southwest)
+         x_offset = -1
+         y_offset = -1
+      case (lcm_exchange_northeast)
+         x_offset = 1
+         y_offset = 1
+      case default
+         error stop 'invalid direction in count-exchange test'
+      end select
+   end subroutine direction_offsets
+
+   integer function normalized_neighbor_rank(neighbor_rank) result(normalized_rank)
+      integer, intent(in) :: neighbor_rank
+
+      if (neighbor_rank < 0) then
+         normalized_rank = -1
+      else
+         normalized_rank = neighbor_rank
+      endif
+   end function normalized_neighbor_rank
 
    subroutine assert_equal(actual, expected, description)
       integer, intent(in) :: actual
