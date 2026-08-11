@@ -113,6 +113,20 @@ an explicit no-op: it does not classify or remove particles, clear directional
 buffers, or call MPI.  This protects serial hosts and prevents particle loss if
 no communicator is available.
 
+### MPI interface boundary
+
+Direct MPI interfaces and calls in standalone LCM are restricted to low-level
+topology and transport modules:
+
+- `lcm_parallel_state.f90` queries the host-provided Cartesian topology.
+- `lcm_particle_count_exchange.f90` performs directional count transport.
+
+Higher-level grid, particle, boundary, buffer, and advance modules operate on
+LCM types and APIs only.  A CMake test scans standalone `lcm_*.f90` sources and
+fails if `mpif.h`, `use mpi`, `use mpi_f08`, or a direct `MPI_*` call appears
+outside the declared boundary.  This keeps a later migration from `mpif.h` to
+a modern MPI module local to the transport/topology layer.
+
 SAM performs all eight directions in a 3-D horizontal run and only east/west
 in its two-dimensional mode. For standalone DALES, Issue #40 selects direct
 eight-direction exchange from the first MPI implementation: particles can
