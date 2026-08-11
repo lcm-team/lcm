@@ -364,6 +364,25 @@ add_test(
   COMMAND test_outgoing_particle_message_packing
 )
 
+add_executable(test_periodic_particle_destination_wrapping
+  tests/unit/test_periodic_particle_destination_wrapping.f90
+)
+
+target_link_libraries(test_periodic_particle_destination_wrapping
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_periodic_particle_destination_wrapping
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME periodic_particle_destination_wrapping
+  COMMAND test_periodic_particle_destination_wrapping
+)
+
 add_executable(test_particle_count_exchange
   tests/unit/test_particle_count_exchange.f90
 )
