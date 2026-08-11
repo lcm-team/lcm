@@ -5,6 +5,7 @@ module lcm_advance_mod
    use lcm_grid_state, only: grid_state
    use lcm_initialization_state, only: lcm_is_initialized
    use lcm_particle_boundaries, only: lcm_apply_particle_boundaries
+   use lcm_particle_count_exchange, only: lcm_exchange_particle_counts
    use lcm_particle_state, only: lcm_prepare_particle_velocities, &
                                  lcm_refine_particle_velocities, &
                                  lcm_extract_outgoing_particles, &
@@ -99,6 +100,7 @@ contains
       ! MPI transport step.  Local particles remain cell-owned until the
       ! ownership update that follows exchange in the advance sequence.
       call lcm_extract_outgoing_particles()
+      call lcm_exchange_particle_counts()
    end subroutine exchange_lcm_particles
 
    subroutine update_lcm_particle_cell_ownership()

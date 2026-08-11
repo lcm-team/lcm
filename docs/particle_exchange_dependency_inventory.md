@@ -93,6 +93,18 @@ indices and `k` with the particle payload, and appends the message to the send
 buffer identified by its exchange direction.  The later MPI transfer sends
 these buffers unchanged.
 
+### MPI count exchange
+
+Before payload exchange, LCM exchanges one integer message count per outgoing
+direction with `MPI_SENDRECV`.  A count sent toward direction `D` uses `D` as
+its MPI tag and is received from the opposite neighbor with that same tag.  It
+is stored as the expected count for the receive buffer whose direction denotes
+the source neighbor.  Receive storage is reserved from this count, but the
+buffer's actual message count remains zero until payload transfer completes.
+At non-periodic edges, each unavailable source or destination is mapped
+independently to `MPI_PROC_NULL`, so a rank can still communicate through its
+valid side.  A missing source produces an expected receive count of zero.
+
 SAM performs all eight directions in a 3-D horizontal run and only east/west
 in its two-dimensional mode. For standalone DALES, Issue #40 selects direct
 eight-direction exchange from the first MPI implementation: particles can
