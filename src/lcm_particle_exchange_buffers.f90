@@ -12,12 +12,15 @@ module lcm_particle_exchange_buffers
    public :: lcm_append_receive_particle_message
    public :: lcm_send_particle_message_count
    public :: lcm_receive_particle_message_count
+   public :: lcm_expected_receive_particle_message_count
+   public :: lcm_reserve_receive_particle_messages
    public :: lcm_get_send_particle_message
    public :: lcm_get_receive_particle_message
 
    type :: lcm_particle_message_buffer_t
       type(lcm_particle_mpi_message_t), allocatable :: messages(:)
       integer :: count = 0
+      integer :: expected_count = 0
    end type lcm_particle_message_buffer_t
 
    type(lcm_particle_message_buffer_t), save :: send_buffers(lcm_exchange_direction_count)
@@ -32,6 +35,7 @@ contains
       do direction = 1, lcm_exchange_direction_count
          send_buffers(direction)%count = 0
          receive_buffers(direction)%count = 0
+         receive_buffers(direction)%expected_count = 0
       enddo
    end subroutine lcm_clear_particle_exchange_buffers
 
@@ -62,6 +66,26 @@ contains
       call require_valid_direction(direction)
       count = receive_buffers(direction)%count
    end function lcm_receive_particle_message_count
+
+   !> Number of messages reported by the matching neighbor during count exchange.
+   !> This reserves receive storage but does not mark payload messages as received.
+   integer function lcm_expected_receive_particle_message_count(direction) result(count)
+      integer, intent(in) :: direction
+
+      call require_valid_direction(direction)
+      count = receive_buffers(direction)%expected_count
+   end function lcm_expected_receive_particle_message_count
+
+   subroutine lcm_reserve_receive_particle_messages(direction, expected_count)
+      integer, intent(in) :: direction
+      integer, intent(in) :: expected_count
+
+      call require_valid_direction(direction)
+      if (expected_count < 0) error stop 'LCM expected receive count must not be negative'
+
+      receive_buffers(direction)%expected_count = expected_count
+      call ensure_buffer_capacity(receive_buffers(direction), expected_count)
+   end subroutine lcm_reserve_receive_particle_messages
 
    subroutine lcm_get_send_particle_message(direction, index, message)
       integer, intent(in) :: direction
@@ -111,6 +135,7 @@ contains
       type(lcm_particle_mpi_message_t), allocatable :: previous_messages(:)
       integer :: new_capacity
 
+      if (required_capacity <= 0) return
       if (.not. allocated(buffer%messages)) then
          allocate(buffer%messages(max(1, required_capacity)))
          return

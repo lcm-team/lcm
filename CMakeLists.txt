@@ -33,6 +33,7 @@ set(LCM_CORE_SOURCES
   "${LCM_SOURCE_DIR}/lcm_grid_state.f90"
   "${LCM_SOURCE_DIR}/lcm_exchange_directions.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_exchange_buffers.f90"
+  "${LCM_SOURCE_DIR}/lcm_particle_count_exchange.f90"
   "${LCM_SOURCE_DIR}/lcm_field_state.f90"
   "${LCM_SOURCE_DIR}/lcm_random.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_location.f90"
@@ -354,6 +355,40 @@ set_target_properties(test_outgoing_particle_message_packing
 add_test(
   NAME outgoing_particle_message_packing
   COMMAND test_outgoing_particle_message_packing
+)
+
+add_executable(test_particle_count_exchange
+  tests/unit/test_particle_count_exchange.f90
+)
+
+target_link_libraries(test_particle_count_exchange
+  PRIVATE
+    lcm
+    MPI::MPI_Fortran
+)
+
+set_target_properties(test_particle_count_exchange
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME particle_count_exchange
+  COMMAND test_particle_count_exchange
+)
+
+add_test(
+  NAME particle_count_exchange_mpi_2
+  COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2
+          ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_particle_count_exchange>
+          ${MPIEXEC_POSTFLAGS}
+)
+
+add_test(
+  NAME particle_count_exchange_mpi_2_nonperiodic
+  COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2
+          ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_particle_count_exchange>
+          ${MPIEXEC_POSTFLAGS} nonperiodic
 )
 
 add_executable(test_minimal_les_host_cell_crossing
