@@ -105,6 +105,11 @@ At non-periodic edges, each unavailable source or destination is mapped
 independently to `MPI_PROC_NULL`, so a rank can still communicate through its
 valid side.  A missing source produces an expected receive count of zero.
 
+When no LCM parallel state has been configured, the complete exchange step is
+an explicit no-op: it does not classify or remove particles, clear directional
+buffers, or call MPI.  This protects serial hosts and prevents particle loss if
+no communicator is available.
+
 SAM performs all eight directions in a 3-D horizontal run and only east/west
 in its two-dimensional mode. For standalone DALES, Issue #40 selects direct
 eight-direction exchange from the first MPI implementation: particles can
