@@ -47,6 +47,8 @@ program test_outgoing_particle_message_packing
    call assert_equal(message%global_j, 9, 'packed global j')
    call assert_equal(message%k, 1, 'packed k')
    call assert_equal(int(message%particle%id), 501, 'packed particle id')
+   call assert_close(message%particle%x, 130.0_real64, 'internal crossing x')
+   call assert_close(message%particle%y, 80.0_real64, 'internal crossing y')
 
 contains
 
@@ -57,5 +59,15 @@ contains
 
       if (actual /= expected) error stop 'assertion failed: ' // description
    end subroutine assert_equal
+
+   subroutine assert_close(actual, expected, description)
+      real(real64), intent(in) :: actual
+      real(real64), intent(in) :: expected
+      character(len=*), intent(in) :: description
+
+      if (abs(actual - expected) > 1.0e-12_real64) then
+         error stop 'assertion failed: ' // description
+      endif
+   end subroutine assert_close
 
 end program test_outgoing_particle_message_packing

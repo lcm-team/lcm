@@ -1637,18 +1637,58 @@ contains
       integer, intent(in) :: x_direction
       integer, intent(in) :: y_direction
       integer :: direction
+      integer :: destination_global_i
+      integer :: destination_global_j
       type(lcm_particle_mpi_message_t) :: message
+      type(lcm_particle_t) :: particle_to_send
 
       call ensure_outgoing_particle_capacity(n_outgoing_particles + 1)
 
+      destination_global_i = global_i
+      destination_global_j = global_j
+      particle_to_send = particle
+      call wrap_periodic_particle_destination(destination_global_i, &
+                                              destination_global_j, &
+                                              particle_to_send)
+
       n_outgoing_particles = n_outgoing_particles + 1
-      outgoing_particles(n_outgoing_particles)%particle = particle
+      outgoing_particles(n_outgoing_particles)%particle = particle_to_send
       direction = lcm_exchange_direction_from_offsets(x_direction, y_direction)
       outgoing_particles(n_outgoing_particles)%direction = direction
 
-      call lcm_pack_particle_mpi_message(global_i, global_j, k, particle, message)
+      call lcm_pack_particle_mpi_message(destination_global_i, &
+                                         destination_global_j, k, &
+                                         particle_to_send, message)
       call lcm_append_send_particle_message(direction, message)
    end subroutine append_outgoing_particle
+
+   !> Wrap communication metadata and coordinates only at global periodic edges.
+   !>
+   !> Internal MPI-subdomain crossings retain their global destination indices
+   !> and physical coordinates.  The original cell-owned particle has already
+   !> been removed, so the wrapped copy becomes the outgoing payload.
+   subroutine wrap_periodic_particle_destination(global_i, global_j, particle)
+      integer, intent(inout) :: global_i
+      integer, intent(inout) :: global_j
+      type(lcm_particle_t), intent(inout) :: particle
+      real(real64) :: x_width
+      real(real64) :: y_width
+
+      if (grid_state%grid%periodic_x .and. &
+          (global_i < 1 .or. global_i > grid_state%grid%nx_global)) then
+         x_width = real(grid_state%grid%nx_global, real64) * grid_state%grid%dx
+         global_i = modulo(global_i - 1, grid_state%grid%nx_global) + 1
+         particle%x = modulo(particle%x, x_width)
+      endif
+
+      if (grid_state%grid%y_dimension == 1 .and. &
+          grid_state%grid%periodic_y .and. &
+          (global_j < 1 .or. global_j > grid_state%grid%ny_global)) then
+         y_width = real(grid_state%grid%ny_global, real64) * grid_state%grid%dy
+         global_j = modulo(global_j - 1, grid_state%grid%ny_global) + 1
+         particle%y = modulo(particle%y, y_width)
+      endif
+   end subroutine wrap_periodic_particle_destination
 
    subroutine ensure_outgoing_particle_capacity(required_capacity)
       integer, intent(in) :: required_capacity

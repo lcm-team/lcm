@@ -92,6 +92,9 @@ calculates its exact global horizontal cell indices from position, packs those
 indices and `k` with the particle payload, and appends the message to the send
 buffer identified by its exchange direction.  The later MPI transfer sends
 these buffers unchanged.
+At a global periodic edge, the outgoing copy's destination index and matching
+physical coordinate are normalized into the opposite side of the global
+domain. Internal MPI-subdomain crossings are not wrapped.
 
 ### MPI count exchange
 
