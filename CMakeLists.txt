@@ -440,7 +440,7 @@ set_target_properties(test_minimal_les_host_outgoing_particles
 )
 
 add_test(
-  NAME minimal_les_host_outgoing_particles
+  NAME minimal_les_host_serial_particle_exchange
   COMMAND test_minimal_les_host_outgoing_particles
 )
 
