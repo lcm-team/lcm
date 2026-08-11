@@ -1,20 +1,19 @@
 program test_particle_count_exchange
-   use iso_fortran_env, only: int64, real64
+   use iso_fortran_env, only: int64
    use mpi_f08, only: MPI_CART_COORDS, MPI_CART_CREATE, MPI_CART_RANK, &
-                      MPI_CART_SHIFT, MPI_COMM_FREE, MPI_COMM_RANK, &
+                      MPI_COMM_FREE, MPI_COMM_RANK, &
                       MPI_COMM_SIZE, MPI_COMM_WORLD, MPI_Comm, MPI_FINALIZE, &
                       MPI_INIT, MPI_PROC_NULL
    use lcm_exchange_directions, only: lcm_exchange_direction_count, &
                                       lcm_exchange_neighbor_rank, &
                                       lcm_exchange_opposite_direction
-   use lcm_grid_state, only: lcm_set_grid
    use lcm_parallel_state, only: lcm_init_parallel, lcm_parallel_t, &
-                                 lcm_set_parallel
+                                 lcm_set_parallel, parallel_state
    use lcm_particle_count_exchange, only: lcm_exchange_particle_counts
    use lcm_particle_exchange_buffers, only: lcm_append_send_particle_message, &
                                             lcm_clear_particle_exchange_buffers, &
                                             lcm_expected_receive_particle_message_count
-   use lcm_types, only: lcm_grid_t, lcm_init_grid, lcm_particle_mpi_message_t
+   use lcm_types, only: lcm_particle_mpi_message_t
 
    implicit none
 
@@ -22,25 +21,17 @@ program test_particle_count_exchange
    integer :: coordinates(2)
    integer :: dimensions(2)
    integer :: direction
-   integer :: east_rank
    integer :: ierr
-   integer :: north_rank
    integer :: opposite_direction
    integer :: rank
    integer :: size
-   integer :: south_rank
    integer :: source_rank
    character(len=32) :: topology_argument
    logical :: periodic_x
    logical :: square_topology
    logical :: periodicity(2)
-   integer :: west_rank
-   type(lcm_grid_t) :: grid
    type(lcm_parallel_t) :: parallel
    type(lcm_particle_mpi_message_t) :: message
-   real(real64) :: dz(1)
-   real(real64) :: z_center(1)
-   real(real64) :: z_face(2)
 
    call MPI_INIT(ierr)
    call MPI_COMM_SIZE(MPI_COMM_WORLD, size, ierr)
@@ -63,20 +54,17 @@ program test_particle_count_exchange
                         communicator, ierr)
    call MPI_COMM_RANK(communicator, rank, ierr)
    call MPI_CART_COORDS(communicator, rank, 2, coordinates, ierr)
-   call MPI_CART_SHIFT(communicator, 0, 1, west_rank, east_rank, ierr)
-   call MPI_CART_SHIFT(communicator, 1, 1, south_rank, north_rank, ierr)
-
-   dz = [1.0_real64]
-   z_center = [0.5_real64]
-   z_face = [0.0_real64, 1.0_real64]
-   call lcm_init_grid(grid, 1, 1, 1, 1, 1, 1, 1, 1, 1, &
-                      1.0_real64, 1.0_real64, &
-                      z_center, z_face, dz, 0, 0, 0, 0, 0, 1, 1, 1, 1, &
-                      west_rank, east_rank, south_rank, north_rank, &
-                      periodic_x, .true., 1)
-   call lcm_set_grid(grid)
    call lcm_init_parallel(parallel, communicator)
    call lcm_set_parallel(parallel)
+
+   call assert_equal(parallel_state%parallel%rank, rank, 'stored rank')
+   call assert_equal(parallel_state%parallel%size, size, 'stored size')
+   call assert_true(all(parallel_state%parallel%coordinates == coordinates), &
+                    'stored Cartesian coordinates')
+   call assert_true(all(parallel_state%parallel%dimensions == dimensions), &
+                    'stored Cartesian dimensions')
+   call assert_true(all(parallel_state%parallel%periodicity .eqv. periodicity), &
+                    'stored Cartesian periodicity')
 
    do direction = 1, lcm_exchange_direction_count
       call assert_equal(normalized_neighbor_rank(lcm_exchange_neighbor_rank(direction)), &
@@ -206,5 +194,12 @@ contains
 
       if (actual /= expected) error stop 'assertion failed: ' // description
    end subroutine assert_equal
+
+   subroutine assert_true(condition, description)
+      logical, intent(in) :: condition
+      character(len=*), intent(in) :: description
+
+      if (.not. condition) error stop 'assertion failed: ' // description
+   end subroutine assert_true
 
 end program test_particle_count_exchange

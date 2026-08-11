@@ -26,9 +26,7 @@ program test_local_subdomain_bounds
    ! Host-array interior indices deliberately differ from global LCM indices.
    call lcm_init_grid(grid, 3, 2, 1, 20, 20, &
                       2, 4, 2, 3, 10.0_real64, 10.0_real64, &
-                      z_center, z_face, dz, 1, 1, 0, 0, 0, &
-                      2, 2, 11, 7, -1, -1, -1, -1, &
-                      .false., .false., 1)
+                      z_center, z_face, dz, 1, 1, 0, 11, 7, 1)
    call lcm_set_grid(grid)
 
    call lcm_local_subdomain_bounds(global_i_first, global_i_last, &

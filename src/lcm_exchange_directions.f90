@@ -1,6 +1,5 @@
 !> Direction identifiers and neighbor lookup for particle MPI exchange.
 module lcm_exchange_directions
-   use lcm_grid_state, only: grid_state
    use lcm_parallel_state, only: parallel_state
 
    implicit none
@@ -69,21 +68,21 @@ contains
 
       select case (direction)
       case (lcm_exchange_east)
-         rank = grid_state%grid%east_rank
+         rank = parallel_state%parallel%east_rank
       case (lcm_exchange_west)
-         rank = grid_state%grid%west_rank
+         rank = parallel_state%parallel%west_rank
       case (lcm_exchange_south)
-         rank = grid_state%grid%south_rank
+         rank = parallel_state%parallel%south_rank
       case (lcm_exchange_north)
-         rank = grid_state%grid%north_rank
+         rank = parallel_state%parallel%north_rank
       case (lcm_exchange_southeast)
-         rank = diagonal_rank(parallel_state%southeast_rank)
+         rank = parallel_state%parallel%southeast_rank
       case (lcm_exchange_northwest)
-         rank = diagonal_rank(parallel_state%northwest_rank)
+         rank = parallel_state%parallel%northwest_rank
       case (lcm_exchange_southwest)
-         rank = diagonal_rank(parallel_state%southwest_rank)
+         rank = parallel_state%parallel%southwest_rank
       case (lcm_exchange_northeast)
-         rank = diagonal_rank(parallel_state%northeast_rank)
+         rank = parallel_state%parallel%northeast_rank
       case default
          error stop 'LCM exchange direction is invalid'
       end select
@@ -113,15 +112,5 @@ contains
          error stop 'LCM exchange direction is invalid'
       end select
    end function lcm_exchange_opposite_direction
-
-   integer function diagonal_rank(rank_from_cartesian_topology) result(rank)
-      integer, intent(in) :: rank_from_cartesian_topology
-
-      if (parallel_state%is_set) then
-         rank = rank_from_cartesian_topology
-      else
-         rank = -1
-      endif
-   end function diagonal_rank
 
 end module lcm_exchange_directions
