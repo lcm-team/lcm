@@ -1,5 +1,7 @@
 !> MPI count exchange for directional particle-message buffers.
 module lcm_particle_count_exchange
+   use mpi_f08, only: MPI_INTEGER, MPI_PROC_NULL, MPI_SENDRECV, MPI_Status, &
+                      MPI_SUCCESS
    use lcm_exchange_directions, only: lcm_exchange_direction_count, &
                                       lcm_exchange_neighbor_rank, &
                                       lcm_exchange_opposite_direction
@@ -21,8 +23,6 @@ contains
    !> opposite side.  Therefore, the count received with tag D belongs in the
    !> local receive buffer for opposite(D), which denotes the source direction.
    subroutine lcm_exchange_particle_counts()
-      include 'mpif.h'
-
       integer :: destination_rank
       integer :: direction
       integer :: ierr
@@ -30,7 +30,7 @@ contains
       integer :: receive_direction
       integer :: send_count
       integer :: source_rank
-      integer :: status(MPI_STATUS_SIZE)
+      type(MPI_Status) :: status
 
       if (.not. parallel_state%is_set) return
 

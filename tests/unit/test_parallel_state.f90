@@ -1,13 +1,15 @@
 program test_parallel_state
-   use lcm_parallel_state, only: lcm_set_parallel, parallel_state
-   use lcm_types, only: lcm_init_parallel, lcm_parallel_t
+   use mpi_f08, only: MPI_CART_CREATE, MPI_COMM_COMPARE, MPI_COMM_FREE, &
+                      MPI_COMM_WORLD, MPI_Comm, MPI_FINALIZE, MPI_IDENT, &
+                      MPI_INIT
+   use lcm_parallel_state, only: lcm_init_parallel, lcm_parallel_t, &
+                                 lcm_set_parallel, parallel_state
 
    implicit none
 
-   include 'mpif.h'
-
    type(lcm_parallel_t) :: parallel
-   integer :: communicator
+   type(MPI_Comm) :: communicator
+   integer :: comparison
    integer :: dimensions(2)
    integer :: ierr
    logical :: periodicity(2)
@@ -22,7 +24,9 @@ program test_parallel_state
    call lcm_set_parallel(parallel)
 
    call assert_true(parallel_state%is_set, 'parallel state is set')
-   call assert_true(parallel_state%parallel%communicator == communicator, 'communicator')
+   call MPI_COMM_COMPARE(parallel_state%parallel%communicator, communicator, &
+                         comparison, ierr)
+   call assert_true(comparison == MPI_IDENT, 'communicator')
    call assert_true(parallel_state%southwest_rank == 0, 'south-west rank')
    call assert_true(parallel_state%southeast_rank == 0, 'south-east rank')
    call assert_true(parallel_state%northwest_rank == 0, 'north-west rank')

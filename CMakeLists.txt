@@ -93,9 +93,10 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
 endif()
 
 target_link_libraries(lcm
+  PUBLIC
+    MPI::MPI_Fortran
   PRIVATE
     lcm_sam_compat
-    MPI::MPI_Fortran
 )
 
 target_include_directories(lcm
