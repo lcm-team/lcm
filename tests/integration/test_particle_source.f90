@@ -144,8 +144,7 @@ contains
       call lcm_init_grid(grid, nx_local, ny_local, nz, nx_local, ny_local, &
                          1, nx_local, 1, ny_local,                         &
                          50.0_real64, 50.0_real64, z_center, z_face, dz,   &
-                         0, 0, 0, 0, 0, 1, 1, 1, 1,                        &
-                         -1, -1, -1, -1, .true., .true., 1)
+                         0, 0, 0, 1, 1, 1)
       call lcm_set_grid(grid)
 
       u = 0.0_real64

@@ -154,8 +154,7 @@ contains
                             minimal_host_dx, minimal_host_dy,          &
                             minimal_host_z_center, minimal_host_z_face,&
                             minimal_host_dz,                           &
-                            0, 0, 0, 1, 1, 3, 3, 3, 3,                &
-                            3, 5, 1, 7, .false., .false., 1)
+                            0, 0, 0, 3, 3, 1)
       else
          call lcm_init_grid(minimal_host_grid,                         &
                             minimal_host_nx_local, minimal_host_ny_local, &
@@ -166,8 +165,7 @@ contains
                             minimal_host_dx, minimal_host_dy,          &
                             minimal_host_z_center, minimal_host_z_face,&
                             minimal_host_dz,                           &
-                            0, 0, 0, 0, 0, 1, 1, 1, 1,                &
-                            -1, -1, -1, -1, .true., .true., 1)
+                            0, 0, 0, 1, 1, 1)
       endif
       call lcm_set_grid(minimal_host_grid)
    end subroutine configure_minimal_host_grid

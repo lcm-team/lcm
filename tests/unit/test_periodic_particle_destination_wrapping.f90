@@ -1,10 +1,14 @@
 program test_periodic_particle_destination_wrapping
    use iso_fortran_env, only: int64, real64
+   use mpi_f08, only: MPI_CART_CREATE, MPI_COMM_FREE, MPI_COMM_WORLD, MPI_Comm, &
+                      MPI_FINALIZE, MPI_INIT
    use lcm_exchange_directions, only: lcm_exchange_east, lcm_exchange_north, &
                                       lcm_exchange_northeast, lcm_exchange_northwest, &
                                       lcm_exchange_south, lcm_exchange_southeast, &
                                       lcm_exchange_southwest, lcm_exchange_west
    use lcm_grid_state, only: lcm_set_grid
+   use lcm_parallel_state, only: lcm_init_parallel, lcm_parallel_t, &
+                                 lcm_set_parallel
    use lcm_particle_exchange_buffers, only: lcm_get_send_particle_message, &
                                             lcm_send_particle_message_count
    use lcm_particle_state, only: lcm_add_particle, lcm_allocate_particle_cells, &
@@ -15,6 +19,11 @@ program test_periodic_particle_destination_wrapping
    implicit none
 
    type(lcm_grid_t) :: grid
+   type(lcm_parallel_t) :: parallel
+   type(MPI_Comm) :: communicator
+   integer :: dimensions(2)
+   integer :: ierr
+   logical :: periodicity(2)
    type(lcm_particle_mpi_message_t) :: message
    real(real64) :: dz(1)
    real(real64) :: z_center(1)
@@ -23,11 +32,16 @@ program test_periodic_particle_destination_wrapping
    dz = [10.0_real64]
    z_center = [5.0_real64]
    z_face = [0.0_real64, 10.0_real64]
+   call MPI_INIT(ierr)
+   dimensions = [1, 1]
+   periodicity = [.true., .true.]
+   call MPI_CART_CREATE(MPI_COMM_WORLD, 2, dimensions, periodicity, .false., &
+                        communicator, ierr)
+   call lcm_init_parallel(parallel, communicator)
+   call lcm_set_parallel(parallel)
    call lcm_init_grid(grid, 3, 2, 1, 3, 2, &
                       2, 4, 2, 3, 10.0_real64, 10.0_real64, &
-                      z_center, z_face, dz, 1, 1, 0, 0, 0, &
-                      1, 1, 1, 1, 0, 0, 0, 0, &
-                      .true., .true., 1)
+                      z_center, z_face, dz, 1, 1, 0, 1, 1, 1)
    call lcm_set_grid(grid)
    call lcm_allocate_particle_cells()
 
@@ -58,6 +72,9 @@ program test_periodic_particle_destination_wrapping
                                1.0_real64, 19.0_real64, 'south-east corner')
    call assert_wrapped_message(lcm_exchange_southwest, 608, 3, 2, &
                                29.0_real64, 19.0_real64, 'south-west corner')
+
+   call MPI_COMM_FREE(communicator, ierr)
+   call MPI_FINALIZE(ierr)
 
 contains
 

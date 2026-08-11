@@ -13,7 +13,9 @@ module lcm_particle_state
    use lcm_parameters, only: epsv, fac_cond, molecular_weight_water, pi, &
                              rho_liq, rv, surface_tension_water
    use lcm_particle_location, only: lcm_locate_particle_cell
-   use lcm_exchange_directions, only: lcm_exchange_direction_from_offsets
+   use lcm_exchange_directions, only: lcm_exchange_direction_from_offsets, &
+                                      lcm_exchange_neighbor_rank
+   use lcm_parallel_state, only: parallel_state
    use lcm_particle_exchange_buffers, only: lcm_append_send_particle_message, &
                                             lcm_clear_particle_exchange_buffers
    use lcm_particle_mpi_messages, only: lcm_pack_particle_mpi_message
@@ -228,12 +230,12 @@ contains
 
       call require_grid_set()
 
-      n_subdomains = int(grid_state%grid%n_subdomains_x, int64) * &
-                     int(grid_state%grid%n_subdomains_y, int64)
+      n_subdomains = int(parallel_state%parallel%dimensions(1), int64) * &
+                     int(parallel_state%parallel%dimensions(2), int64)
       subdomain_id = &
-         int(grid_state%grid%subdomain_y_index, int64) * &
-         int(grid_state%grid%n_subdomains_x, int64) + &
-         int(grid_state%grid%subdomain_x_index, int64)
+         int(parallel_state%parallel%coordinates(2), int64) * &
+         int(parallel_state%parallel%dimensions(1), int64) + &
+         int(parallel_state%parallel%coordinates(1), int64)
 
       n_step_id = huge(1_int64) / n_subdomains
       n_id = n_step_id * subdomain_id
@@ -605,8 +607,8 @@ contains
 
       tracked_particles_per_subdomain = &
          max(1, config_state%n_track_particles / &
-                grid_state%grid%n_subdomains_x / &
-                grid_state%grid%n_subdomains_y)
+                parallel_state%parallel%dimensions(1) / &
+                parallel_state%parallel%dimensions(2))
       tracking_period = initial_particle_count_for_tracking() / &
                         tracked_particles_per_subdomain
       marker_divisor = initial_particle_count_for_tracking() / &
@@ -990,9 +992,9 @@ contains
    end function particle_random_seed_id
 
    integer function particle_subdomain_id() result(subdomain_id)
-      subdomain_id = grid_state%grid%subdomain_y_index * &
-                     grid_state%grid%n_subdomains_x + &
-                     grid_state%grid%subdomain_x_index
+      subdomain_id = parallel_state%parallel%coordinates(2) * &
+                     parallel_state%parallel%dimensions(1) + &
+                     parallel_state%parallel%coordinates(1)
    end function particle_subdomain_id
 
    subroutine set_equal_mode_weight(i, j, k, n, i_mode, np_mode)
@@ -1608,6 +1610,7 @@ contains
       integer, intent(in) :: new_k
       integer, intent(out) :: x_direction
       integer, intent(out) :: y_direction
+      integer :: direction
 
       x_direction = 0
       y_direction = 0
@@ -1621,10 +1624,8 @@ contains
       if (new_j > grid_state%grid%ny_local) y_direction = 1
 
       if (x_direction == 0 .and. y_direction == 0) return
-      if (x_direction < 0 .and. grid_state%grid%west_rank < 0) return
-      if (x_direction > 0 .and. grid_state%grid%east_rank < 0) return
-      if (y_direction < 0 .and. grid_state%grid%south_rank < 0) return
-      if (y_direction > 0 .and. grid_state%grid%north_rank < 0) return
+      direction = lcm_exchange_direction_from_offsets(x_direction, y_direction)
+      if (lcm_exchange_neighbor_rank(direction) < 0) return
 
       particle_leaves_to_neighbor_rank = .true.
    end function particle_leaves_to_neighbor_rank
@@ -1674,7 +1675,7 @@ contains
       real(real64) :: x_width
       real(real64) :: y_width
 
-      if (grid_state%grid%periodic_x .and. &
+      if (parallel_state%parallel%periodicity(1) .and. &
           (global_i < 1 .or. global_i > grid_state%grid%nx_global)) then
          x_width = real(grid_state%grid%nx_global, real64) * grid_state%grid%dx
          global_i = modulo(global_i - 1, grid_state%grid%nx_global) + 1
@@ -1682,7 +1683,7 @@ contains
       endif
 
       if (grid_state%grid%y_dimension == 1 .and. &
-          grid_state%grid%periodic_y .and. &
+          parallel_state%parallel%periodicity(2) .and. &
           (global_j < 1 .or. global_j > grid_state%grid%ny_global)) then
          y_width = real(grid_state%grid%ny_global, real64) * grid_state%grid%dy
          global_j = modulo(global_j - 1, grid_state%grid%ny_global) + 1

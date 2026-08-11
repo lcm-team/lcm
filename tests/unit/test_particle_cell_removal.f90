@@ -39,9 +39,7 @@ contains
 
       call lcm_init_grid(grid, 1, 1, 1, 1, 1, &
                          1, 1, 1, 1, 10.0_real64, 10.0_real64, &
-                         z_center, z_face, dz, 0, 0, 0, 0, 0, &
-                         1, 1, 1, 1, -1, -1, -1, -1, &
-                         .false., .false., 1)
+                         z_center, z_face, dz, 0, 0, 0, 1, 1, 1)
       call lcm_set_grid(grid)
    end subroutine configure_grid
 

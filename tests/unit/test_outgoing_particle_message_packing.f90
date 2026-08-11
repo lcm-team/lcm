@@ -1,6 +1,10 @@
 program test_outgoing_particle_message_packing
    use iso_fortran_env, only: int64, real64
+   use mpi_f08, only: MPI_CART_CREATE, MPI_COMM_FREE, MPI_COMM_WORLD, MPI_Comm, &
+                      MPI_FINALIZE, MPI_INIT
    use lcm_exchange_directions, only: lcm_exchange_northeast
+   use lcm_parallel_state, only: lcm_init_parallel, lcm_parallel_t, &
+                                 lcm_set_parallel
    use lcm_particle_exchange_buffers, only: lcm_get_send_particle_message, &
                                             lcm_send_particle_message_count
    use lcm_particle_state, only: cell_particles, lcm_add_particle, &
@@ -13,6 +17,11 @@ program test_outgoing_particle_message_packing
    implicit none
 
    type(lcm_grid_t) :: grid
+   type(lcm_parallel_t) :: parallel
+   type(MPI_Comm) :: communicator
+   integer :: dimensions(2)
+   integer :: ierr
+   logical :: periodicity(2)
    type(lcm_particle_mpi_message_t) :: message
    type(lcm_particle_t) :: particle
    real(real64) :: dz(1)
@@ -22,11 +31,16 @@ program test_outgoing_particle_message_packing
    dz = [10.0_real64]
    z_center = [5.0_real64]
    z_face = [0.0_real64, 10.0_real64]
+   call MPI_INIT(ierr)
+   dimensions = [1, 1]
+   periodicity = [.true., .true.]
+   call MPI_CART_CREATE(MPI_COMM_WORLD, 2, dimensions, periodicity, .false., &
+                        communicator, ierr)
+   call lcm_init_parallel(parallel, communicator)
+   call lcm_set_parallel(parallel)
    call lcm_init_grid(grid, 3, 2, 1, 20, 20, &
                       2, 4, 2, 3, 10.0_real64, 10.0_real64, &
-                      z_center, z_face, dz, 1, 1, 0, 0, 0, &
-                      2, 2, 11, 7, 0, 0, 0, 0, &
-                      .false., .false., 1)
+                      z_center, z_face, dz, 1, 1, 0, 11, 7, 1)
    call lcm_set_grid(grid)
    call lcm_allocate_particle_cells()
 
@@ -49,6 +63,9 @@ program test_outgoing_particle_message_packing
    call assert_equal(int(message%particle%id), 501, 'packed particle id')
    call assert_close(message%particle%x, 130.0_real64, 'internal crossing x')
    call assert_close(message%particle%y, 80.0_real64, 'internal crossing y')
+
+   call MPI_COMM_FREE(communicator, ierr)
+   call MPI_FINALIZE(ierr)
 
 contains
 
