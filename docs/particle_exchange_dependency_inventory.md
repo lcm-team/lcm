@@ -1,5 +1,10 @@
 # Particle Exchange Dependency Inventory
 
+The accepted standalone ownership and MPI design is documented in
+[`particle_exchange_architecture.md`](particle_exchange_architecture.md).
+This inventory remains the detailed comparison with the inherited SAM-LCM
+implementation.
+
 This note inventories SAM-LCM's particle-exchange implementation before
 implementing standalone `exchange_lcm_particles()` (Issue #40). The reference
 is `MICRO_LAGRANGE/micro_exchange.f90`, especially
