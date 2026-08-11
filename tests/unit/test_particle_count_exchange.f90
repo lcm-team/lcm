@@ -1,22 +1,24 @@
 program test_particle_count_exchange
    use iso_fortran_env, only: int64, real64
+   use mpi_f08, only: MPI_CART_COORDS, MPI_CART_CREATE, MPI_CART_RANK, &
+                      MPI_CART_SHIFT, MPI_COMM_FREE, MPI_COMM_RANK, &
+                      MPI_COMM_SIZE, MPI_COMM_WORLD, MPI_Comm, MPI_FINALIZE, &
+                      MPI_INIT, MPI_PROC_NULL
    use lcm_exchange_directions, only: lcm_exchange_direction_count, &
                                       lcm_exchange_neighbor_rank, &
                                       lcm_exchange_opposite_direction
    use lcm_grid_state, only: lcm_set_grid
-   use lcm_parallel_state, only: lcm_set_parallel
+   use lcm_parallel_state, only: lcm_init_parallel, lcm_parallel_t, &
+                                 lcm_set_parallel
    use lcm_particle_count_exchange, only: lcm_exchange_particle_counts
    use lcm_particle_exchange_buffers, only: lcm_append_send_particle_message, &
                                             lcm_clear_particle_exchange_buffers, &
                                             lcm_expected_receive_particle_message_count
-   use lcm_types, only: lcm_grid_t, lcm_init_grid, lcm_init_parallel, &
-                        lcm_parallel_t, lcm_particle_mpi_message_t
+   use lcm_types, only: lcm_grid_t, lcm_init_grid, lcm_particle_mpi_message_t
 
    implicit none
 
-   include 'mpif.h'
-
-   integer :: communicator
+   type(MPI_Comm) :: communicator
    integer :: coordinates(2)
    integer :: dimensions(2)
    integer :: direction
