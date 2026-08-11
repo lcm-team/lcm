@@ -7,6 +7,13 @@ option(LCM_BUILD_ALL_SAM_SOURCES "Attempt to build all SAM-derived LCM source fi
 
 enable_testing()
 
+add_test(
+  NAME mpi_interface_isolation
+  COMMAND ${CMAKE_COMMAND}
+          -DLCM_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/src
+          -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/cmake/check_mpi_interface_isolation.cmake
+)
+
 find_package(MPI REQUIRED COMPONENTS Fortran)
 
 set(CMAKE_Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/mod")
