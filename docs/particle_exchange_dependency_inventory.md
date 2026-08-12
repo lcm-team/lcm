@@ -114,11 +114,13 @@ domain. Internal MPI-subdomain crossings are not wrapped.
 ### MPI count exchange
 
 Before payload exchange, LCM exchanges one integer message count per outgoing
-direction with `MPI_SENDRECV`.  A count sent toward direction `D` uses `D` as
-its MPI tag and is received from the opposite neighbor with that same tag.  It
-is stored as the expected count for the receive buffer whose direction denotes
-the source neighbor.  Receive storage is reserved from this count, but the
-buffer's actual message count remains zero until payload transfer completes.
+direction. For each cardinal phase it posts both nonblocking count receives,
+then both nonblocking count sends, and completes all four requests with one
+`MPI_WAITALL`. A count sent toward direction `D` uses `D` as its MPI tag and is
+received from the opposite neighbor with that same tag. It is stored as the
+expected count for the receive buffer whose direction denotes the source
+neighbor. Receive storage is reserved from this count, but the buffer's actual
+message count remains zero until payload transfer completes.
 At non-periodic edges, each unavailable source or destination is mapped
 independently to `MPI_PROC_NULL`, so a rank can still communicate through its
 valid side.  A missing source produces an expected receive count of zero.

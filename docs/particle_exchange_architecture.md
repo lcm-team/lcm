@@ -169,8 +169,9 @@ transfers more than one message and verifies every particle field. This
 avoids a manually maintained homogeneous wire array while keeping all
 representation-specific logic inside one LCM transport module.
 
-The transport posts nonblocking receives before nonblocking sends and completes
-each phase with `MPI_Waitall`. It accesses the active contiguous directional
+Count and payload transport both post the phase's two nonblocking receives
+before its two nonblocking sends and complete all four requests with one
+`MPI_Waitall`. Payload transport accesses the active contiguous directional
 buffers directly, so it does not allocate or copy a second transport-only
 payload array. This follows the useful receive-before-send behavior present in
 SAM-LCM and the nonblocking communication pattern used by DALES, without
