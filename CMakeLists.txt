@@ -480,6 +480,29 @@ add_test(
           ${MPIEXEC_POSTFLAGS}
 )
 
+add_executable(test_lcm_advance_particle_exchange_mpi
+  tests/integration/test_lcm_advance_particle_exchange_mpi.f90
+)
+
+target_link_libraries(test_lcm_advance_particle_exchange_mpi
+  PRIVATE
+    lcm
+    MPI::MPI_Fortran
+)
+
+set_target_properties(test_lcm_advance_particle_exchange_mpi
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME lcm_advance_mpi_4_particle_exchange
+  COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4
+          ${MPIEXEC_PREFLAGS}
+          $<TARGET_FILE:test_lcm_advance_particle_exchange_mpi>
+          ${MPIEXEC_POSTFLAGS}
+)
+
 add_executable(test_minimal_les_host_cell_crossing
   tests/integration/minimal_les_host.f90
   tests/integration/test_minimal_les_host_cell_crossing.f90
