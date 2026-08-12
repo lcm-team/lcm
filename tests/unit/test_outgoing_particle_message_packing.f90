@@ -2,7 +2,8 @@ program test_outgoing_particle_message_packing
    use iso_fortran_env, only: int64, real64
    use mpi_f08, only: MPI_CART_CREATE, MPI_COMM_FREE, MPI_COMM_WORLD, MPI_Comm, &
                       MPI_FINALIZE, MPI_INIT
-   use lcm_exchange_directions, only: lcm_exchange_northeast
+   use lcm_exchange_directions, only: lcm_exchange_east, &
+                                      lcm_exchange_x_phase
    use lcm_parallel_state, only: lcm_init_parallel, lcm_parallel_t, &
                                  lcm_set_parallel
    use lcm_particle_exchange_buffers, only: lcm_get_send_particle_message, &
@@ -44,23 +45,34 @@ program test_outgoing_particle_message_packing
    call lcm_set_grid(grid)
    call lcm_allocate_particle_cells()
 
-   particle = lcm_particle_t()
-   particle%id = 501_int64
-   particle%x = 130.0_real64
-   particle%y = 80.0_real64
-   particle%z = 5.0_real64
-   call lcm_add_particle(1, 1, 1, particle)
+   call add_particle(501_int64, 105.0_real64, 65.0_real64)
+   call add_particle(502_int64, 130.0_real64, 65.0_real64)
+   call add_particle(503_int64, 115.0_real64, 75.0_real64)
+   call add_particle(504_int64, 130.0_real64, 80.0_real64)
+   call add_particle(505_int64, 125.0_real64, 65.0_real64)
 
-   call lcm_extract_outgoing_particles()
+   call lcm_extract_outgoing_particles(lcm_exchange_x_phase)
 
-   call assert_equal(cell_particles(1,1,1)%count, 0, 'outgoing particle removed')
-   call assert_equal(lcm_send_particle_message_count(lcm_exchange_northeast), 1, &
-                     'north-east send count')
-   call lcm_get_send_particle_message(lcm_exchange_northeast, 1, message)
+   call assert_equal(cell_particles(1,1,1)%count, 3, 'retained particle count')
+   call assert_equal(int(cell_particles(1,1,1)%particles(1)%id), 501, &
+                     'first retained particle order')
+   call assert_equal(int(cell_particles(1,1,1)%particles(2)%id), 503, &
+                     'second retained particle order')
+   call assert_equal(int(cell_particles(1,1,1)%particles(3)%id), 505, &
+                     'third retained particle order')
+   call assert_equal(int(cell_particles(1,1,1)%particles(4)%id), 0, &
+                     'first vacated slot cleared')
+   call assert_equal(int(cell_particles(1,1,1)%particles(5)%id), 0, &
+                     'second vacated slot cleared')
+   call assert_equal(lcm_send_particle_message_count(lcm_exchange_east), 2, &
+                     'east send count')
+   call lcm_get_send_particle_message(lcm_exchange_east, 1, message)
+   call assert_equal(int(message%particle%id), 502, 'east particle id')
+   call lcm_get_send_particle_message(lcm_exchange_east, 2, message)
    call assert_equal(message%global_i, 14, 'packed global i')
    call assert_equal(message%global_j, 9, 'packed global j')
    call assert_equal(message%k, 1, 'packed k')
-   call assert_equal(int(message%particle%id), 501, 'packed particle id')
+   call assert_equal(int(message%particle%id), 504, 'packed particle id')
    call assert_close(message%particle%x, 130.0_real64, 'internal crossing x')
    call assert_close(message%particle%y, 80.0_real64, 'internal crossing y')
 
@@ -68,6 +80,19 @@ program test_outgoing_particle_message_packing
    call MPI_FINALIZE(ierr)
 
 contains
+
+   subroutine add_particle(id, x, y)
+      integer(int64), intent(in) :: id
+      real(real64), intent(in) :: x
+      real(real64), intent(in) :: y
+
+      particle = lcm_particle_t()
+      particle%id = id
+      particle%x = x
+      particle%y = y
+      particle%z = 5.0_real64
+      call lcm_add_particle(1, 1, 1, particle)
+   end subroutine add_particle
 
    subroutine assert_equal(actual, expected, description)
       integer, intent(in) :: actual

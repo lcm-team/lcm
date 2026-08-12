@@ -5,6 +5,7 @@ program test_particle_count_exchange
                       MPI_COMM_SIZE, MPI_COMM_WORLD, MPI_Comm, MPI_FINALIZE, &
                       MPI_INIT, MPI_PROC_NULL
    use lcm_exchange_directions, only: lcm_exchange_direction_count, &
+                                      lcm_exchange_phase_count, &
                                       lcm_exchange_neighbor_rank, &
                                       lcm_exchange_opposite_direction
    use lcm_parallel_state, only: lcm_init_parallel, lcm_parallel_t, &
@@ -23,6 +24,7 @@ program test_particle_count_exchange
    integer :: direction
    integer :: ierr
    integer :: opposite_direction
+   integer :: phase
    integer :: rank
    integer :: size
    integer :: source_rank
@@ -79,7 +81,9 @@ program test_particle_count_exchange
       call append_messages(direction, message, 10 * rank + direction)
    enddo
 
-   call lcm_exchange_particle_counts()
+   do phase = 1, lcm_exchange_phase_count
+      call lcm_exchange_particle_counts(phase)
+   enddo
 
    do direction = 1, lcm_exchange_direction_count
       opposite_direction = lcm_exchange_opposite_direction(direction)
@@ -137,11 +141,7 @@ contains
 
    subroutine direction_offsets(direction, x_offset, y_offset)
       use lcm_exchange_directions, only: lcm_exchange_east, lcm_exchange_west, &
-                                         lcm_exchange_southeast, &
-                                         lcm_exchange_northwest, &
-                                         lcm_exchange_south, lcm_exchange_north, &
-                                         lcm_exchange_southwest, &
-                                         lcm_exchange_northeast
+                                         lcm_exchange_south, lcm_exchange_north
 
       integer, intent(in) :: direction
       integer, intent(out) :: x_offset
@@ -154,23 +154,11 @@ contains
       case (lcm_exchange_west)
          x_offset = -1
          y_offset = 0
-      case (lcm_exchange_southeast)
-         x_offset = 1
-         y_offset = -1
-      case (lcm_exchange_northwest)
-         x_offset = -1
-         y_offset = 1
       case (lcm_exchange_south)
          x_offset = 0
          y_offset = -1
       case (lcm_exchange_north)
          x_offset = 0
-         y_offset = 1
-      case (lcm_exchange_southwest)
-         x_offset = -1
-         y_offset = -1
-      case (lcm_exchange_northeast)
-         x_offset = 1
          y_offset = 1
       case default
          error stop 'invalid direction in count-exchange test'

@@ -38,10 +38,6 @@ program test_parallel_state
    call assert_true(parallel_state%parallel%east_rank == 0, 'east rank')
    call assert_true(parallel_state%parallel%south_rank == 0, 'south rank')
    call assert_true(parallel_state%parallel%north_rank == 0, 'north rank')
-   call assert_true(parallel_state%parallel%southwest_rank == 0, 'south-west rank')
-   call assert_true(parallel_state%parallel%southeast_rank == 0, 'south-east rank')
-   call assert_true(parallel_state%parallel%northwest_rank == 0, 'north-west rank')
-   call assert_true(parallel_state%parallel%northeast_rank == 0, 'north-east rank')
 
    call MPI_COMM_FREE(communicator, ierr)
    call MPI_FINALIZE(ierr)

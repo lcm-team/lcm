@@ -1,6 +1,9 @@
 !> Flat directional message buffers for standalone particle MPI exchange.
 module lcm_particle_exchange_buffers
-   use lcm_exchange_directions, only: lcm_exchange_direction_count
+   use lcm_exchange_directions, only: lcm_exchange_direction_count, &
+                                      lcm_exchange_direction_for_phase, &
+                                      lcm_exchange_directions_per_phase, &
+                                      lcm_require_valid_exchange_phase
    use lcm_types, only: lcm_particle_mpi_message_t
 
    implicit none
@@ -8,12 +11,16 @@ module lcm_particle_exchange_buffers
    private
 
    public :: lcm_clear_particle_exchange_buffers
+   public :: lcm_clear_particle_exchange_phase_buffers
    public :: lcm_append_send_particle_message
    public :: lcm_append_receive_particle_message
    public :: lcm_send_particle_message_count
    public :: lcm_receive_particle_message_count
    public :: lcm_expected_receive_particle_message_count
    public :: lcm_reserve_receive_particle_messages
+   public :: lcm_get_send_particle_message_view
+   public :: lcm_get_receive_particle_message_view
+   public :: lcm_mark_receive_particle_messages_received
    public :: lcm_get_send_particle_message
    public :: lcm_get_receive_particle_message
 
@@ -23,8 +30,10 @@ module lcm_particle_exchange_buffers
       integer :: expected_count = 0
    end type lcm_particle_message_buffer_t
 
-   type(lcm_particle_message_buffer_t), save :: send_buffers(lcm_exchange_direction_count)
-   type(lcm_particle_message_buffer_t), save :: receive_buffers(lcm_exchange_direction_count)
+   type(lcm_particle_message_buffer_t), target, save :: &
+      send_buffers(lcm_exchange_direction_count)
+   type(lcm_particle_message_buffer_t), target, save :: &
+      receive_buffers(lcm_exchange_direction_count)
 
 contains
 
@@ -38,6 +47,21 @@ contains
          receive_buffers(direction)%expected_count = 0
       enddo
    end subroutine lcm_clear_particle_exchange_buffers
+
+   !> Reset only the two buffers used by one cardinal exchange phase.
+   subroutine lcm_clear_particle_exchange_phase_buffers(phase)
+      integer, intent(in) :: phase
+      integer :: direction
+      integer :: phase_direction
+
+      call lcm_require_valid_exchange_phase(phase)
+      do phase_direction = 1, lcm_exchange_directions_per_phase
+         direction = lcm_exchange_direction_for_phase(phase, phase_direction)
+         send_buffers(direction)%count = 0
+         receive_buffers(direction)%count = 0
+         receive_buffers(direction)%expected_count = 0
+      enddo
+   end subroutine lcm_clear_particle_exchange_phase_buffers
 
    subroutine lcm_append_send_particle_message(direction, message)
       integer, intent(in) :: direction
@@ -86,6 +110,47 @@ contains
       receive_buffers(direction)%expected_count = expected_count
       call ensure_buffer_capacity(receive_buffers(direction), expected_count)
    end subroutine lcm_reserve_receive_particle_messages
+
+   !> Provide direct contiguous access to the active send-buffer payload.
+   !>
+   !> The view is valid only until the matching direction is cleared or grown.
+   !> Transport must not modify the messages or retain the view after it waits.
+   subroutine lcm_get_send_particle_message_view(direction, messages)
+      integer, intent(in) :: direction
+      type(lcm_particle_mpi_message_t), contiguous, pointer, intent(out) :: messages(:)
+
+      call require_valid_direction(direction)
+      if (send_buffers(direction)%count == 0) then
+         nullify(messages)
+      else
+         messages => send_buffers(direction)%messages( &
+            1:send_buffers(direction)%count)
+      endif
+   end subroutine lcm_get_send_particle_message_view
+
+   !> Provide direct contiguous access to reserved receive-buffer storage.
+   !>
+   !> The returned region has the count established by the preceding count
+   !> exchange. Transport fills it in place and then marks it as received.
+   subroutine lcm_get_receive_particle_message_view(direction, messages)
+      integer, intent(in) :: direction
+      type(lcm_particle_mpi_message_t), contiguous, pointer, intent(out) :: messages(:)
+
+      call require_valid_direction(direction)
+      if (receive_buffers(direction)%expected_count == 0) then
+         nullify(messages)
+      else
+         messages => receive_buffers(direction)%messages( &
+            1:receive_buffers(direction)%expected_count)
+      endif
+   end subroutine lcm_get_receive_particle_message_view
+
+   subroutine lcm_mark_receive_particle_messages_received(direction)
+      integer, intent(in) :: direction
+
+      call require_valid_direction(direction)
+      receive_buffers(direction)%count = receive_buffers(direction)%expected_count
+   end subroutine lcm_mark_receive_particle_messages_received
 
    subroutine lcm_get_send_particle_message(direction, index, message)
       integer, intent(in) :: direction

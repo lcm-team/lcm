@@ -21,7 +21,7 @@ domain data, but it does not implement LCM communication loops.
 ### LCM owns
 
 - outgoing-particle classification;
-- the eight exchange directions;
+- the two cardinal exchange phases (x followed by y);
 - temporary directional send and receive buffers;
 - temporary destination-cell metadata;
 - periodic global-coordinate wrapping;
@@ -65,8 +65,9 @@ call lcm_set_parallel(lcm_parallel)
 For DALES, `host_cartesian_communicator` is `comm3d`.
 
 LCM queries the communicator for rank, size, processor coordinates, processor
-grid dimensions, periodicity, and neighbor ranks. Deriving neighbor ranks from
-the communicator preserves correctness when MPI rank reordering is enabled.
+grid dimensions, periodicity, and the four cardinal neighbor ranks. Deriving
+these ranks with `MPI_CART_SHIFT` preserves correctness when MPI rank
+reordering is enabled. Diagonal ranks are not part of the LCM topology state.
 
 MPI execution state belongs in `lcm_parallel_t` or its private state module.
 Physical grid geometry belongs in `lcm_grid_t`. MPI topology data must not be
@@ -74,26 +75,28 @@ duplicated in both types without a documented validation requirement.
 
 ## Direction and buffer contract
 
-Each rank can exchange particles in eight horizontal directions:
+Each rank exchanges particles with four cardinal neighbors in two ordered
+phases:
 
-| Direction | Opposite direction |
+| Phase | Send directions |
 | --- | --- |
-| east | west |
-| west | east |
-| north | south |
-| south | north |
-| northeast | southwest |
-| northwest | southeast |
-| southeast | northwest |
-| southwest | northeast |
+| x | east, west |
+| y | south, north |
 
-LCM owns eight send buffers and eight receive buffers. A buffer contains all
-particles moving in one direction during the current exchange step. LCM does
-not normally issue one MPI operation per particle.
+LCM owns four send buffers and four receive buffers. A buffer contains all
+particles moving in one cardinal direction during the current exchange step.
+LCM does not normally issue one MPI operation per particle.
+
+The x phase is completed first: classify east/west particles, exchange counts
+and payloads, and insert received particles. The y phase then repeats those
+steps for south/north movement. A corner-crossing particle therefore travels
+through two cardinal transfers. For example, a northeast particle first moves
+east and, after insertion on the receiving rank, moves north. No diagonal rank,
+buffer, tag, or direct diagonal MPI message is required.
 
 Some directions can map to `MPI_PROC_NULL` at non-periodic physical edges.
-Multiple directions can map to the same rank in small or periodic processor
-grids. Direction-specific tags keep those transfers distinct.
+Multiple cardinal directions can map to the same rank in small or periodic
+processor grids. Direction-specific tags keep those transfers distinct.
 
 ## Particle-message contract
 
@@ -130,19 +133,18 @@ call exchange_lcm_particles()
 call update_lcm_particle_cell_ownership()
 ```
 
-`exchange_lcm_particles()` performs these phases:
+`exchange_lcm_particles()` performs this sequence:
 
-1. Clear temporary directional buffers.
-2. Classify and remove particles leaving the local horizontal subdomain.
-3. Apply global periodic wrapping only when crossing a global periodic edge.
-4. Pack each outgoing particle into its directional send buffer.
-5. Exchange one particle count per direction.
-6. Reserve directional receive-buffer storage.
-7. Post particle-payload receives.
-8. Post particle-payload sends.
-9. Wait for communication to complete.
-10. Store received typed messages.
-11. Insert received particles into local cell-owned storage.
+1. Run the x phase for east/west classification, dimension-specific periodic
+   wrapping, count exchange, payload exchange, and received-particle insertion.
+2. Run the y phase for south/north classification, dimension-specific periodic
+   wrapping, count exchange, payload exchange, and received-particle insertion.
+
+Within each phase LCM clears only that phase's two buffers, classifies and
+stably compacts cell-owned particles, exchanges one count per direction,
+reserves receive storage, posts payload receives and sends, waits for
+completion, and inserts received particles. Completing insertion between the
+phases is what makes corner movement correct.
 
 Vertical physical-boundary behavior and local microphysics are explicitly
 outside this routine.
@@ -153,22 +155,31 @@ Direct MPI use is restricted to small, low-level standalone LCM modules, such
 as:
 
 - `lcm_parallel_state.f90` for communicator and topology initialization; and
-- `lcm_particle_mpi_transport.f90` for count and payload transport.
+- `lcm_particle_count_exchange.f90` for count transport;
+- `lcm_particle_mpi_datatype.f90` for the typed message representation; and
+- `lcm_particle_mpi_transport.f90` for payload transport.
 
 These modules use `mpi_f08`. Higher-level grid, particle, buffer, boundary,
 ownership, and advance modules must not call MPI directly.
 
-The first payload implementation uses an MPI derived datatype for
-`lcm_particle_mpi_message_t`. It must be constructed from actual component
+The payload implementation uses an MPI derived datatype for
+`lcm_particle_mpi_message_t`. It is constructed from actual component
 addresses and resized to the correct array-element extent. A multi-rank test
-must transfer more than one message and verify every particle field. This
+transfers more than one message and verifies every particle field. This
 avoids a manually maintained homogeneous wire array while keeping all
 representation-specific logic inside one LCM transport module.
 
-The transport should post nonblocking receives and sends and complete them with
-`MPI_Waitall`. This follows the useful receive-before-send behavior present in
+The transport posts nonblocking receives before nonblocking sends and completes
+each phase with `MPI_Waitall`. It accesses the active contiguous directional
+buffers directly, so it does not allocate or copy a second transport-only
+payload array. This follows the useful receive-before-send behavior present in
 SAM-LCM and the nonblocking communication pattern used by DALES, without
 depending on DALES `modmpi`.
+
+After transport, the x-phase receiver inserts a corner particle temporarily in
+the nearest local y-edge cell because its y destination is not local yet. The
+particle's physical coordinate makes the subsequent y phase extract it. A
+y-phase receive requires both horizontal destination indices to be local.
 
 ## Serial behavior
 
@@ -222,7 +233,8 @@ The design is satisfied when:
 - DALES only passes `comm3d` and host data through its adapter;
 - another MPI LES can use the same public LCM interface;
 - LCM owns count and payload transport;
-- LCM supports all eight directions and periodic corners;
+- LCM supports all four cardinal directions and routes periodic corners through
+  the ordered x and y phases;
 - unavailable neighbors are safe;
 - multiple messages per direction preserve every particle field;
 - outgoing particles are removed exactly once;
@@ -232,11 +244,14 @@ The design is satisfied when:
 
 ## Implementation order
 
-1. Modernize the isolated LCM MPI boundary to `mpi_f08`.
+1. Modernize the isolated LCM MPI boundary to `mpi_f08`. **Done.**
 2. Separate MPI topology state from physical grid geometry without duplicates.
+   **Done.**
 3. Make the DALES adapter pass only `comm3d` for parallel initialization.
-4. Implement the LCM-owned particle-message MPI datatype.
-5. Implement LCM-owned nonblocking payload exchange.
-6. Insert received messages into cell-owned storage.
-7. Add standalone multi-rank LCM tests.
+   **Done in the intentionally uncommitted DALES adapter work.**
+4. Implement the LCM-owned particle-message MPI datatype. **Done.**
+5. Implement LCM-owned nonblocking payload exchange. **Done.**
+6. Insert received messages into cell-owned storage between phases. **Done.**
+7. Add standalone multi-rank LCM tests. **Done for typed arrays and all four
+   corner routes on a 2x2 Cartesian communicator.**
 8. Add a thin DALES integration test that verifies communicator handoff.
