@@ -21,11 +21,10 @@ program test_field_attachment
    temperature = 280.0_real64
    qv = 0.008_real64
 
-   call lcm_attach_field("u", u_face)
-   call lcm_attach_field("v", v_face)
-   call lcm_attach_field("w", w_face)
+   ! The bulk API must preserve the same staggered velocity-field contract as
+   ! the single-field API used by the particle velocity interpolator.
+   call lcm_attach_fields(u=u_face, v=v_face, w=w_face, qv=qv)
    call lcm_attach_field("temperature", temperature)
-   call lcm_attach_fields(qv=qv)
 
    call assert_true(field_state%u_is_attached, "u attached")
    call assert_true(field_state%v_is_attached, "v attached")
