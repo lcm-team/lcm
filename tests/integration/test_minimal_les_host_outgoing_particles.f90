@@ -4,8 +4,7 @@ program test_minimal_les_host_outgoing_particles
    use lcm_exchange_directions, only: lcm_exchange_direction_count
    use lcm_particle_exchange_buffers, only: lcm_send_particle_message_count
    use lcm_particle_state, only: cell_particles, lcm_add_particle, &
-                                 lcm_reset_particle_cells, &
-                                 n_outgoing_particles
+                                 lcm_reset_particle_cells
    use lcm_types, only: lcm_particle_t
    use minimal_les_host, only: minimal_host_u, minimal_host_v, &
                                minimal_host_w, setup_minimal_les_host
@@ -29,8 +28,6 @@ program test_minimal_les_host_outgoing_particles
 
    call assert_true(total_particle_count() == 3, &
                     "serial exchange preserves all particles")
-   call assert_true(n_outgoing_particles == 0, &
-                    "serial exchange does not classify outgoing particles")
    do direction = 1, lcm_exchange_direction_count
       call assert_true(lcm_send_particle_message_count(direction) == 0, &
                        "serial exchange leaves send buffers empty")

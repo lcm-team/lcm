@@ -2,9 +2,11 @@
 module lcm_particle_count_exchange
    use mpi_f08, only: MPI_INTEGER, MPI_PROC_NULL, MPI_SENDRECV, MPI_Status, &
                       MPI_SUCCESS
-   use lcm_exchange_directions, only: lcm_exchange_direction_count, &
+   use lcm_exchange_directions, only: lcm_exchange_direction_for_phase, &
+                                      lcm_exchange_directions_per_phase, &
                                       lcm_exchange_neighbor_rank, &
-                                      lcm_exchange_opposite_direction
+                                      lcm_exchange_opposite_direction, &
+                                      lcm_require_valid_exchange_phase
    use lcm_parallel_state, only: parallel_state
    use lcm_particle_exchange_buffers, only: lcm_reserve_receive_particle_messages, &
                                             lcm_send_particle_message_count
@@ -22,7 +24,8 @@ contains
    !> A count sent toward direction D is received by the neighbor on its
    !> opposite side.  Therefore, the count received with tag D belongs in the
    !> local receive buffer for opposite(D), which denotes the source direction.
-   subroutine lcm_exchange_particle_counts()
+   subroutine lcm_exchange_particle_counts(phase)
+      integer, intent(in) :: phase
       integer :: destination_rank
       integer :: direction
       integer :: ierr
@@ -30,11 +33,14 @@ contains
       integer :: receive_direction
       integer :: send_count
       integer :: source_rank
+      integer :: phase_direction
       type(MPI_Status) :: status
 
       if (.not. parallel_state%is_set) return
+      call lcm_require_valid_exchange_phase(phase)
 
-      do direction = 1, lcm_exchange_direction_count
+      do phase_direction = 1, lcm_exchange_directions_per_phase
+         direction = lcm_exchange_direction_for_phase(phase, phase_direction)
          receive_direction = lcm_exchange_opposite_direction(direction)
          destination_rank = lcm_exchange_neighbor_rank(direction)
          source_rank = lcm_exchange_neighbor_rank(receive_direction)

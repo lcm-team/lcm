@@ -1,32 +1,37 @@
 program test_exchange_directions
-   use lcm_exchange_directions, only: lcm_exchange_direction_from_offsets, &
+   use lcm_exchange_directions, only: lcm_exchange_direction_for_phase, &
+                                      lcm_exchange_direction_from_offset, &
                                       lcm_exchange_opposite_direction, &
                                       lcm_exchange_east, lcm_exchange_west, &
-                                      lcm_exchange_southeast, lcm_exchange_northwest, &
                                       lcm_exchange_south, lcm_exchange_north, &
-                                      lcm_exchange_southwest, lcm_exchange_northeast
+                                      lcm_exchange_x_phase, lcm_exchange_y_phase
 
    implicit none
 
-   call assert_direction(1, 0, lcm_exchange_east, lcm_exchange_west)
-   call assert_direction(-1, 0, lcm_exchange_west, lcm_exchange_east)
-   call assert_direction(1, -1, lcm_exchange_southeast, lcm_exchange_northwest)
-   call assert_direction(-1, 1, lcm_exchange_northwest, lcm_exchange_southeast)
-   call assert_direction(0, -1, lcm_exchange_south, lcm_exchange_north)
-   call assert_direction(0, 1, lcm_exchange_north, lcm_exchange_south)
-   call assert_direction(-1, -1, lcm_exchange_southwest, lcm_exchange_northeast)
-   call assert_direction(1, 1, lcm_exchange_northeast, lcm_exchange_southwest)
+   call assert_direction(lcm_exchange_x_phase, 1, lcm_exchange_east, lcm_exchange_west)
+   call assert_direction(lcm_exchange_x_phase, -1, lcm_exchange_west, lcm_exchange_east)
+   call assert_direction(lcm_exchange_y_phase, -1, lcm_exchange_south, lcm_exchange_north)
+   call assert_direction(lcm_exchange_y_phase, 1, lcm_exchange_north, lcm_exchange_south)
+
+   call assert_true(lcm_exchange_direction_for_phase(lcm_exchange_x_phase, 1) == &
+                    lcm_exchange_east, 'first x-phase direction')
+   call assert_true(lcm_exchange_direction_for_phase(lcm_exchange_x_phase, 2) == &
+                    lcm_exchange_west, 'second x-phase direction')
+   call assert_true(lcm_exchange_direction_for_phase(lcm_exchange_y_phase, 1) == &
+                    lcm_exchange_south, 'first y-phase direction')
+   call assert_true(lcm_exchange_direction_for_phase(lcm_exchange_y_phase, 2) == &
+                    lcm_exchange_north, 'second y-phase direction')
 
 contains
 
-   subroutine assert_direction(x_offset, y_offset, expected, opposite)
-      integer, intent(in) :: x_offset
-      integer, intent(in) :: y_offset
+   subroutine assert_direction(phase, offset, expected, opposite)
+      integer, intent(in) :: phase
+      integer, intent(in) :: offset
       integer, intent(in) :: expected
       integer, intent(in) :: opposite
 
-      call assert_true(lcm_exchange_direction_from_offsets(x_offset, y_offset) == expected, &
-                       'direction from offsets')
+      call assert_true(lcm_exchange_direction_from_offset(phase, offset) == expected, &
+                       'direction from phase offset')
       call assert_true(lcm_exchange_opposite_direction(expected) == opposite, &
                        'opposite direction')
    end subroutine assert_direction

@@ -1,10 +1,11 @@
 program test_particle_exchange_buffers
    use iso_fortran_env, only: int64
    use lcm_exchange_directions, only: lcm_exchange_east, lcm_exchange_north, &
-                                      lcm_exchange_northeast
+                                      lcm_exchange_x_phase
    use lcm_particle_exchange_buffers, only: lcm_append_receive_particle_message, &
                                             lcm_append_send_particle_message, &
                                             lcm_clear_particle_exchange_buffers, &
+                                            lcm_clear_particle_exchange_phase_buffers, &
                                             lcm_get_receive_particle_message, &
                                             lcm_get_send_particle_message, &
                                             lcm_receive_particle_message_count, &
@@ -26,8 +27,8 @@ program test_particle_exchange_buffers
 
    call assert_equal(lcm_send_particle_message_count(lcm_exchange_east), 2, &
                      'east send count')
-   call assert_equal(lcm_send_particle_message_count(lcm_exchange_northeast), 0, &
-                     'empty northeast send count')
+   call assert_equal(lcm_send_particle_message_count(lcm_exchange_north), 0, &
+                     'empty north send count')
    call assert_equal(lcm_receive_particle_message_count(lcm_exchange_north), 1, &
                      'north receive count')
 
@@ -37,11 +38,15 @@ program test_particle_exchange_buffers
    call lcm_get_receive_particle_message(lcm_exchange_north, 1, copied_message)
    call assert_equal(int(copied_message%particle%id), 103, 'north receive id')
 
-   call lcm_clear_particle_exchange_buffers()
+   call lcm_clear_particle_exchange_phase_buffers(lcm_exchange_x_phase)
    call assert_equal(lcm_send_particle_message_count(lcm_exchange_east), 0, &
                      'cleared east send count')
+   call assert_equal(lcm_receive_particle_message_count(lcm_exchange_north), 1, &
+                     'x-phase clear preserves north receive count')
+
+   call lcm_clear_particle_exchange_buffers()
    call assert_equal(lcm_receive_particle_message_count(lcm_exchange_north), 0, &
-                     'cleared north receive count')
+                     'full clear resets north receive count')
 
 contains
 

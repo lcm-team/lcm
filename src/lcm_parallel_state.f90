@@ -1,6 +1,6 @@
 !> LCM-owned communication context supplied by the host model.
 module lcm_parallel_state
-   use mpi_f08, only: MPI_CART_GET, MPI_CART_RANK, MPI_CART_SHIFT, MPI_Comm, &
+   use mpi_f08, only: MPI_CART_GET, MPI_CART_SHIFT, MPI_Comm, &
                       MPI_COMM_NULL, MPI_COMM_RANK, MPI_COMM_SIZE, &
                       MPI_PROC_NULL, MPI_SUCCESS
 
@@ -31,10 +31,6 @@ module lcm_parallel_state
       integer :: east_rank = MPI_PROC_NULL
       integer :: south_rank = MPI_PROC_NULL
       integer :: north_rank = MPI_PROC_NULL
-      integer :: southwest_rank = MPI_PROC_NULL
-      integer :: southeast_rank = MPI_PROC_NULL
-      integer :: northwest_rank = MPI_PROC_NULL
-      integer :: northeast_rank = MPI_PROC_NULL
    end type lcm_parallel_t
 
    type :: t_lcm_parallel_state
@@ -94,57 +90,6 @@ contains
       if (ierr /= MPI_SUCCESS) then
          error stop 'LCM failed to derive south/north Cartesian neighbors'
       endif
-
-      parallel%southwest_rank = cartesian_neighbor_rank(parallel, -1, -1)
-      parallel%southeast_rank = cartesian_neighbor_rank(parallel, 1, -1)
-      parallel%northwest_rank = cartesian_neighbor_rank(parallel, -1, 1)
-      parallel%northeast_rank = cartesian_neighbor_rank(parallel, 1, 1)
    end subroutine initialize_cartesian_topology
-
-   integer function cartesian_neighbor_rank(parallel, x_offset, y_offset) result(rank)
-      type(lcm_parallel_t), intent(in) :: parallel
-      integer, intent(in) :: x_offset
-      integer, intent(in) :: y_offset
-      integer :: ierr
-      integer :: neighbor_coordinates(2)
-      logical :: is_valid
-
-      neighbor_coordinates = parallel%coordinates + [x_offset, y_offset]
-      call wrap_or_reject_coordinate(neighbor_coordinates(1), &
-                                     parallel%dimensions(1), &
-                                     parallel%periodicity(1), is_valid)
-      if (.not. is_valid) then
-         rank = MPI_PROC_NULL
-         return
-      endif
-      call wrap_or_reject_coordinate(neighbor_coordinates(2), &
-                                     parallel%dimensions(2), &
-                                     parallel%periodicity(2), is_valid)
-      if (.not. is_valid) then
-         rank = MPI_PROC_NULL
-         return
-      endif
-
-      call MPI_CART_RANK(parallel%communicator, neighbor_coordinates, rank, ierr)
-      if (ierr /= MPI_SUCCESS) then
-         error stop 'LCM failed to derive a Cartesian neighbor rank'
-      endif
-   end function cartesian_neighbor_rank
-
-   subroutine wrap_or_reject_coordinate(coordinate, dimension, periodic, is_valid)
-      integer, intent(inout) :: coordinate
-      integer, intent(in) :: dimension
-      logical, intent(in) :: periodic
-      logical, intent(out) :: is_valid
-
-      is_valid = coordinate >= 0 .and. coordinate < dimension
-      if (is_valid) return
-      if (.not. periodic) then
-         return
-      endif
-
-      coordinate = modulo(coordinate, dimension)
-      is_valid = .true.
-   end subroutine wrap_or_reject_coordinate
 
 end module lcm_parallel_state

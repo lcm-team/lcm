@@ -3,13 +3,14 @@ module lcm_advance_mod
    use iso_fortran_env, only: real64
    use lcm_config_state, only: config_is_set, config_state
    use lcm_grid_state, only: grid_state
+   use lcm_exchange_directions, only: lcm_exchange_x_phase, &
+                                      lcm_exchange_y_phase
    use lcm_initialization_state, only: lcm_is_initialized
    use lcm_parallel_state, only: parallel_state
    use lcm_particle_boundaries, only: lcm_apply_particle_boundaries
-   use lcm_particle_count_exchange, only: lcm_exchange_particle_counts
+   use lcm_particle_exchange, only: lcm_exchange_particle_phase
    use lcm_particle_state, only: lcm_prepare_particle_velocities, &
                                  lcm_refine_particle_velocities, &
-                                 lcm_extract_outgoing_particles, &
                                  lcm_update_particle_cell_ownership, &
                                  lcm_update_particle_positions
    use lcm_particle_source, only: lcm_apply_particle_sources
@@ -102,8 +103,8 @@ contains
       ! ownership update that follows exchange in the advance sequence.
       if (.not. parallel_state%is_set) return
 
-      call lcm_extract_outgoing_particles()
-      call lcm_exchange_particle_counts()
+      call lcm_exchange_particle_phase(lcm_exchange_x_phase)
+      call lcm_exchange_particle_phase(lcm_exchange_y_phase)
    end subroutine exchange_lcm_particles
 
    subroutine update_lcm_particle_cell_ownership()

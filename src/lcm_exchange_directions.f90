@@ -1,4 +1,4 @@
-!> Direction identifiers and neighbor lookup for particle MPI exchange.
+!> Cardinal direction and phase identifiers for particle MPI exchange.
 module lcm_exchange_directions
    use lcm_parallel_state, only: parallel_state
 
@@ -8,60 +8,74 @@ module lcm_exchange_directions
 
    integer, parameter, public :: lcm_exchange_east = 1
    integer, parameter, public :: lcm_exchange_west = 2
-   integer, parameter, public :: lcm_exchange_southeast = 3
-   integer, parameter, public :: lcm_exchange_northwest = 4
-   integer, parameter, public :: lcm_exchange_south = 5
-   integer, parameter, public :: lcm_exchange_north = 6
-   integer, parameter, public :: lcm_exchange_southwest = 7
-   integer, parameter, public :: lcm_exchange_northeast = 8
-   integer, parameter, public :: lcm_exchange_direction_count = 8
+   integer, parameter, public :: lcm_exchange_south = 3
+   integer, parameter, public :: lcm_exchange_north = 4
+   integer, parameter, public :: lcm_exchange_direction_count = 4
 
-   public :: lcm_exchange_direction_from_offsets
+   integer, parameter, public :: lcm_exchange_x_phase = 1
+   integer, parameter, public :: lcm_exchange_y_phase = 2
+   integer, parameter, public :: lcm_exchange_phase_count = 2
+   integer, parameter, public :: lcm_exchange_directions_per_phase = 2
+
+   public :: lcm_exchange_direction_for_phase
+   public :: lcm_exchange_direction_from_offset
    public :: lcm_exchange_neighbor_rank
    public :: lcm_exchange_opposite_direction
+   public :: lcm_require_valid_exchange_phase
 
 contains
 
-   integer function lcm_exchange_direction_from_offsets(x_offset, y_offset) result(direction)
-      integer, intent(in) :: x_offset
-      integer, intent(in) :: y_offset
+   integer function lcm_exchange_direction_for_phase(phase, phase_direction) &
+      result(direction)
+      integer, intent(in) :: phase
+      integer, intent(in) :: phase_direction
 
-      select case (x_offset)
-      case (1)
-         select case (y_offset)
-         case (0)
+      call lcm_require_valid_exchange_phase(phase)
+      if (phase_direction < 1 .or. &
+          phase_direction > lcm_exchange_directions_per_phase) then
+         error stop 'LCM exchange phase direction is invalid'
+      endif
+
+      select case (phase)
+      case (lcm_exchange_x_phase)
+         if (phase_direction == 1) then
             direction = lcm_exchange_east
-         case (-1)
-            direction = lcm_exchange_southeast
-         case (1)
-            direction = lcm_exchange_northeast
-         case default
-            error stop 'LCM exchange x offset must be -1, 0, or 1'
-         end select
-      case (-1)
-         select case (y_offset)
-         case (0)
+         else
             direction = lcm_exchange_west
-         case (-1)
-            direction = lcm_exchange_southwest
-         case (1)
-            direction = lcm_exchange_northwest
-         case default
-            error stop 'LCM exchange x offset must be -1, 0, or 1'
-         end select
-      case (0)
-         select case (y_offset)
-         case (-1)
+         endif
+      case (lcm_exchange_y_phase)
+         if (phase_direction == 1) then
             direction = lcm_exchange_south
-         case (1)
+         else
             direction = lcm_exchange_north
-         case default
-            error stop 'LCM exchange direction cannot be zero or exceed one cell'
-         end select
-      case default
-         error stop 'LCM exchange x offset must be -1, 0, or 1'
+         endif
       end select
-   end function lcm_exchange_direction_from_offsets
+   end function lcm_exchange_direction_for_phase
+
+   integer function lcm_exchange_direction_from_offset(phase, offset) result(direction)
+      integer, intent(in) :: phase
+      integer, intent(in) :: offset
+
+      call lcm_require_valid_exchange_phase(phase)
+      if (offset /= -1 .and. offset /= 1) then
+         error stop 'LCM exchange offset must be -1 or 1'
+      endif
+
+      select case (phase)
+      case (lcm_exchange_x_phase)
+         if (offset < 0) then
+            direction = lcm_exchange_west
+         else
+            direction = lcm_exchange_east
+         endif
+      case (lcm_exchange_y_phase)
+         if (offset < 0) then
+            direction = lcm_exchange_south
+         else
+            direction = lcm_exchange_north
+         endif
+      end select
+   end function lcm_exchange_direction_from_offset
 
    integer function lcm_exchange_neighbor_rank(direction) result(rank)
       integer, intent(in) :: direction
@@ -75,14 +89,6 @@ contains
          rank = parallel_state%parallel%south_rank
       case (lcm_exchange_north)
          rank = parallel_state%parallel%north_rank
-      case (lcm_exchange_southeast)
-         rank = parallel_state%parallel%southeast_rank
-      case (lcm_exchange_northwest)
-         rank = parallel_state%parallel%northwest_rank
-      case (lcm_exchange_southwest)
-         rank = parallel_state%parallel%southwest_rank
-      case (lcm_exchange_northeast)
-         rank = parallel_state%parallel%northeast_rank
       case default
          error stop 'LCM exchange direction is invalid'
       end select
@@ -96,21 +102,21 @@ contains
          opposite = lcm_exchange_west
       case (lcm_exchange_west)
          opposite = lcm_exchange_east
-      case (lcm_exchange_southeast)
-         opposite = lcm_exchange_northwest
-      case (lcm_exchange_northwest)
-         opposite = lcm_exchange_southeast
       case (lcm_exchange_south)
          opposite = lcm_exchange_north
       case (lcm_exchange_north)
          opposite = lcm_exchange_south
-      case (lcm_exchange_southwest)
-         opposite = lcm_exchange_northeast
-      case (lcm_exchange_northeast)
-         opposite = lcm_exchange_southwest
       case default
          error stop 'LCM exchange direction is invalid'
       end select
    end function lcm_exchange_opposite_direction
+
+   subroutine lcm_require_valid_exchange_phase(phase)
+      integer, intent(in) :: phase
+
+      if (phase < 1 .or. phase > lcm_exchange_phase_count) then
+         error stop 'LCM exchange phase is invalid'
+      endif
+   end subroutine lcm_require_valid_exchange_phase
 
 end module lcm_exchange_directions
