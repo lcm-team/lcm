@@ -24,9 +24,9 @@ program test_initial_particle_population
 
    type(lcm_config_t) :: config
    type(lcm_grid_t) :: grid
-   real(real64), target :: u(nx_local, ny_local, nz)
-   real(real64), target :: v(nx_local, ny_local, nz)
-   real(real64), target :: w(nx_local, ny_local, nz)
+   real(real64), target :: u(nx_local + 1, ny_local, nz)
+   real(real64), target :: v(nx_local, ny_local + 1, nz)
+   real(real64), target :: w(nx_local, ny_local, nz + 1)
    real(real64), target :: static_energy(nx_local, ny_local, nz)
    real(real64), target :: temperature(nx_local, ny_local, nz)
    real(real64), target :: qv(nx_local, ny_local, nz)

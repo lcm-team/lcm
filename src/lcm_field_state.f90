@@ -44,18 +44,18 @@ contains
 
       if (present(u)) then
          call attach_3d_field(u, field_state%u, field_state%u_is_attached, &
-                              "u", grid_state%grid%nx_local, &
+                              "u", grid_state%grid%nx_local + 1, &
                               grid_state%grid%ny_local, grid_state%grid%nz)
       endif
       if (present(v)) then
          call attach_3d_field(v, field_state%v, field_state%v_is_attached, &
                               "v", grid_state%grid%nx_local, &
-                              grid_state%grid%ny_local, grid_state%grid%nz)
+                              grid_state%grid%ny_local + 1, grid_state%grid%nz)
       endif
       if (present(w)) then
          call attach_3d_field(w, field_state%w, field_state%w_is_attached, &
                               "w", grid_state%grid%nx_local, &
-                              grid_state%grid%ny_local, grid_state%grid%nz)
+                              grid_state%grid%ny_local, grid_state%grid%nz + 1)
       endif
       if (present(static_energy)) then
          call attach_cell_center_field("static_energy", static_energy, &
