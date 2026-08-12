@@ -4,6 +4,10 @@ project(lcm LANGUAGES Fortran)
 
 option(LCM_BUILD_COMPAT_STUBS "Build LCM with temporary SAM compatibility stubs" ON)
 option(LCM_BUILD_ALL_SAM_SOURCES "Attempt to build all SAM-derived LCM source files" OFF)
+option(LCM_BUILD_EXPERIMENTAL_BENCHMARKS
+  "Build opt-in experimental LCM performance benchmarks"
+  OFF
+)
 
 enable_testing()
 
@@ -111,6 +115,10 @@ set_target_properties(lcm lcm_sam_compat
   PROPERTIES
     Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
 )
+
+if(LCM_BUILD_EXPERIMENTAL_BENCHMARKS)
+  add_subdirectory(benchmarks/experimental/particle_exchange)
+endif()
 
 add_executable(test_initial_particle_population
   tests/integration/test_initial_particle_population.f90
