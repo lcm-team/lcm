@@ -68,12 +68,14 @@ module minimal_les_host
 
 contains
 
-   subroutine setup_minimal_les_host(case_name, use_internal_subdomain)
+   subroutine setup_minimal_les_host(case_name, use_internal_subdomain, &
+                                     bottom_removal_radius)
       character(len=*), intent(in), optional :: case_name
       logical, intent(in), optional :: use_internal_subdomain
+      real(real64), intent(in), optional :: bottom_removal_radius
       logical :: internal_subdomain
 
-      call configure_minimal_host_config(case_name)
+      call configure_minimal_host_config(case_name, bottom_removal_radius)
       internal_subdomain = .false.
       if (present(use_internal_subdomain)) then
          internal_subdomain = use_internal_subdomain
@@ -93,8 +95,9 @@ contains
       call lcm_initialize()
    end subroutine setup_minimal_les_host
 
-   subroutine configure_minimal_host_config(case_name)
+   subroutine configure_minimal_host_config(case_name, bottom_removal_radius)
       character(len=*), intent(in), optional :: case_name
+      real(real64), intent(in), optional :: bottom_removal_radius
       character(len=32) :: selected_case
 
       call lcm_init_config(minimal_host_config)
@@ -109,6 +112,9 @@ contains
       minimal_host_config%sigma_aero = [1.4, 0.0, 0.0, 0.0]
       minimal_host_config%shares_aero = [1.0, 0.0, 0.0, 0.0]
       minimal_host_config%rho_aero = [2170.0, 0.0, 0.0, 0.0]
+      if (present(bottom_removal_radius)) then
+         minimal_host_config%bottom_removal_radius = bottom_removal_radius
+      endif
 
       selected_case = "bin"
       if (present(case_name)) selected_case = case_name

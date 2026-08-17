@@ -26,6 +26,8 @@ endif()
 set(LCM_CORE_SOURCES
   "${LCM_SOURCE_DIR}/lcm_parameters.f90"
   "${LCM_SOURCE_DIR}/lcm_types.f90"
+  "${LCM_SOURCE_DIR}/lcm_boundary_diagnostics.f90"
+  "${LCM_SOURCE_DIR}/lcm_particle_properties.f90"
   "${LCM_SOURCE_DIR}/lcm_grid_state.f90"
   "${LCM_SOURCE_DIR}/lcm_field_state.f90"
   "${LCM_SOURCE_DIR}/lcm_random.f90"
@@ -33,6 +35,7 @@ set(LCM_CORE_SOURCES
   "${LCM_SOURCE_DIR}/lcm_velocity_interpolation.f90"
   "${LCM_SOURCE_DIR}/lcm_user.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_state.f90"
+  "${LCM_SOURCE_DIR}/lcm_particle_boundaries.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_source.f90"
   "${LCM_SOURCE_DIR}/micro_user_vars.f90"
   "${LCM_SOURCE_DIR}/micro_vars.f90"
@@ -323,6 +326,122 @@ set_target_properties(test_velocity_interpolation
 add_test(
   NAME velocity_interpolation
   COMMAND test_velocity_interpolation
+)
+
+add_executable(test_particle_radius
+  tests/unit/test_particle_radius.f90
+)
+
+target_link_libraries(test_particle_radius
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_particle_radius
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME particle_radius
+  COMMAND test_particle_radius
+)
+
+add_executable(test_boundary_config
+  tests/unit/test_boundary_config.f90
+)
+
+target_link_libraries(test_boundary_config
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_boundary_config
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME boundary_config
+  COMMAND test_boundary_config
+)
+
+add_executable(test_vertical_boundary_bounds
+  tests/unit/test_vertical_boundary_bounds.f90
+)
+
+target_link_libraries(test_vertical_boundary_bounds
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_vertical_boundary_bounds
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME vertical_boundary_bounds
+  COMMAND test_vertical_boundary_bounds
+)
+
+add_executable(test_particle_cell_removal
+  tests/unit/test_particle_cell_removal.f90
+)
+
+target_link_libraries(test_particle_cell_removal
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_particle_cell_removal
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME particle_cell_removal
+  COMMAND test_particle_cell_removal
+)
+
+add_executable(test_minimal_les_host_top_particle_boundary
+  tests/integration/minimal_les_host.f90
+  tests/integration/test_minimal_les_host_top_particle_boundary.f90
+)
+
+target_link_libraries(test_minimal_les_host_top_particle_boundary
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_minimal_les_host_top_particle_boundary
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME minimal_les_host_top_particle_boundary
+  COMMAND test_minimal_les_host_top_particle_boundary
+)
+
+add_executable(test_minimal_les_host_bottom_particle_boundary
+  tests/integration/minimal_les_host.f90
+  tests/integration/test_minimal_les_host_bottom_particle_boundary.f90
+)
+
+target_link_libraries(test_minimal_les_host_bottom_particle_boundary
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_minimal_les_host_bottom_particle_boundary
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME minimal_les_host_bottom_particle_boundary
+  COMMAND test_minimal_les_host_bottom_particle_boundary
 )
 
 add_executable(test_particle_source
