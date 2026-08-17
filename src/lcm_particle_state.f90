@@ -30,6 +30,7 @@ module lcm_particle_state
       lcm_particle_exchange_metrics_are_enabled, &
       lcm_particle_exchange_metrics_timer_t, &
       lcm_record_particle_outgoing_preparation, &
+      lcm_record_particle_ownership_update, &
       lcm_record_received_particle_insertion, &
       lcm_start_particle_exchange_metrics_timer, &
       lcm_stop_particle_exchange_metrics_timer
@@ -665,6 +666,8 @@ contains
    end subroutine compact_outgoing_particles_from_cell
 
    subroutine lcm_update_particle_cell_ownership()
+      integer(int64) :: particle_examinations
+      integer(int64) :: particles_moved
       integer :: i
       integer :: j
       integer :: k
@@ -673,14 +676,26 @@ contains
       integer :: new_j
       integer :: new_k
       logical :: is_local
+      logical :: measure_ownership_update
+      type(lcm_particle_exchange_metrics_timer_t) :: metrics_timer
 
       call require_particle_cells_allocated()
+
+      measure_ownership_update = lcm_particle_exchange_metrics_are_enabled()
+      if (measure_ownership_update) then
+         particle_examinations = 0_int64
+         particles_moved = 0_int64
+         call lcm_start_particle_exchange_metrics_timer(metrics_timer)
+      endif
 
       do k = 1, size(cell_particles, 3)
          do j = 1, size(cell_particles, 2)
             do i = 1, size(cell_particles, 1)
                n = 1
                do while (n <= cell_particles(i,j,k)%count)
+                  if (measure_ownership_update) then
+                     particle_examinations = particle_examinations + 1_int64
+                  endif
                   call lcm_locate_particle_cell( &
                      cell_particles(i,j,k)%particles(n)%x, &
                      cell_particles(i,j,k)%particles(n)%y, &
@@ -689,6 +704,9 @@ contains
 
                   if (is_local .and. (new_i /= i .or. new_j /= j .or. &
                                        new_k /= k)) then
+                     if (measure_ownership_update) then
+                        particles_moved = particles_moved + 1_int64
+                     endif
                      call lcm_move_particle(i, j, k, n, new_i, new_j, new_k)
                   else
                      n = n + 1
@@ -697,6 +715,12 @@ contains
             enddo
          enddo
       enddo
+
+      if (measure_ownership_update) then
+         call lcm_record_particle_ownership_update( &
+            lcm_stop_particle_exchange_metrics_timer(metrics_timer), &
+            particle_examinations, particles_moved)
+      endif
    end subroutine lcm_update_particle_cell_ownership
 
    subroutine init_particle_properties(i, j, k, cell_particle_index, particle)

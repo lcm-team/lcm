@@ -25,6 +25,7 @@ module lcm_particle_exchange_metrics
       real(real64) :: y_payload_exchange_seconds = 0.0_real64
       real(real64) :: x_received_insertion_seconds = 0.0_real64
       real(real64) :: y_received_insertion_seconds = 0.0_real64
+      real(real64) :: ownership_update_seconds = 0.0_real64
       integer(int64) :: x_particles_examined = 0_int64
       integer(int64) :: y_particles_examined = 0_int64
       integer(int64) :: x_particles_outgoing = 0_int64
@@ -37,6 +38,9 @@ module lcm_particle_exchange_metrics
       integer(int64) :: y_received_insertion_calls = 0_int64
       integer(int64) :: x_particles_inserted = 0_int64
       integer(int64) :: y_particles_inserted = 0_int64
+      integer(int64) :: ownership_update_calls = 0_int64
+      integer(int64) :: ownership_particle_examinations = 0_int64
+      integer(int64) :: ownership_particles_moved = 0_int64
    end type lcm_particle_exchange_metrics_t
 
    type, public :: lcm_particle_exchange_metrics_timer_t
@@ -53,6 +57,7 @@ module lcm_particle_exchange_metrics
    public :: lcm_particle_exchange_metrics_are_enabled
    public :: lcm_record_particle_count_exchange
    public :: lcm_record_particle_outgoing_preparation
+   public :: lcm_record_particle_ownership_update
    public :: lcm_record_particle_payload_exchange
    public :: lcm_record_received_particle_insertion
    public :: lcm_reset_particle_exchange_metrics
@@ -205,5 +210,25 @@ contains
             particle_exchange_metrics%y_particles_inserted + particles_inserted
       end select
    end subroutine lcm_record_received_particle_insertion
+
+   subroutine lcm_record_particle_ownership_update(elapsed_seconds, &
+                                                   particle_examinations, &
+                                                   particles_moved)
+      real(real64), intent(in) :: elapsed_seconds
+      integer(int64), intent(in) :: particle_examinations
+      integer(int64), intent(in) :: particles_moved
+
+      if (.not. metrics_enabled) return
+
+      particle_exchange_metrics%ownership_update_seconds = &
+         particle_exchange_metrics%ownership_update_seconds + elapsed_seconds
+      particle_exchange_metrics%ownership_update_calls = &
+         particle_exchange_metrics%ownership_update_calls + 1_int64
+      particle_exchange_metrics%ownership_particle_examinations = &
+         particle_exchange_metrics%ownership_particle_examinations + &
+         particle_examinations
+      particle_exchange_metrics%ownership_particles_moved = &
+         particle_exchange_metrics%ownership_particles_moved + particles_moved
+   end subroutine lcm_record_particle_ownership_update
 
 end module lcm_particle_exchange_metrics

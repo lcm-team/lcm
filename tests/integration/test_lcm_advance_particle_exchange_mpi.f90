@@ -7,11 +7,15 @@ program test_lcm_advance_particle_exchange_mpi
                       MPI_SUM, MPI_Comm, MPI_FINALIZE, MPI_INIT
    use lcm_host_interface, only: lcm_advance, lcm_attach_field, &
                                  lcm_attach_fields, lcm_config_t, &
+                                 lcm_get_particle_exchange_metrics, &
                                  lcm_grid_t, lcm_init_config, &
                                  lcm_init_grid, lcm_init_parallel, &
                                  lcm_initialize, lcm_parallel_t, &
+                                 lcm_particle_exchange_metrics_t, &
+                                 lcm_reset_particle_exchange_metrics, &
                                  lcm_set_config, lcm_set_grid, &
-                                 lcm_set_parallel
+                                 lcm_set_parallel, &
+                                 lcm_set_particle_exchange_metrics_enabled
    use lcm_initialization_state, only: lcm_initial_particle_count_global, &
                                        lcm_initial_particle_count_local
    use lcm_particle_location, only: lcm_locate_particle_cell
@@ -41,6 +45,7 @@ program test_lcm_advance_particle_exchange_mpi
    integer :: mpi_size
    integer(int64) :: initial_ids_by_rank(expected_local_count, 4)
    type(lcm_parallel_t) :: parallel
+   type(lcm_particle_exchange_metrics_t) :: metrics
    logical :: periodicity(2)
    integer :: rank
    real(real64), target :: density(nz)
@@ -81,11 +86,23 @@ program test_lcm_advance_particle_exchange_mpi
                      'cell-owned count before advance')
    call gather_initial_particle_ids()
 
+   call lcm_reset_particle_exchange_metrics()
+   call lcm_set_particle_exchange_metrics_enabled(.true.)
    call lcm_advance(time_step)
 
    call assert_global_particle_conservation()
    call assert_particles_arrived_from_diagonal_rank()
    call assert_final_cell_ownership()
+   call lcm_get_particle_exchange_metrics(metrics)
+   call assert_equal_int64(metrics%ownership_update_calls, 1_int64, &
+                           'one ownership update through lcm_advance')
+   call assert_equal_int64(metrics%ownership_particle_examinations, &
+                           int(expected_local_count, int64), &
+                           'all final local particles examined')
+   call assert_equal_int64(metrics%ownership_particles_moved, 0_int64, &
+                           'received particles already own final cells')
+   call assert_true(metrics%ownership_update_seconds >= 0.0_real64, &
+                    'lcm_advance ownership update time is nonnegative')
 
    call MPI_COMM_FREE(communicator, ierr)
    call MPI_FINALIZE(ierr)
