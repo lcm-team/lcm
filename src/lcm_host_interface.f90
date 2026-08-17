@@ -12,6 +12,8 @@ module lcm_host_interface
       lcm_particle_exchange_metrics_t, &
       lcm_reset_particle_exchange_metrics, &
       lcm_set_particle_exchange_metrics_enabled
+   use lcm_particle_storage_metrics, only: lcm_get_particle_storage_metrics, &
+      lcm_particle_storage_metrics_t
 
    implicit none
 
@@ -35,5 +37,7 @@ module lcm_host_interface
    public :: lcm_set_particle_exchange_metrics_enabled
    public :: lcm_reset_particle_exchange_metrics
    public :: lcm_get_particle_exchange_metrics
+   public :: lcm_particle_storage_metrics_t
+   public :: lcm_get_particle_storage_metrics
 
 end module lcm_host_interface

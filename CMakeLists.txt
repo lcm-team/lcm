@@ -54,6 +54,7 @@ set(LCM_CORE_SOURCES
   "${LCM_SOURCE_DIR}/lcm_velocity_interpolation.f90"
   "${LCM_SOURCE_DIR}/lcm_user.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_state.f90"
+  "${LCM_SOURCE_DIR}/lcm_particle_storage_metrics.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_exchange.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_boundaries.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_source.f90"
@@ -669,6 +670,25 @@ set_target_properties(test_particle_cell_removal
 add_test(
   NAME particle_cell_removal
   COMMAND test_particle_cell_removal
+)
+
+add_executable(test_particle_storage_metrics
+  tests/unit/test_particle_storage_metrics.f90
+)
+
+target_link_libraries(test_particle_storage_metrics
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_particle_storage_metrics
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME particle_storage_metrics
+  COMMAND test_particle_storage_metrics
 )
 
 add_executable(test_minimal_les_host_top_particle_boundary
