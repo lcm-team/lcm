@@ -30,6 +30,7 @@ module lcm_particle_state
       lcm_particle_exchange_metrics_are_enabled, &
       lcm_particle_exchange_metrics_timer_t, &
       lcm_record_particle_outgoing_preparation, &
+      lcm_record_received_particle_insertion, &
       lcm_start_particle_exchange_metrics_timer, &
       lcm_stop_particle_exchange_metrics_timer
    use lcm_particle_properties, only: lcm_particle_radius
@@ -537,15 +538,27 @@ contains
       integer :: local_j
       integer :: message_count
       integer :: phase_direction
+      integer(int64) :: particles_inserted
+      logical :: measure_received_insertion
+      type(lcm_particle_exchange_metrics_timer_t) :: metrics_timer
       type(lcm_particle_mpi_message_t), contiguous, pointer :: messages(:)
 
       call require_particle_cells_allocated()
       call lcm_require_valid_exchange_phase(phase)
 
+      measure_received_insertion = lcm_particle_exchange_metrics_are_enabled()
+      if (measure_received_insertion) then
+         particles_inserted = 0_int64
+         call lcm_start_particle_exchange_metrics_timer(metrics_timer)
+      endif
+
       do phase_direction = 1, lcm_exchange_directions_per_phase
          direction = lcm_exchange_direction_for_phase(phase, phase_direction)
          message_count = lcm_receive_particle_message_count(direction)
          if (message_count == 0) cycle
+         if (measure_received_insertion) then
+            particles_inserted = particles_inserted + int(message_count, int64)
+         endif
          call lcm_get_receive_particle_message_view(direction, messages)
          do index = 1, message_count
             call received_message_local_indices(messages(index), phase, local_i, local_j)
@@ -553,6 +566,12 @@ contains
                                   messages(index)%particle)
          enddo
       enddo
+
+      if (measure_received_insertion) then
+         call lcm_record_received_particle_insertion( &
+            phase, lcm_stop_particle_exchange_metrics_timer(metrics_timer), &
+            particles_inserted)
+      endif
    end subroutine lcm_insert_received_particles
 
    subroutine received_message_local_indices(message, phase, local_i, local_j)

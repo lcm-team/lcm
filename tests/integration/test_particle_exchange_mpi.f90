@@ -114,6 +114,14 @@ program test_particle_exchange_mpi
                      'one x payload exchange measured')
    call assert_equal(int(metrics%y_payload_exchange_calls), 1, &
                      'one y payload exchange measured')
+   call assert_equal(int(metrics%x_received_insertion_calls), 1, &
+                     'one x received insertion measured')
+   call assert_equal(int(metrics%y_received_insertion_calls), 1, &
+                     'one y received insertion measured')
+   call assert_equal(int(metrics%x_particles_inserted), particles_per_route, &
+                     'x received particles inserted')
+   call assert_equal(int(metrics%y_particles_inserted), particles_per_route, &
+                     'y received particles inserted')
    call assert_nonnegative(metrics%x_count_exchange_seconds, &
                            'x count exchange time')
    call assert_nonnegative(metrics%y_count_exchange_seconds, &
@@ -122,6 +130,10 @@ program test_particle_exchange_mpi
                            'x payload exchange time')
    call assert_nonnegative(metrics%y_payload_exchange_seconds, &
                            'y payload exchange time')
+   call assert_nonnegative(metrics%x_received_insertion_seconds, &
+                           'x received insertion time')
+   call assert_nonnegative(metrics%y_received_insertion_seconds, &
+                           'y received insertion time')
    call assert_equal(cell_particles(final_i,final_j,1)%count, &
                      particles_per_route, &
                      'particles inserted in final diagonal destination cell')

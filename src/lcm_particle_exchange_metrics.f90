@@ -23,6 +23,8 @@ module lcm_particle_exchange_metrics
       real(real64) :: y_count_exchange_seconds = 0.0_real64
       real(real64) :: x_payload_exchange_seconds = 0.0_real64
       real(real64) :: y_payload_exchange_seconds = 0.0_real64
+      real(real64) :: x_received_insertion_seconds = 0.0_real64
+      real(real64) :: y_received_insertion_seconds = 0.0_real64
       integer(int64) :: x_particles_examined = 0_int64
       integer(int64) :: y_particles_examined = 0_int64
       integer(int64) :: x_particles_outgoing = 0_int64
@@ -31,6 +33,10 @@ module lcm_particle_exchange_metrics
       integer(int64) :: y_count_exchange_calls = 0_int64
       integer(int64) :: x_payload_exchange_calls = 0_int64
       integer(int64) :: y_payload_exchange_calls = 0_int64
+      integer(int64) :: x_received_insertion_calls = 0_int64
+      integer(int64) :: y_received_insertion_calls = 0_int64
+      integer(int64) :: x_particles_inserted = 0_int64
+      integer(int64) :: y_particles_inserted = 0_int64
    end type lcm_particle_exchange_metrics_t
 
    type, public :: lcm_particle_exchange_metrics_timer_t
@@ -48,6 +54,7 @@ module lcm_particle_exchange_metrics
    public :: lcm_record_particle_count_exchange
    public :: lcm_record_particle_outgoing_preparation
    public :: lcm_record_particle_payload_exchange
+   public :: lcm_record_received_particle_insertion
    public :: lcm_reset_particle_exchange_metrics
    public :: lcm_set_particle_exchange_metrics_enabled
    public :: lcm_start_particle_exchange_metrics_timer
@@ -171,5 +178,32 @@ contains
             particle_exchange_metrics%y_payload_exchange_calls + 1_int64
       end select
    end subroutine lcm_record_particle_payload_exchange
+
+   subroutine lcm_record_received_particle_insertion(phase, elapsed_seconds, &
+                                                      particles_inserted)
+      integer, intent(in) :: phase
+      real(real64), intent(in) :: elapsed_seconds
+      integer(int64), intent(in) :: particles_inserted
+
+      call lcm_require_valid_exchange_phase(phase)
+      if (.not. metrics_enabled) return
+
+      select case (phase)
+      case (lcm_exchange_x_phase)
+         particle_exchange_metrics%x_received_insertion_seconds = &
+            particle_exchange_metrics%x_received_insertion_seconds + elapsed_seconds
+         particle_exchange_metrics%x_received_insertion_calls = &
+            particle_exchange_metrics%x_received_insertion_calls + 1_int64
+         particle_exchange_metrics%x_particles_inserted = &
+            particle_exchange_metrics%x_particles_inserted + particles_inserted
+      case (lcm_exchange_y_phase)
+         particle_exchange_metrics%y_received_insertion_seconds = &
+            particle_exchange_metrics%y_received_insertion_seconds + elapsed_seconds
+         particle_exchange_metrics%y_received_insertion_calls = &
+            particle_exchange_metrics%y_received_insertion_calls + 1_int64
+         particle_exchange_metrics%y_particles_inserted = &
+            particle_exchange_metrics%y_particles_inserted + particles_inserted
+      end select
+   end subroutine lcm_record_received_particle_insertion
 
 end module lcm_particle_exchange_metrics
