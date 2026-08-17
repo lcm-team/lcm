@@ -10,6 +10,12 @@ module lcm_particle_count_exchange
    use lcm_parallel_state, only: parallel_state
    use lcm_particle_exchange_buffers, only: lcm_reserve_receive_particle_messages, &
                                             lcm_send_particle_message_count
+   use lcm_particle_exchange_metrics, only: &
+      lcm_particle_exchange_metrics_are_enabled, &
+      lcm_particle_exchange_metrics_timer_t, &
+      lcm_record_particle_count_exchange, &
+      lcm_start_particle_exchange_metrics_timer, &
+      lcm_stop_particle_exchange_metrics_timer
 
    implicit none
 
@@ -39,6 +45,8 @@ contains
       integer, asynchronous :: send_counts(lcm_exchange_directions_per_phase)
       integer :: source_ranks(lcm_exchange_directions_per_phase)
       type(MPI_Status) :: statuses(request_count)
+      logical :: measure_count_exchange
+      type(lcm_particle_exchange_metrics_timer_t) :: metrics_timer
 
       if (.not. parallel_state%is_set) return
       call lcm_require_valid_exchange_phase(phase)
@@ -64,6 +72,13 @@ contains
          endif
       enddo
 
+      ! Measure MPI request posting and completion only. Receive-buffer
+      ! reservation below remains outside the count-communication metric.
+      measure_count_exchange = lcm_particle_exchange_metrics_are_enabled()
+      if (measure_count_exchange) then
+         call lcm_start_particle_exchange_metrics_timer(metrics_timer)
+      endif
+
       do phase_direction = 1, lcm_exchange_directions_per_phase
          call MPI_IRECV(receive_counts(phase_direction), 1, MPI_INTEGER, &
                         source_ranks(phase_direction), directions(phase_direction), &
@@ -83,6 +98,11 @@ contains
 
       call MPI_WAITALL(request_count, requests, statuses, ierr)
       call require_mpi_success(ierr, 'complete particle-count exchange')
+
+      if (measure_count_exchange) then
+         call lcm_record_particle_count_exchange( &
+            phase, lcm_stop_particle_exchange_metrics_timer(metrics_timer))
+      endif
 
       do phase_direction = 1, lcm_exchange_directions_per_phase
          call lcm_reserve_receive_particle_messages( &

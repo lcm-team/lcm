@@ -28,7 +28,10 @@ module lcm_particle_state
    use lcm_particle_mpi_messages, only: lcm_pack_particle_mpi_message
    use lcm_particle_exchange_metrics, only: &
       lcm_particle_exchange_metrics_are_enabled, &
-      lcm_record_particle_outgoing_preparation
+      lcm_particle_exchange_metrics_timer_t, &
+      lcm_record_particle_outgoing_preparation, &
+      lcm_start_particle_exchange_metrics_timer, &
+      lcm_stop_particle_exchange_metrics_timer
    use lcm_particle_properties, only: lcm_particle_radius
    use lcm_types, only: lcm_particle_cell_t, lcm_particle_mpi_message_t, &
                         lcm_particle_t
@@ -480,18 +483,13 @@ contains
    !> transferred once in x and then classified again for its y transfer.
    subroutine lcm_extract_outgoing_particles(phase)
       integer, intent(in) :: phase
-      integer(int64) :: clock_count_max
-      integer(int64) :: clock_count_rate
-      integer(int64) :: clock_count_start
-      integer(int64) :: clock_count_stop
-      integer(int64) :: elapsed_clock_counts
       integer(int64) :: particles_examined
       integer(int64) :: particles_outgoing
       integer :: i
       integer :: j
       integer :: k
       logical :: measure_outgoing_preparation
-      real(real64) :: elapsed_seconds
+      type(lcm_particle_exchange_metrics_timer_t) :: metrics_timer
 
       call require_particle_cells_allocated()
       call lcm_require_valid_exchange_phase(phase)
@@ -501,7 +499,7 @@ contains
       if (measure_outgoing_preparation) then
          particles_examined = 0_int64
          particles_outgoing = 0_int64
-         call system_clock(clock_count_start, clock_count_rate, clock_count_max)
+         call lcm_start_particle_exchange_metrics_timer(metrics_timer)
       endif
 
       do k = 1, size(cell_particles, 3)
@@ -518,20 +516,9 @@ contains
       enddo
 
       if (measure_outgoing_preparation) then
-         call system_clock(clock_count_stop)
-         if (clock_count_stop >= clock_count_start) then
-            elapsed_clock_counts = clock_count_stop - clock_count_start
-         else
-            elapsed_clock_counts = (clock_count_max - clock_count_start) + &
-                                   clock_count_stop + 1_int64
-         endif
-         elapsed_seconds = 0.0_real64
-         if (clock_count_rate > 0_int64) then
-            elapsed_seconds = real(elapsed_clock_counts, real64) / &
-                              real(clock_count_rate, real64)
-         endif
          call lcm_record_particle_outgoing_preparation( &
-            phase, elapsed_seconds, particles_examined, particles_outgoing)
+            phase, lcm_stop_particle_exchange_metrics_timer(metrics_timer), &
+            particles_examined, particles_outgoing)
       endif
    end subroutine lcm_extract_outgoing_particles
 

@@ -15,6 +15,12 @@ module lcm_particle_mpi_transport
       lcm_mark_receive_particle_messages_received, &
       lcm_send_particle_message_count
    use lcm_particle_mpi_datatype, only: lcm_get_particle_mpi_datatype
+   use lcm_particle_exchange_metrics, only: &
+      lcm_particle_exchange_metrics_are_enabled, &
+      lcm_particle_exchange_metrics_timer_t, &
+      lcm_record_particle_payload_exchange, &
+      lcm_start_particle_exchange_metrics_timer, &
+      lcm_stop_particle_exchange_metrics_timer
    use lcm_types, only: lcm_particle_mpi_message_t
 
    implicit none
@@ -48,11 +54,19 @@ contains
          2 * lcm_exchange_directions_per_phase)
       type(MPI_Status) :: statuses( &
          2 * lcm_exchange_directions_per_phase)
+      logical :: measure_payload_exchange
+      type(lcm_particle_exchange_metrics_timer_t) :: metrics_timer
 
       if (.not. parallel_state%is_set) return
       call lcm_require_valid_exchange_phase(phase)
 
       request_count = 0
+      ! Measure payload request preparation, posting, and completion. Marking
+      ! completed receive buffers below remains outside this metric.
+      measure_payload_exchange = lcm_particle_exchange_metrics_are_enabled()
+      if (measure_payload_exchange) then
+         call lcm_start_particle_exchange_metrics_timer(metrics_timer)
+      endif
       do phase_direction = 1, lcm_exchange_directions_per_phase
          direction = lcm_exchange_direction_for_phase(phase, phase_direction)
          receive_direction = lcm_exchange_opposite_direction(direction)
@@ -99,6 +113,11 @@ contains
          call MPI_WAITALL(request_count, requests(1:request_count), &
                           statuses(1:request_count), ierr)
          call require_mpi_success(ierr, 'complete particle-payload transport')
+      endif
+
+      if (measure_payload_exchange) then
+         call lcm_record_particle_payload_exchange( &
+            phase, lcm_stop_particle_exchange_metrics_timer(metrics_timer))
       endif
 
       do phase_direction = 1, lcm_exchange_directions_per_phase

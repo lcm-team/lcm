@@ -7,6 +7,9 @@ program test_particle_exchange_mpi
    use lcm_grid_state, only: lcm_set_grid
    use lcm_parallel_state, only: lcm_init_parallel, lcm_parallel_t, lcm_set_parallel
    use lcm_particle_exchange, only: lcm_exchange_particle_phase
+   use lcm_particle_exchange_metrics, only: lcm_get_particle_exchange_metrics, &
+      lcm_particle_exchange_metrics_t, lcm_reset_particle_exchange_metrics, &
+      lcm_set_particle_exchange_metrics_enabled
    use lcm_particle_state, only: cell_particles, lcm_add_particle, &
                                  lcm_allocate_particle_cells
    use lcm_types, only: lcm_grid_t, lcm_init_grid, lcm_particle_t
@@ -28,6 +31,7 @@ program test_particle_exchange_mpi
    integer :: mpi_size
    integer, parameter :: particles_per_route = 3
    type(lcm_parallel_t) :: parallel
+   type(lcm_particle_exchange_metrics_t) :: metrics
    type(lcm_particle_t) :: particle
    logical :: periodicity(2)
    integer :: rank
@@ -58,6 +62,8 @@ program test_particle_exchange_mpi
                       2 * coordinates(1) + 1, 2 * coordinates(2) + 1, 1)
    call lcm_set_grid(grid)
    call lcm_allocate_particle_cells()
+   call lcm_reset_particle_exchange_metrics()
+   call lcm_set_particle_exchange_metrics_enabled(.true.)
 
    ! Every rank sends one particle toward the diagonally opposite rank:
    ! NE, NW, SE, and SW are therefore exercised in the same 2x2 run.
@@ -99,6 +105,23 @@ program test_particle_exchange_mpi
 
    call assert_equal(total_particle_count(), particles_per_route, &
                      'final local particle count')
+   call lcm_get_particle_exchange_metrics(metrics)
+   call assert_equal(int(metrics%x_count_exchange_calls), 1, &
+                     'one x count exchange measured')
+   call assert_equal(int(metrics%y_count_exchange_calls), 1, &
+                     'one y count exchange measured')
+   call assert_equal(int(metrics%x_payload_exchange_calls), 1, &
+                     'one x payload exchange measured')
+   call assert_equal(int(metrics%y_payload_exchange_calls), 1, &
+                     'one y payload exchange measured')
+   call assert_nonnegative(metrics%x_count_exchange_seconds, &
+                           'x count exchange time')
+   call assert_nonnegative(metrics%y_count_exchange_seconds, &
+                           'y count exchange time')
+   call assert_nonnegative(metrics%x_payload_exchange_seconds, &
+                           'x payload exchange time')
+   call assert_nonnegative(metrics%y_payload_exchange_seconds, &
+                           'y payload exchange time')
    call assert_equal(cell_particles(final_i,final_j,1)%count, &
                      particles_per_route, &
                      'particles inserted in final diagonal destination cell')
@@ -155,5 +178,12 @@ contains
 
       if (actual /= expected) error stop 'assertion failed: ' // description
    end subroutine assert_close
+
+   subroutine assert_nonnegative(actual, description)
+      real(real64), intent(in) :: actual
+      character(len=*), intent(in) :: description
+
+      if (actual < 0.0_real64) error stop 'assertion failed: ' // description
+   end subroutine assert_nonnegative
 
 end program test_particle_exchange_mpi
