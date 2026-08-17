@@ -44,6 +44,7 @@ set(LCM_CORE_SOURCES
   "${LCM_SOURCE_DIR}/lcm_particle_properties.f90"
   "${LCM_SOURCE_DIR}/lcm_grid_state.f90"
   "${LCM_SOURCE_DIR}/lcm_exchange_directions.f90"
+  "${LCM_SOURCE_DIR}/lcm_particle_exchange_metrics.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_exchange_buffers.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_count_exchange.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_mpi_transport.f90"

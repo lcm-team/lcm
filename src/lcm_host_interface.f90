@@ -8,6 +8,10 @@ module lcm_host_interface
    use lcm_initialization_state, only: lcm_configure_runtime, lcm_initialize
    use lcm_advance_mod, only: lcm_advance
    use lcm_field_state, only: lcm_attach_field, lcm_attach_fields
+   use lcm_particle_exchange_metrics, only: lcm_get_particle_exchange_metrics, &
+      lcm_particle_exchange_metrics_t, &
+      lcm_reset_particle_exchange_metrics, &
+      lcm_set_particle_exchange_metrics_enabled
 
    implicit none
 
@@ -27,5 +31,9 @@ module lcm_host_interface
    public :: lcm_advance
    public :: lcm_attach_field
    public :: lcm_attach_fields
+   public :: lcm_particle_exchange_metrics_t
+   public :: lcm_set_particle_exchange_metrics_enabled
+   public :: lcm_reset_particle_exchange_metrics
+   public :: lcm_get_particle_exchange_metrics
 
 end module lcm_host_interface

@@ -26,6 +26,9 @@ module lcm_particle_state
                                             lcm_get_receive_particle_message_view, &
                                             lcm_receive_particle_message_count
    use lcm_particle_mpi_messages, only: lcm_pack_particle_mpi_message
+   use lcm_particle_exchange_metrics, only: &
+      lcm_particle_exchange_metrics_are_enabled, &
+      lcm_record_particle_outgoing_preparation
    use lcm_particle_properties, only: lcm_particle_radius
    use lcm_types, only: lcm_particle_cell_t, lcm_particle_mpi_message_t, &
                         lcm_particle_t
@@ -477,21 +480,59 @@ contains
    !> transferred once in x and then classified again for its y transfer.
    subroutine lcm_extract_outgoing_particles(phase)
       integer, intent(in) :: phase
+      integer(int64) :: clock_count_max
+      integer(int64) :: clock_count_rate
+      integer(int64) :: clock_count_start
+      integer(int64) :: clock_count_stop
+      integer(int64) :: elapsed_clock_counts
+      integer(int64) :: particles_examined
+      integer(int64) :: particles_outgoing
       integer :: i
       integer :: j
       integer :: k
+      logical :: measure_outgoing_preparation
+      real(real64) :: elapsed_seconds
 
       call require_particle_cells_allocated()
       call lcm_require_valid_exchange_phase(phase)
       call lcm_clear_particle_exchange_phase_buffers(phase)
 
+      measure_outgoing_preparation = lcm_particle_exchange_metrics_are_enabled()
+      if (measure_outgoing_preparation) then
+         particles_examined = 0_int64
+         particles_outgoing = 0_int64
+         call system_clock(clock_count_start, clock_count_rate, clock_count_max)
+      endif
+
       do k = 1, size(cell_particles, 3)
          do j = 1, size(cell_particles, 2)
             do i = 1, size(cell_particles, 1)
-               call compact_outgoing_particles_from_cell(i, j, k, phase)
+               if (measure_outgoing_preparation) then
+                  call compact_outgoing_particles_from_cell( &
+                     i, j, k, phase, particles_examined, particles_outgoing)
+               else
+                  call compact_outgoing_particles_from_cell(i, j, k, phase)
+               endif
             enddo
          enddo
       enddo
+
+      if (measure_outgoing_preparation) then
+         call system_clock(clock_count_stop)
+         if (clock_count_stop >= clock_count_start) then
+            elapsed_clock_counts = clock_count_stop - clock_count_start
+         else
+            elapsed_clock_counts = (clock_count_max - clock_count_start) + &
+                                   clock_count_stop + 1_int64
+         endif
+         elapsed_seconds = 0.0_real64
+         if (clock_count_rate > 0_int64) then
+            elapsed_seconds = real(elapsed_clock_counts, real64) / &
+                              real(clock_count_rate, real64)
+         endif
+         call lcm_record_particle_outgoing_preparation( &
+            phase, elapsed_seconds, particles_examined, particles_outgoing)
+      endif
    end subroutine lcm_extract_outgoing_particles
 
    !> Insert payloads received during one cardinal exchange phase.
@@ -560,11 +601,15 @@ contains
    !> Retained particles preserve their original relative order. Outgoing
    !> particles are copied directly to their directional MPI message buffer,
    !> so removing several particles never repeatedly shifts the cell array.
-   subroutine compact_outgoing_particles_from_cell(i, j, k, phase)
+   subroutine compact_outgoing_particles_from_cell(i, j, k, phase, &
+                                                    particles_examined, &
+                                                    particles_outgoing)
       integer, intent(in) :: i
       integer, intent(in) :: j
       integer, intent(in) :: k
       integer, intent(in) :: phase
+      integer(int64), intent(inout), optional :: particles_examined
+      integer(int64), intent(inout), optional :: particles_outgoing
       integer :: direction
       integer :: new_i
       integer :: new_j
@@ -578,6 +623,9 @@ contains
 
       original_count = cell_particles(i,j,k)%count
       retained_count = 0
+      if (present(particles_examined)) then
+         particles_examined = particles_examined + int(original_count, int64)
+      endif
 
       do read_index = 1, original_count
          call lcm_locate_particle_cell( &
@@ -588,6 +636,9 @@ contains
 
          if (particle_leaves_to_neighbor_rank(new_i, new_j, new_k, phase, &
                                               direction)) then
+            if (present(particles_outgoing)) then
+               particles_outgoing = particles_outgoing + 1_int64
+            endif
             call append_outgoing_particle( &
                cell_particles(i,j,k)%particles(read_index), global_i, global_j, new_k, &
                phase, direction)

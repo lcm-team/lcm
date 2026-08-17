@@ -3,11 +3,16 @@ program test_outgoing_particle_message_packing
    use mpi_f08, only: MPI_CART_CREATE, MPI_COMM_FREE, MPI_COMM_WORLD, MPI_Comm, &
                       MPI_FINALIZE, MPI_INIT
    use lcm_exchange_directions, only: lcm_exchange_east, &
-                                      lcm_exchange_x_phase
+                                      lcm_exchange_x_phase, &
+                                      lcm_exchange_y_phase
    use lcm_parallel_state, only: lcm_init_parallel, lcm_parallel_t, &
                                  lcm_set_parallel
    use lcm_particle_exchange_buffers, only: lcm_get_send_particle_message, &
                                             lcm_send_particle_message_count
+   use lcm_particle_exchange_metrics, only: lcm_get_particle_exchange_metrics, &
+      lcm_particle_exchange_metrics_are_enabled, &
+      lcm_particle_exchange_metrics_t, lcm_reset_particle_exchange_metrics, &
+      lcm_set_particle_exchange_metrics_enabled
    use lcm_particle_state, only: cell_particles, lcm_add_particle, &
                                  lcm_allocate_particle_cells, &
                                  lcm_extract_outgoing_particles
@@ -24,6 +29,7 @@ program test_outgoing_particle_message_packing
    integer :: ierr
    logical :: periodicity(2)
    type(lcm_particle_mpi_message_t) :: message
+   type(lcm_particle_exchange_metrics_t) :: metrics
    type(lcm_particle_t) :: particle
    real(real64) :: dz(1)
    real(real64) :: z_center(1)
@@ -44,6 +50,14 @@ program test_outgoing_particle_message_packing
                       z_center, z_face, dz, 1, 1, 0, 11, 7, 1)
    call lcm_set_grid(grid)
    call lcm_allocate_particle_cells()
+
+   call assert_false(lcm_particle_exchange_metrics_are_enabled(), &
+                     'metrics disabled by default')
+   call lcm_get_particle_exchange_metrics(metrics)
+   call assert_equal(int(metrics%x_particles_examined), 0, &
+                     'default examined count')
+   call lcm_reset_particle_exchange_metrics()
+   call lcm_set_particle_exchange_metrics_enabled(.true.)
 
    call add_particle(501_int64, 105.0_real64, 65.0_real64)
    call add_particle(502_int64, 130.0_real64, 65.0_real64)
@@ -75,6 +89,42 @@ program test_outgoing_particle_message_packing
    call assert_equal(int(message%particle%id), 504, 'packed particle id')
    call assert_close(message%particle%x, 130.0_real64, 'internal crossing x')
    call assert_close(message%particle%y, 80.0_real64, 'internal crossing y')
+
+   call lcm_get_particle_exchange_metrics(metrics)
+   call assert_equal(int(metrics%x_particles_examined), 5, &
+                     'measured x particles examined')
+   call assert_equal(int(metrics%x_particles_outgoing), 2, &
+                     'measured x particles outgoing')
+   call assert_equal(int(metrics%y_particles_examined), 0, &
+                     'unmeasured y particles examined')
+   call assert_nonnegative(metrics%x_outgoing_preparation_seconds, &
+                           'x outgoing preparation time')
+
+   call add_particle(506_int64, 105.0_real64, 80.0_real64)
+   call lcm_extract_outgoing_particles(lcm_exchange_y_phase)
+   call lcm_get_particle_exchange_metrics(metrics)
+   call assert_equal(int(metrics%y_particles_examined), 4, &
+                     'measured y particles examined')
+   call assert_equal(int(metrics%y_particles_outgoing), 1, &
+                     'measured y particles outgoing')
+   call assert_nonnegative(metrics%y_outgoing_preparation_seconds, &
+                           'y outgoing preparation time')
+   call assert_equal(cell_particles(1,1,1)%count, 3, &
+                     'y classification removes the outgoing particle')
+
+   call lcm_set_particle_exchange_metrics_enabled(.false.)
+   call lcm_extract_outgoing_particles(lcm_exchange_x_phase)
+   call lcm_get_particle_exchange_metrics(metrics)
+   call assert_equal(int(metrics%x_particles_examined), 5, &
+                     'disabled metrics do not accumulate examined particles')
+   call assert_equal(int(metrics%x_particles_outgoing), 2, &
+                     'disabled metrics do not accumulate outgoing particles')
+   call assert_equal(int(metrics%y_particles_examined), 4, &
+                     'disabled metrics preserve y examined count')
+   call assert_equal(int(metrics%y_particles_outgoing), 1, &
+                     'disabled metrics preserve y outgoing count')
+   call assert_equal(cell_particles(1,1,1)%count, 3, &
+                     'disabled instrumentation preserves particle behavior')
 
    call MPI_COMM_FREE(communicator, ierr)
    call MPI_FINALIZE(ierr)
@@ -111,5 +161,19 @@ contains
          error stop 'assertion failed: ' // description
       endif
    end subroutine assert_close
+
+   subroutine assert_false(actual, description)
+      logical, intent(in) :: actual
+      character(len=*), intent(in) :: description
+
+      if (actual) error stop 'assertion failed: ' // description
+   end subroutine assert_false
+
+   subroutine assert_nonnegative(actual, description)
+      real(real64), intent(in) :: actual
+      character(len=*), intent(in) :: description
+
+      if (actual < 0.0_real64) error stop 'assertion failed: ' // description
+   end subroutine assert_nonnegative
 
 end program test_outgoing_particle_message_packing
