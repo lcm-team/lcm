@@ -5,7 +5,8 @@ program test_initial_particle_population
                                  lcm_initialize, lcm_set_config, lcm_set_grid
    use lcm_initialization_state, only: lcm_initial_particle_count_global, &
                                        lcm_initial_particle_count_local
-   use lcm_particle_state, only: cell_particles
+   use lcm_particle_state, only: cell_particles, lcm_add_particle
+   use lcm_types, only: lcm_particle_t
 
    implicit none
 
@@ -72,6 +73,7 @@ program test_initial_particle_population
    call assert_true(lcm_initial_particle_count_global == expected_count, &
                     "global initial particle count")
    call assert_particle_cells()
+   call assert_lazy_upper_cell_allocation()
 
 contains
 
@@ -170,9 +172,10 @@ contains
                if (k <= nzl) then
                   call assert_true(cell_particles(i,j,k)%count == np_xy, &
                                    "initialized cell particle count")
-                  call assert_true(cell_particles(i,j,k)%capacity >= &
-                                   cell_particles(i,j,k)%count, &
-                                   "cell-local active particle range")
+                  call assert_true(cell_particles(i,j,k)%capacity == np_xy, &
+                                   "initialized cell reserved capacity")
+                  call assert_true(allocated(cell_particles(i,j,k)%particles), &
+                                   "initialized cell particle storage")
                   do n = 1, cell_particles(i,j,k)%count
                      total_count = total_count + 1
                      call assert_particle(i, j, k, n)
@@ -180,6 +183,10 @@ contains
                else
                   call assert_true(cell_particles(i,j,k)%count == 0, &
                                    "uninitialized cell particle count")
+                  call assert_true(cell_particles(i,j,k)%capacity == 0, &
+                                   "uninitialized cell has no reserved capacity")
+                  call assert_true(.not. allocated(cell_particles(i,j,k)%particles), &
+                                   "uninitialized cell has no particle storage")
                endif
             enddo
          enddo
@@ -188,6 +195,26 @@ contains
       call assert_true(total_count == expected_count, "summed particle count")
       call assert_unique_ids()
    end subroutine assert_particle_cells
+
+   subroutine assert_lazy_upper_cell_allocation()
+      type(lcm_particle_t) :: particle
+
+      particle%id = expected_count + 1_int64
+      particle%weight = 17_int64
+
+      call lcm_add_particle(1, 1, nz, particle)
+
+      call assert_true(cell_particles(1,1,nz)%count == 1, &
+                       "upper cell accepts a particle lazily")
+      call assert_true(cell_particles(1,1,nz)%capacity == 1, &
+                       "upper cell reserves only required initial capacity")
+      call assert_true(allocated(cell_particles(1,1,nz)%particles), &
+                       "upper cell storage allocated on demand")
+      call assert_true(cell_particles(1,1,nz)%particles(1)%id == particle%id, &
+                       "upper cell preserves lazily inserted particle")
+      call assert_true(cell_particles(1,1,nz)%particles(1)%weight == particle%weight, &
+                       "upper cell preserves lazily inserted particle weight")
+   end subroutine assert_lazy_upper_cell_allocation
 
    subroutine assert_particle(i, j, k, n)
       integer, intent(in) :: i
