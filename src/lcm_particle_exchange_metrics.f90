@@ -8,7 +8,11 @@
 !! instrumentation can be removed after the scalability work is complete.
 module lcm_particle_exchange_metrics
    use iso_fortran_env, only: int64, real64
-   use lcm_exchange_directions, only: lcm_exchange_x_phase, &
+   use lcm_exchange_directions, only: lcm_exchange_east, &
+                                      lcm_exchange_north, &
+                                      lcm_exchange_south, &
+                                      lcm_exchange_west, &
+                                      lcm_exchange_x_phase, &
                                       lcm_exchange_y_phase, &
                                       lcm_require_valid_exchange_phase
 
@@ -34,6 +38,14 @@ module lcm_particle_exchange_metrics
       integer(int64) :: y_count_exchange_calls = 0_int64
       integer(int64) :: x_payload_exchange_calls = 0_int64
       integer(int64) :: y_payload_exchange_calls = 0_int64
+      integer(int64) :: east_particles_sent = 0_int64
+      integer(int64) :: west_particles_sent = 0_int64
+      integer(int64) :: south_particles_sent = 0_int64
+      integer(int64) :: north_particles_sent = 0_int64
+      integer(int64) :: east_payload_bytes_sent = 0_int64
+      integer(int64) :: west_payload_bytes_sent = 0_int64
+      integer(int64) :: south_payload_bytes_sent = 0_int64
+      integer(int64) :: north_payload_bytes_sent = 0_int64
       integer(int64) :: x_received_insertion_calls = 0_int64
       integer(int64) :: y_received_insertion_calls = 0_int64
       integer(int64) :: x_particles_inserted = 0_int64
@@ -59,6 +71,7 @@ module lcm_particle_exchange_metrics
    public :: lcm_record_particle_outgoing_preparation
    public :: lcm_record_particle_ownership_update
    public :: lcm_record_particle_payload_exchange
+   public :: lcm_record_particle_payload_sent
    public :: lcm_record_received_particle_insertion
    public :: lcm_reset_particle_exchange_metrics
    public :: lcm_set_particle_exchange_metrics_enabled
@@ -183,6 +196,44 @@ contains
             particle_exchange_metrics%y_payload_exchange_calls + 1_int64
       end select
    end subroutine lcm_record_particle_payload_exchange
+
+   !> Accumulate the MPI datatype payload sent toward one cardinal neighbor.
+   !!
+   !! Byte counts use MPI_TYPE_SIZE and therefore exclude datatype holes,
+   !! MPI protocol headers, and lower-level network overhead.
+   subroutine lcm_record_particle_payload_sent(direction, particle_count, &
+                                                payload_bytes)
+      integer, intent(in) :: direction
+      integer(int64), intent(in) :: particle_count
+      integer(int64), intent(in) :: payload_bytes
+
+      if (.not. metrics_enabled) return
+
+      select case (direction)
+      case (lcm_exchange_east)
+         particle_exchange_metrics%east_particles_sent = &
+            particle_exchange_metrics%east_particles_sent + particle_count
+         particle_exchange_metrics%east_payload_bytes_sent = &
+            particle_exchange_metrics%east_payload_bytes_sent + payload_bytes
+      case (lcm_exchange_west)
+         particle_exchange_metrics%west_particles_sent = &
+            particle_exchange_metrics%west_particles_sent + particle_count
+         particle_exchange_metrics%west_payload_bytes_sent = &
+            particle_exchange_metrics%west_payload_bytes_sent + payload_bytes
+      case (lcm_exchange_south)
+         particle_exchange_metrics%south_particles_sent = &
+            particle_exchange_metrics%south_particles_sent + particle_count
+         particle_exchange_metrics%south_payload_bytes_sent = &
+            particle_exchange_metrics%south_payload_bytes_sent + payload_bytes
+      case (lcm_exchange_north)
+         particle_exchange_metrics%north_particles_sent = &
+            particle_exchange_metrics%north_particles_sent + particle_count
+         particle_exchange_metrics%north_payload_bytes_sent = &
+            particle_exchange_metrics%north_payload_bytes_sent + payload_bytes
+      case default
+         error stop 'LCM particle payload direction is invalid'
+      end select
+   end subroutine lcm_record_particle_payload_sent
 
    subroutine lcm_record_received_particle_insertion(phase, elapsed_seconds, &
                                                       particles_inserted)
