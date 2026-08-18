@@ -63,7 +63,9 @@ contains
 
    subroutine initialize_lcm_from_config()
       call initialize_particle_count_state()
-      call lcm_allocate_particle_cells(initial_capacity_per_cell=config_state%np_xy)
+      call lcm_allocate_particle_cells( &
+         initial_capacity_per_cell=config_state%np_xy, &
+         initial_capacity_vertical_levels=config_state%nzl)
       call lcm_initialize_computational_particles()
 
       ! SAM-LCM micro_set also initialized grid-helper geometry. In standalone

@@ -71,9 +71,12 @@ module lcm_particle_state
 
 contains
 
-   subroutine lcm_allocate_particle_cells(initial_capacity_per_cell)
+   subroutine lcm_allocate_particle_cells(initial_capacity_per_cell, &
+                                          initial_capacity_vertical_levels)
       integer, intent(in), optional :: initial_capacity_per_cell
+      integer, intent(in), optional :: initial_capacity_vertical_levels
       integer :: capacity
+      integer :: capacity_vertical_levels
       integer :: i, j, k
 
       if (.not. grid_state%is_set) then
@@ -91,6 +94,15 @@ contains
          capacity = initial_capacity_per_cell
       endif
 
+      capacity_vertical_levels = grid_state%grid%nz
+      if (present(initial_capacity_vertical_levels)) then
+         if (initial_capacity_vertical_levels < 0 .or. &
+             initial_capacity_vertical_levels > grid_state%grid%nz) then
+            error stop "LCM initial-capacity levels must be within the vertical grid"
+         endif
+         capacity_vertical_levels = initial_capacity_vertical_levels
+      endif
+
       ! Allocate one particle container per local grid cell. Particle counts
       ! are stored inside each cell and grow dynamically.
       allocate(cell_particles(grid_state%grid%nx_local, &
@@ -99,7 +111,7 @@ contains
       call lcm_clear_outgoing_particles()
 
       if (capacity > 0) then
-         do k = 1, grid_state%grid%nz
+         do k = 1, capacity_vertical_levels
             do j = 1, grid_state%grid%ny_local
                do i = 1, grid_state%grid%nx_local
                   call resize_cell_storage(cell_particles(i,j,k), capacity)
