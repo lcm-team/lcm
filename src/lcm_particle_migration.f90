@@ -11,7 +11,12 @@
 !> plan.  Particles received by the x phase are classified separately for the
 !> y phase, preserving the existing two-phase corner-routing semantics.
 module lcm_particle_migration
-   use lcm_exchange_directions, only: lcm_exchange_direction_count
+   use lcm_exchange_directions, only: lcm_exchange_direction_count, &
+                                      lcm_exchange_east, lcm_exchange_north, &
+                                      lcm_exchange_south, lcm_exchange_west
+   use lcm_grid_state, only: grid_state
+   use lcm_particle_location, only: lcm_locate_particle_cell
+   use lcm_types, only: lcm_particle_t
 
    implicit none
 
@@ -37,8 +42,60 @@ module lcm_particle_migration
 
    public :: lcm_particle_migration_is_outgoing
    public :: lcm_particle_migration_is_valid
+   public :: lcm_classify_particle_migration
 
 contains
+
+   !> Classify one particle without modifying particle or cell storage.
+   !>
+   !> The result describes geometry only.  A later transport step decides
+   !> whether the corresponding neighbor route is active.  Testing x before y
+   !> guarantees that corner-crossing particles follow the established
+   !> x-then-y exchange order.
+   subroutine lcm_classify_particle_migration(particle, source_i, source_j, &
+                                              source_k, migration)
+      type(lcm_particle_t), intent(in) :: particle
+      integer, intent(in) :: source_i
+      integer, intent(in) :: source_j
+      integer, intent(in) :: source_k
+      type(lcm_particle_migration_t), intent(out) :: migration
+      integer :: destination_i
+      integer :: destination_j
+      logical :: is_local
+
+      migration = lcm_particle_migration_t()
+      call lcm_locate_particle_cell(particle%x, particle%y, particle%z, &
+                                    destination_i, destination_j, migration%k, &
+                                    is_local, migration%global_i, &
+                                    migration%global_j)
+
+      if (migration%k < 1 .or. migration%k > grid_state%grid%nz) then
+         error stop 'LCM particle migration destination is outside the vertical domain'
+      elseif (destination_i < 1) then
+         call set_outgoing_migration(migration, lcm_exchange_west)
+      elseif (destination_i > grid_state%grid%nx_local) then
+         call set_outgoing_migration(migration, lcm_exchange_east)
+      elseif (destination_j < 1) then
+         call set_outgoing_migration(migration, lcm_exchange_south)
+      elseif (destination_j > grid_state%grid%ny_local) then
+         call set_outgoing_migration(migration, lcm_exchange_north)
+      elseif (.not. is_local) then
+         error stop 'LCM particle migration destination is above the domain'
+      elseif (destination_i == source_i .and. &
+              destination_j == source_j .and. migration%k == source_k) then
+         migration%disposition = lcm_migration_same_cell
+      else
+         migration%disposition = lcm_migration_local_cell
+      endif
+   end subroutine lcm_classify_particle_migration
+
+   pure subroutine set_outgoing_migration(migration, direction)
+      type(lcm_particle_migration_t), intent(inout) :: migration
+      integer, intent(in) :: direction
+
+      migration%disposition = lcm_migration_outgoing
+      migration%direction = direction
+   end subroutine set_outgoing_migration
 
    pure logical function lcm_particle_migration_is_outgoing(migration)
       type(lcm_particle_migration_t), intent(in) :: migration
