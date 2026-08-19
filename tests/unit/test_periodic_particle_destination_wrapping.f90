@@ -95,6 +95,13 @@ program test_periodic_particle_destination_wrapping
    call assert_equal(total_particle_count(), 8, &
                      'y payload transport preserves every periodic particle')
 
+   ! A second preparation cycle must be allowed after both staged phases were
+   ! consumed. All wrapped particles are already local, so no new sends occur.
+   call lcm_exchange_particle_phase(lcm_exchange_x_phase)
+   call lcm_exchange_particle_phase(lcm_exchange_y_phase)
+   call assert_equal(total_particle_count(), 8, &
+                     'subsequent migration cycle preserves every particle')
+
    call MPI_COMM_FREE(communicator, ierr)
    call MPI_FINALIZE(ierr)
 
