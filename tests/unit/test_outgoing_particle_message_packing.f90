@@ -2,7 +2,7 @@ program test_outgoing_particle_message_packing
    use iso_fortran_env, only: int64, real64
    use mpi_f08, only: MPI_CART_CREATE, MPI_COMM_FREE, MPI_COMM_WORLD, MPI_Comm, &
                       MPI_FINALIZE, MPI_INIT
-   use lcm_exchange_directions, only: lcm_exchange_east, &
+   use lcm_exchange_directions, only: lcm_exchange_east, lcm_exchange_west, &
                                       lcm_exchange_x_phase
    use lcm_parallel_state, only: lcm_init_parallel, lcm_parallel_t, &
                                  lcm_set_parallel
@@ -50,22 +50,29 @@ program test_outgoing_particle_message_packing
    call add_particle(503_int64, 115.0_real64, 75.0_real64)
    call add_particle(504_int64, 130.0_real64, 80.0_real64)
    call add_particle(505_int64, 125.0_real64, 65.0_real64)
+   call add_particle(506_int64, 95.0_real64, 65.0_real64)
+   call add_particle(507_int64, 95.0_real64, 80.0_real64)
 
    call lcm_extract_outgoing_particles(lcm_exchange_x_phase)
 
-   call assert_equal(cell_particles(1,1,1)%count, 3, 'retained particle count')
+   call assert_equal(cell_particles(1,1,1)%count, 1, 'same-cell particle count')
    call assert_equal(int(cell_particles(1,1,1)%particles(1)%id), 501, &
-                     'first retained particle order')
-   call assert_equal(int(cell_particles(1,1,1)%particles(2)%id), 503, &
-                     'second retained particle order')
-   call assert_equal(int(cell_particles(1,1,1)%particles(3)%id), 505, &
-                     'third retained particle order')
-   call assert_equal(int(cell_particles(1,1,1)%particles(4)%id), 0, &
+                     'same-cell particle order')
+   call assert_equal(cell_particles(2,2,1)%count, 1, &
+                     'local two-dimensional move count')
+   call assert_equal(int(cell_particles(2,2,1)%particles(1)%id), 503, &
+                     'local two-dimensional move id')
+   call assert_equal(cell_particles(3,1,1)%count, 1, 'local x move count')
+   call assert_equal(int(cell_particles(3,1,1)%particles(1)%id), 505, &
+                     'local x move id')
+   call assert_equal(int(cell_particles(1,1,1)%particles(2)%id), 0, &
                      'first vacated slot cleared')
-   call assert_equal(int(cell_particles(1,1,1)%particles(5)%id), 0, &
-                     'second vacated slot cleared')
+   call assert_equal(int(cell_particles(1,1,1)%particles(7)%id), 0, &
+                     'last vacated slot cleared')
    call assert_equal(lcm_send_particle_message_count(lcm_exchange_east), 2, &
                      'east send count')
+   call assert_equal(lcm_send_particle_message_count(lcm_exchange_west), 2, &
+                     'west send count')
    call lcm_get_send_particle_message(lcm_exchange_east, 1, message)
    call assert_equal(int(message%particle%id), 502, 'east particle id')
    call lcm_get_send_particle_message(lcm_exchange_east, 2, message)
@@ -75,6 +82,10 @@ program test_outgoing_particle_message_packing
    call assert_equal(int(message%particle%id), 504, 'packed particle id')
    call assert_close(message%particle%x, 130.0_real64, 'internal crossing x')
    call assert_close(message%particle%y, 80.0_real64, 'internal crossing y')
+   call lcm_get_send_particle_message(lcm_exchange_west, 1, message)
+   call assert_equal(int(message%particle%id), 506, 'first west particle id')
+   call lcm_get_send_particle_message(lcm_exchange_west, 2, message)
+   call assert_equal(int(message%particle%id), 507, 'second west particle id')
 
    call MPI_COMM_FREE(communicator, ierr)
    call MPI_FINALIZE(ierr)

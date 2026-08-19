@@ -16,7 +16,9 @@ module lcm_particle_state
    use lcm_exchange_directions, only: lcm_exchange_direction_from_offset, &
                                       lcm_exchange_direction_for_phase, &
                                       lcm_exchange_directions_per_phase, &
+                                      lcm_exchange_east, &
                                       lcm_exchange_neighbor_rank, &
+                                      lcm_exchange_west, &
                                       lcm_exchange_x_phase, &
                                       lcm_exchange_y_phase, &
                                       lcm_require_valid_exchange_phase
@@ -28,6 +30,7 @@ module lcm_particle_state
    use lcm_particle_mpi_messages, only: lcm_pack_particle_mpi_message
    use lcm_particle_migration, only: lcm_classify_particle_migration, &
                                      lcm_migration_local_cell, &
+                                     lcm_migration_outgoing, &
                                      lcm_particle_migration_t
    use lcm_particle_properties, only: lcm_particle_radius
    use lcm_types, only: lcm_particle_cell_t, lcm_particle_mpi_message_t, &
@@ -490,6 +493,7 @@ contains
    !> transferred once in x and then classified again for its y transfer.
    subroutine lcm_extract_outgoing_particles(phase)
       integer, intent(in) :: phase
+      type(lcm_particle_cell_migration_plan_t), allocatable :: migration_plan(:,:,:)
       integer :: i
       integer :: j
       integer :: k
@@ -497,6 +501,18 @@ contains
       call require_particle_cells_allocated()
       call lcm_require_valid_exchange_phase(phase)
       call lcm_clear_particle_exchange_phase_buffers(phase)
+
+      if (phase == lcm_exchange_x_phase) then
+         ! The initial post-boundary plan handles local moves and west/east
+         ! extraction together, so x preparation does not locate particles a
+         ! second time or shift storage once per removal.
+         allocate(migration_plan(size(cell_particles, 1), &
+                                 size(cell_particles, 2), &
+                                 size(cell_particles, 3)))
+         call build_local_particle_migration_plan(migration_plan)
+         call apply_particle_migration_plan(migration_plan, .true.)
+         return
+      endif
 
       do k = 1, size(cell_particles, 3)
          do j = 1, size(cell_particles, 2)
@@ -628,7 +644,7 @@ contains
       allocate(plan(size(cell_particles, 1), size(cell_particles, 2), &
                     size(cell_particles, 3)))
       call build_local_particle_migration_plan(plan)
-      call apply_local_particle_migration_plan(plan)
+      call apply_particle_migration_plan(plan, .false.)
    end subroutine lcm_update_particle_cell_ownership
 
    !> Classify every original local particle once without mutating storage.
@@ -658,11 +674,13 @@ contains
 
    !> Compact every source cell once and then append local moves in batches.
    !>
-   !> Outgoing particles remain in their source cells here. MPI extraction is
-   !> still responsible for removing them; integrating outgoing routes with
-   !> this plan is a separate step.
-   subroutine apply_local_particle_migration_plan(plan)
+   !> During initial x preparation, active west/east routes are packed into
+   !> their send buffers and removed during the same compaction. South/north
+   !> routes and inactive physical-edge routes remain cell-owned for their
+   !> existing later handling.
+   subroutine apply_particle_migration_plan(plan, extract_x_outgoing)
       type(lcm_particle_cell_migration_plan_t), intent(in) :: plan(:,:,:)
+      logical, intent(in) :: extract_x_outgoing
       type(lcm_particle_cell_t), allocatable :: incoming(:,:,:)
       integer :: i
       integer :: j
@@ -684,6 +702,12 @@ contains
                      call stage_local_particle( &
                         incoming, migration, &
                         cell_particles(i,j,k)%particles(n))
+                  elseif (extract_x_outgoing .and. &
+                          migration_leaves_in_x(migration)) then
+                     call append_outgoing_particle( &
+                        cell_particles(i,j,k)%particles(n), &
+                        migration%global_i, migration%global_j, migration%k, &
+                        lcm_exchange_x_phase, migration%direction)
                   else
                      retained_count = retained_count + 1
                      if (retained_count /= n) then
@@ -710,7 +734,22 @@ contains
             enddo
          enddo
       enddo
-   end subroutine apply_local_particle_migration_plan
+   end subroutine apply_particle_migration_plan
+
+   logical function migration_leaves_in_x(migration)
+      type(lcm_particle_migration_t), intent(in) :: migration
+
+      migration_leaves_in_x = &
+         migration%disposition == lcm_migration_outgoing .and. &
+         (migration%direction == lcm_exchange_west .or. &
+          migration%direction == lcm_exchange_east)
+      if (.not. migration_leaves_in_x) return
+
+      ! A geometric crossing at a non-periodic physical edge has no neighbor
+      ! and therefore remains cell-owned, matching the existing phase logic.
+      migration_leaves_in_x = &
+         lcm_exchange_neighbor_rank(migration%direction) >= 0
+   end function migration_leaves_in_x
 
    subroutine stage_local_particle(incoming, migration, particle)
       type(lcm_particle_cell_t), intent(inout) :: incoming(:,:,:)
