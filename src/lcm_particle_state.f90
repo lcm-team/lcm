@@ -26,6 +26,9 @@ module lcm_particle_state
                                             lcm_get_receive_particle_message_view, &
                                             lcm_receive_particle_message_count
    use lcm_particle_mpi_messages, only: lcm_pack_particle_mpi_message
+   use lcm_particle_migration, only: lcm_classify_particle_migration, &
+                                     lcm_migration_local_cell, &
+                                     lcm_particle_migration_t
    use lcm_particle_properties, only: lcm_particle_radius
    use lcm_types, only: lcm_particle_cell_t, lcm_particle_mpi_message_t, &
                         lcm_particle_t
@@ -67,6 +70,16 @@ module lcm_particle_state
    integer(int64), protected, save :: n_id = 0_int64
    logical, save :: aerosol_initialization_template_is_set = .false.
    logical, protected, save :: particle_id_counter_is_initialized = .false.
+
+   !> Snapshot of migration decisions for one source cell.
+   !>
+   !> The entries describe only the particles present when the plan is built.
+   !> Storage is not mutated until every original particle has been classified,
+   !> preventing particles appended to a later cell from being processed twice.
+   type :: lcm_particle_cell_migration_plan_t
+      integer :: count = 0
+      type(lcm_particle_migration_t), allocatable :: entries(:)
+   end type lcm_particle_cell_migration_plan_t
 
    integer, parameter :: liquid_particle_type = 1
    integer, parameter :: ice_nucleating_particle_type = 2
@@ -608,39 +621,112 @@ contains
    end subroutine compact_outgoing_particles_from_cell
 
    subroutine lcm_update_particle_cell_ownership()
+      type(lcm_particle_cell_migration_plan_t), allocatable :: plan(:,:,:)
+
+      call require_particle_cells_allocated()
+
+      allocate(plan(size(cell_particles, 1), size(cell_particles, 2), &
+                    size(cell_particles, 3)))
+      call build_local_particle_migration_plan(plan)
+      call apply_local_particle_migration_plan(plan)
+   end subroutine lcm_update_particle_cell_ownership
+
+   !> Classify every original local particle once without mutating storage.
+   subroutine build_local_particle_migration_plan(plan)
+      type(lcm_particle_cell_migration_plan_t), intent(inout) :: plan(:,:,:)
       integer :: i
       integer :: j
       integer :: k
       integer :: n
-      integer :: new_i
-      integer :: new_j
-      integer :: new_k
-      logical :: is_local
-
-      call require_particle_cells_allocated()
 
       do k = 1, size(cell_particles, 3)
          do j = 1, size(cell_particles, 2)
             do i = 1, size(cell_particles, 1)
-               n = 1
-               do while (n <= cell_particles(i,j,k)%count)
-                  call lcm_locate_particle_cell( &
-                     cell_particles(i,j,k)%particles(n)%x, &
-                     cell_particles(i,j,k)%particles(n)%y, &
-                     cell_particles(i,j,k)%particles(n)%z, &
-                     new_i, new_j, new_k, is_local)
+               plan(i,j,k)%count = cell_particles(i,j,k)%count
+               if (plan(i,j,k)%count == 0) cycle
 
-                  if (is_local .and. (new_i /= i .or. new_j /= j .or. &
-                                       new_k /= k)) then
-                     call lcm_move_particle(i, j, k, n, new_i, new_j, new_k)
-                  else
-                     n = n + 1
-                  endif
+               allocate(plan(i,j,k)%entries(plan(i,j,k)%count))
+               do n = 1, plan(i,j,k)%count
+                  call lcm_classify_particle_migration( &
+                     cell_particles(i,j,k)%particles(n), i, j, k, &
+                     plan(i,j,k)%entries(n))
                enddo
             enddo
          enddo
       enddo
-   end subroutine lcm_update_particle_cell_ownership
+   end subroutine build_local_particle_migration_plan
+
+   !> Compact every source cell once and then append local moves in batches.
+   !>
+   !> Outgoing particles remain in their source cells here. MPI extraction is
+   !> still responsible for removing them; integrating outgoing routes with
+   !> this plan is a separate step.
+   subroutine apply_local_particle_migration_plan(plan)
+      type(lcm_particle_cell_migration_plan_t), intent(in) :: plan(:,:,:)
+      type(lcm_particle_cell_t), allocatable :: incoming(:,:,:)
+      integer :: i
+      integer :: j
+      integer :: k
+      integer :: n
+      integer :: retained_count
+      type(lcm_particle_migration_t) :: migration
+
+      allocate(incoming(size(cell_particles, 1), size(cell_particles, 2), &
+                        size(cell_particles, 3)))
+
+      do k = 1, size(cell_particles, 3)
+         do j = 1, size(cell_particles, 2)
+            do i = 1, size(cell_particles, 1)
+               retained_count = 0
+               do n = 1, plan(i,j,k)%count
+                  migration = plan(i,j,k)%entries(n)
+                  if (migration%disposition == lcm_migration_local_cell) then
+                     call stage_local_particle( &
+                        incoming, migration, &
+                        cell_particles(i,j,k)%particles(n))
+                  else
+                     retained_count = retained_count + 1
+                     if (retained_count /= n) then
+                        cell_particles(i,j,k)%particles(retained_count) = &
+                           cell_particles(i,j,k)%particles(n)
+                     endif
+                  endif
+               enddo
+
+               if (retained_count < plan(i,j,k)%count) then
+                  cell_particles(i,j,k)%particles( &
+                     retained_count + 1:plan(i,j,k)%count) = lcm_particle_t()
+               endif
+               cell_particles(i,j,k)%count = retained_count
+            enddo
+         enddo
+      enddo
+
+      do k = 1, size(cell_particles, 3)
+         do j = 1, size(cell_particles, 2)
+            do i = 1, size(cell_particles, 1)
+               call append_particle_batch(cell_particles(i,j,k), &
+                                          incoming(i,j,k))
+            enddo
+         enddo
+      enddo
+   end subroutine apply_local_particle_migration_plan
+
+   subroutine stage_local_particle(incoming, migration, particle)
+      type(lcm_particle_cell_t), intent(inout) :: incoming(:,:,:)
+      type(lcm_particle_migration_t), intent(in) :: migration
+      type(lcm_particle_t), intent(in) :: particle
+      integer :: destination_i
+      integer :: destination_j
+
+      destination_i = migration%global_i - &
+                      grid_state%grid%global_i_start + 1
+      destination_j = migration%global_j - &
+                      grid_state%grid%global_j_start + 1
+      call validate_cell_index(destination_i, destination_j, migration%k)
+      call append_particle_to_cell( &
+         incoming(destination_i,destination_j,migration%k), particle)
+   end subroutine stage_local_particle
 
    subroutine init_particle_properties(i, j, k, cell_particle_index, particle)
       integer, intent(in) :: i
@@ -1697,6 +1783,26 @@ contains
       cell%count = cell%count + 1
       cell%particles(cell%count) = particle
    end subroutine append_particle_to_cell
+
+   !> Append a staged group with at most one destination-cell resize.
+   subroutine append_particle_batch(cell, batch)
+      type(lcm_particle_cell_t), intent(inout) :: cell
+      type(lcm_particle_cell_t), intent(in) :: batch
+      integer :: first
+      integer :: required_capacity
+
+      if (batch%count == 0) return
+
+      first = cell%count + 1
+      required_capacity = cell%count + batch%count
+      if (required_capacity > cell%capacity) then
+         call resize_cell_storage( &
+            cell, max(required_capacity, next_capacity(cell%capacity)))
+      endif
+
+      cell%particles(first:required_capacity) = batch%particles(1:batch%count)
+      cell%count = required_capacity
+   end subroutine append_particle_batch
 
    logical function particle_leaves_to_neighbor_rank(new_i, new_j, new_k, phase, &
                                                      direction)

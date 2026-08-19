@@ -11,20 +11,29 @@ program test_particle_cell_ownership
    type(lcm_grid_t) :: grid
 
    call configure_grid()
-   call lcm_allocate_particle_cells(1)
+   call lcm_allocate_particle_cells(4)
    call add_particles()
 
    call lcm_update_particle_cell_ownership()
 
-   call assert_true(cell_particles(1,1,1)%count == 1, "original cell count")
-   call assert_true(cell_particles(2,1,1)%count == 1, "east cell count")
+   call assert_true(cell_particles(1,1,1)%count == 3, "original cell count")
+   call assert_true(cell_particles(2,1,1)%count == 3, "east cell count")
    call assert_true(cell_particles(1,2,1)%count == 1, "north cell count")
    call assert_true(cell_particles(1,1,2)%count == 1, "upper cell count")
 
    call assert_particle_id(1, 1, 1, 1, 10_int64, "stationary particle id")
-   call assert_particle_id(2, 1, 1, 1, 20_int64, "eastward particle id")
-   call assert_particle_id(1, 2, 1, 1, 30_int64, "northward particle id")
-   call assert_particle_id(1, 1, 2, 1, 40_int64, "upward particle id")
+   call assert_particle_id(1, 1, 1, 2, 30_int64, "second retained particle id")
+   call assert_particle_id(1, 1, 1, 3, 80_int64, "outgoing particle remains")
+   call assert_particle_id(2, 1, 1, 1, 70_int64, "existing destination particle id")
+   call assert_particle_id(2, 1, 1, 2, 20_int64, "first eastward particle id")
+   call assert_particle_id(2, 1, 1, 3, 40_int64, "second eastward particle id")
+   call assert_particle_id(1, 2, 1, 1, 50_int64, "northward particle id")
+   call assert_particle_id(1, 1, 2, 1, 60_int64, "upward particle id")
+
+   call assert_true(cell_particles(2,1,1)%capacity == 4, &
+                    "reusable destination capacity is preserved")
+   call assert_true(cell_particles(1,1,1)%capacity == 8, &
+                    "source capacity is not shrunk")
 
 contains
 
@@ -46,8 +55,13 @@ contains
    subroutine add_particles()
       call add_particle(10_int64, 25.0_real64, 25.0_real64, 50.0_real64)
       call add_particle(20_int64, 75.0_real64, 25.0_real64, 50.0_real64)
-      call add_particle(30_int64, 25.0_real64, 75.0_real64, 50.0_real64)
-      call add_particle(40_int64, 25.0_real64, 25.0_real64, 150.0_real64)
+      call add_particle(30_int64, 25.0_real64, 25.0_real64, 50.0_real64)
+      call add_particle(40_int64, 75.0_real64, 25.0_real64, 50.0_real64)
+      call add_particle(50_int64, 25.0_real64, 75.0_real64, 50.0_real64)
+      call add_particle(60_int64, 25.0_real64, 25.0_real64, 150.0_real64)
+      call add_particle(80_int64, -25.0_real64, 25.0_real64, 50.0_real64)
+      call add_particle_to_cell(70_int64, 75.0_real64, 25.0_real64, &
+                                50.0_real64, 2, 1, 1)
    end subroutine add_particles
 
    subroutine add_particle(id, x, y, z)
@@ -65,6 +79,24 @@ contains
       particle%z = z
       call lcm_add_particle(1, 1, 1, particle)
    end subroutine add_particle
+
+   subroutine add_particle_to_cell(id, x, y, z, i, j, k)
+      integer(int64), intent(in) :: id
+      real(real64), intent(in) :: x
+      real(real64), intent(in) :: y
+      real(real64), intent(in) :: z
+      integer, intent(in) :: i
+      integer, intent(in) :: j
+      integer, intent(in) :: k
+      type(lcm_particle_t) :: particle
+
+      particle = lcm_particle_t()
+      particle%id = id
+      particle%x = x
+      particle%y = y
+      particle%z = z
+      call lcm_add_particle(i, j, k, particle)
+   end subroutine add_particle_to_cell
 
    subroutine assert_particle_id(i, j, k, n, expected_id, message)
       integer, intent(in) :: i
