@@ -3,10 +3,12 @@ program test_particle_exchange_mpi
    use mpi_f08, only: MPI_CART_COORDS, MPI_CART_CREATE, MPI_CART_RANK, &
                       MPI_COMM_FREE, MPI_COMM_RANK, MPI_COMM_SIZE, &
                       MPI_COMM_WORLD, MPI_Comm, MPI_FINALIZE, MPI_INIT
-   use lcm_exchange_directions, only: lcm_exchange_x_phase, lcm_exchange_y_phase
+   use lcm_exchange_directions, only: lcm_exchange_north, lcm_exchange_south, &
+                                      lcm_exchange_x_phase, lcm_exchange_y_phase
    use lcm_grid_state, only: lcm_set_grid
    use lcm_parallel_state, only: lcm_init_parallel, lcm_parallel_t, lcm_set_parallel
    use lcm_particle_exchange, only: lcm_exchange_particle_phase
+   use lcm_particle_exchange_buffers, only: lcm_send_particle_message_count
    use lcm_particle_state, only: cell_particles, lcm_add_particle, &
                                  lcm_allocate_particle_cells
    use lcm_types, only: lcm_grid_t, lcm_init_grid, lcm_particle_t
@@ -89,8 +91,12 @@ program test_particle_exchange_mpi
    enddo
 
    call lcm_exchange_particle_phase(lcm_exchange_x_phase)
-   call assert_equal(total_particle_count(), particles_per_route, &
-                     'x phase preserves every route particle')
+   call assert_equal(total_particle_count(), 0, &
+                     'x-received corner particles remain staged for y')
+   call assert_equal( &
+      lcm_send_particle_message_count(lcm_exchange_south) + &
+      lcm_send_particle_message_count(lcm_exchange_north), &
+      particles_per_route, 'x-received corner particles populate y buffers')
    call lcm_exchange_particle_phase(lcm_exchange_y_phase)
 
    expected_source_coordinates = 1 - coordinates
