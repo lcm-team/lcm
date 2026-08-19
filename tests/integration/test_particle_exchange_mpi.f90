@@ -30,6 +30,7 @@ program test_particle_exchange_mpi
    integer :: mpi_size
    integer, parameter :: particles_per_route = 3
    type(lcm_parallel_t) :: parallel
+   type(lcm_particle_t) :: expected_particle
    type(lcm_particle_t) :: particle
    logical :: periodicity(2)
    integer :: rank
@@ -79,14 +80,7 @@ program test_particle_exchange_mpi
    endif
 
    do sequence = 1, particles_per_route
-      particle = lcm_particle_t()
-      particle%id = int(1000 + 10 * rank + sequence, int64)
-      particle%weight = int(2000 + 10 * rank + sequence, int64)
-      particle%mass_water = real(10 * rank + sequence, real64) + 0.25_real64
-      particle%temperature = 270.0_real64 + real(10 * rank + sequence, real64)
-      particle%x = merge(25.0_real64, 15.0_real64, coordinates(1) == 0)
-      particle%y = merge(25.0_real64, 15.0_real64, coordinates(2) == 0)
-      particle%z = 5.0_real64
+      particle = populated_particle(rank, sequence, coordinates)
       call lcm_add_particle(initial_i, initial_j, 1, particle)
    enddo
 
@@ -110,26 +104,116 @@ program test_particle_exchange_mpi
                      'particles inserted in final diagonal destination cell')
    do sequence = 1, particles_per_route
       particle = cell_particles(final_i,final_j,1)%particles(sequence)
-      call assert_equal(int(particle%id), &
-                        1000 + 10 * expected_source_rank + sequence, &
-                        'ordered diagonal source particle id')
-      call assert_equal(int(particle%weight), &
-                        2000 + 10 * expected_source_rank + sequence, &
-                        'diagonal source particle weight')
-      call assert_close(particle%mass_water, &
-                        real(10 * expected_source_rank + sequence, real64) + &
-                           0.25_real64, &
-                        'diagonal source water mass')
-      call assert_close(particle%temperature, &
-                        270.0_real64 + &
-                           real(10 * expected_source_rank + sequence, real64), &
-                        'diagonal source temperature')
+      expected_particle = populated_particle(expected_source_rank, sequence, &
+                                             expected_source_coordinates)
+      call assert_particle_equal(particle, expected_particle, &
+                                 'diagonal particle state')
    enddo
 
    call MPI_COMM_FREE(communicator, ierr)
    call MPI_FINALIZE(ierr)
 
 contains
+
+   function populated_particle(source_rank, source_sequence, source_coordinates) &
+      result(result_particle)
+      integer, intent(in) :: source_rank
+      integer, intent(in) :: source_sequence
+      integer, intent(in) :: source_coordinates(2)
+      type(lcm_particle_t) :: result_particle
+      integer :: integer_seed
+      real(real64) :: seed
+
+      integer_seed = 100 * source_rank + source_sequence
+      seed = real(integer_seed, real64)
+      result_particle%weight = int(2000 + 10 * source_rank + source_sequence, &
+                                   int64)
+      result_particle%id = int(1000 + 10 * source_rank + source_sequence, int64)
+      result_particle%particle_type = integer_seed + 2
+      result_particle%x = merge(25.0_real64, 15.0_real64, &
+                                source_coordinates(1) == 0)
+      result_particle%y = merge(25.0_real64, 15.0_real64, &
+                                source_coordinates(2) == 0)
+      result_particle%z = 5.0_real64
+      result_particle%u = seed + 1.0_real64
+      result_particle%v = seed + 2.0_real64
+      result_particle%w = seed + 3.0_real64
+      result_particle%u_sgs = seed + 4.0_real64
+      result_particle%v_sgs = seed + 5.0_real64
+      result_particle%w_sgs = seed + 6.0_real64
+      result_particle%mass_water = seed + 7.25_real64
+      result_particle%mass_aero = seed + 8.25_real64
+      result_particle%w_sedi = seed + 9.0_real64
+      result_particle%temperature = seed + 270.0_real64
+      result_particle%qv = seed + 10.0_real64
+      result_particle%eta = seed + 11.0_real64
+      result_particle%axis_a = seed + 12.0_real64
+      result_particle%axis_c = seed + 13.0_real64
+      result_particle%density = seed + 14.0_real64
+      result_particle%rimed_mass = seed + 15.0_real64
+      result_particle%freezing_temperature = seed + 16.0_real64
+      result_particle%in_surface_area = seed + &
+         [17.0_real64, 18.0_real64, 19.0_real64, 20.0_real64]
+      result_particle%aerosol_portions = seed + &
+         [0.1_real64, 0.2_real64, 0.3_real64, 0.4_real64]
+      result_particle%cloudy_age = seed + 21.0_real64
+      result_particle%cell_particle_index = integer_seed + 22
+      result_particle%last_i = integer_seed + 23
+      result_particle%last_j = integer_seed + 24
+      result_particle%last_k = integer_seed + 25
+      result_particle%n_monomer = int(integer_seed + 2000, int64)
+      result_particle%spray_marker = integer_seed + 26
+      result_particle%track_marker = integer_seed + 27
+   end function populated_particle
+
+   subroutine assert_particle_equal(actual, expected, description)
+      type(lcm_particle_t), intent(in) :: actual
+      type(lcm_particle_t), intent(in) :: expected
+      character(len=*), intent(in) :: description
+
+      call assert_true(actual%weight == expected%weight, description // ' weight')
+      call assert_true(actual%id == expected%id, description // ' id')
+      call assert_true(actual%particle_type == expected%particle_type, &
+                       description // ' type')
+      call assert_true(all([actual%x, actual%y, actual%z, actual%u, actual%v, &
+                            actual%w, actual%u_sgs, actual%v_sgs, actual%w_sgs] == &
+                           [expected%x, expected%y, expected%z, expected%u, &
+                            expected%v, expected%w, expected%u_sgs, &
+                            expected%v_sgs, expected%w_sgs]), &
+                       description // ' motion')
+      call assert_true(all([actual%mass_water, actual%mass_aero, actual%w_sedi, &
+                            actual%temperature, actual%qv, actual%eta] == &
+                           [expected%mass_water, expected%mass_aero, &
+                            expected%w_sedi, expected%temperature, expected%qv, &
+                            expected%eta]), description // ' microphysics')
+      call assert_true(all([actual%axis_a, actual%axis_c, actual%density, &
+                            actual%rimed_mass, actual%freezing_temperature] == &
+                           [expected%axis_a, expected%axis_c, expected%density, &
+                            expected%rimed_mass, expected%freezing_temperature]), &
+                       description // ' ice state')
+      call assert_true(all(actual%in_surface_area == expected%in_surface_area), &
+                       description // ' surface area')
+      call assert_true(all(actual%aerosol_portions == expected%aerosol_portions), &
+                       description // ' aerosol portions')
+      call assert_true(actual%cloudy_age == expected%cloudy_age, &
+                       description // ' cloudy age')
+      call assert_true(all([actual%cell_particle_index, actual%last_i, &
+                            actual%last_j, actual%last_k, actual%spray_marker, &
+                            actual%track_marker] == &
+                           [expected%cell_particle_index, expected%last_i, &
+                            expected%last_j, expected%last_k, &
+                            expected%spray_marker, expected%track_marker]), &
+                       description // ' integer metadata')
+      call assert_true(actual%n_monomer == expected%n_monomer, &
+                       description // ' monomers')
+   end subroutine assert_particle_equal
+
+   subroutine assert_true(condition, description)
+      logical, intent(in) :: condition
+      character(len=*), intent(in) :: description
+
+      if (.not. condition) error stop 'assertion failed: ' // description
+   end subroutine assert_true
 
    integer function total_particle_count() result(count)
       integer :: i
@@ -153,13 +237,5 @@ contains
 
       if (actual /= expected) error stop 'assertion failed: ' // description
    end subroutine assert_equal
-
-   subroutine assert_close(actual, expected, description)
-      real(real64), intent(in) :: actual
-      real(real64), intent(in) :: expected
-      character(len=*), intent(in) :: description
-
-      if (actual /= expected) error stop 'assertion failed: ' // description
-   end subroutine assert_close
 
 end program test_particle_exchange_mpi
