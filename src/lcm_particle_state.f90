@@ -59,6 +59,7 @@ module lcm_particle_state
    public :: lcm_update_particle_positions
    public :: lcm_reflect_particles_at_top
    public :: lcm_apply_particles_at_bottom
+   public :: lcm_prepare_particle_migration
    public :: lcm_extract_outgoing_particles
    public :: lcm_insert_received_particles
    public :: lcm_update_particle_cell_ownership
@@ -75,6 +76,7 @@ module lcm_particle_state
    integer(int64), protected, save :: n_id = 0_int64
    logical, save :: aerosol_initialization_template_is_set = .false.
    logical, protected, save :: particle_id_counter_is_initialized = .false.
+   logical, save :: planned_x_send_buffers_are_ready = .false.
    logical, save :: planned_y_send_buffers_are_ready = .false.
 
    !> Snapshot of migration decisions for one source cell.
@@ -215,6 +217,7 @@ contains
             enddo
          enddo
       enddo
+      planned_x_send_buffers_are_ready = .false.
       planned_y_send_buffers_are_ready = .false.
    end subroutine lcm_reset_particle_cells
 
@@ -490,13 +493,39 @@ contains
       enddo
    end subroutine lcm_apply_particles_at_bottom
 
+   !> Classify and apply one post-boundary migration plan.
+   !>
+   !> Local moves are completed for both serial and parallel execution. When
+   !> MPI state is available, cardinal send buffers are also populated for the
+   !> following two transport phases. The plan and its particle-index snapshot
+   !> are discarded before this routine returns.
+   subroutine lcm_prepare_particle_migration()
+      type(lcm_particle_cell_migration_plan_t), allocatable :: migration_plan(:,:,:)
+
+      call require_particle_cells_allocated()
+      if (planned_x_send_buffers_are_ready .or. &
+          planned_y_send_buffers_are_ready) then
+         error stop 'LCM particle migration is already prepared'
+      endif
+
+      call lcm_clear_particle_exchange_phase_buffers(lcm_exchange_x_phase)
+      call lcm_clear_particle_exchange_phase_buffers(lcm_exchange_y_phase)
+      allocate(migration_plan(size(cell_particles, 1), &
+                              size(cell_particles, 2), &
+                              size(cell_particles, 3)))
+      call build_local_particle_migration_plan(migration_plan)
+      call apply_particle_migration_plan(migration_plan, parallel_state%is_set)
+
+      planned_x_send_buffers_are_ready = parallel_state%is_set
+      planned_y_send_buffers_are_ready = parallel_state%is_set
+   end subroutine lcm_prepare_particle_migration
+
    !> Extract particles leaving in one horizontal cardinal phase.
    !>
    !> The initial plan stages original x and y routes. After x transport, only
    !> x-received particles are checked for a second, corner-routing y hop.
    subroutine lcm_extract_outgoing_particles(phase)
       integer, intent(in) :: phase
-      type(lcm_particle_cell_migration_plan_t), allocatable :: migration_plan(:,:,:)
       integer :: i
       integer :: j
       integer :: k
@@ -505,19 +534,12 @@ contains
       call lcm_require_valid_exchange_phase(phase)
 
       if (phase == lcm_exchange_x_phase) then
-         call lcm_clear_particle_exchange_phase_buffers(lcm_exchange_x_phase)
-         call lcm_clear_particle_exchange_phase_buffers(lcm_exchange_y_phase)
-         planned_y_send_buffers_are_ready = .false.
-
-         ! The initial post-boundary plan handles local moves and all original
-         ! outgoing particles together. West/east buffers are transported
-         ! immediately; south/north buffers remain staged until after x.
-         allocate(migration_plan(size(cell_particles, 1), &
-                                 size(cell_particles, 2), &
-                                 size(cell_particles, 3)))
-         call build_local_particle_migration_plan(migration_plan)
-         call apply_particle_migration_plan(migration_plan, .true.)
-         planned_y_send_buffers_are_ready = .true.
+         ! Production advancement prepares immediately after boundary handling.
+         ! Preserve direct phase-level use by preparing lazily when necessary.
+         if (.not. planned_x_send_buffers_are_ready) then
+            call lcm_prepare_particle_migration()
+         endif
+         planned_x_send_buffers_are_ready = .false.
          return
       elseif (planned_y_send_buffers_are_ready) then
          ! Original y routes were staged by the initial plan and corner routes
