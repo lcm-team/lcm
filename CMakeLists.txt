@@ -44,6 +44,7 @@ set(LCM_CORE_SOURCES
   "${LCM_SOURCE_DIR}/lcm_particle_properties.f90"
   "${LCM_SOURCE_DIR}/lcm_grid_state.f90"
   "${LCM_SOURCE_DIR}/lcm_exchange_directions.f90"
+  "${LCM_SOURCE_DIR}/lcm_particle_migration.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_exchange_buffers.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_count_exchange.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_mpi_transport.f90"
@@ -339,6 +340,25 @@ set_target_properties(test_exchange_directions
 add_test(
   NAME exchange_directions
   COMMAND test_exchange_directions
+)
+
+add_executable(test_particle_migration_metadata
+  tests/unit/test_particle_migration_metadata.f90
+)
+
+target_link_libraries(test_particle_migration_metadata
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_particle_migration_metadata
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME particle_migration_metadata
+  COMMAND test_particle_migration_metadata
 )
 
 add_executable(test_local_subdomain_bounds
