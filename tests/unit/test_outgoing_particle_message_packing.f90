@@ -2,7 +2,8 @@ program test_outgoing_particle_message_packing
    use iso_fortran_env, only: int64, real64
    use mpi_f08, only: MPI_CART_CREATE, MPI_COMM_FREE, MPI_COMM_WORLD, MPI_Comm, &
                       MPI_FINALIZE, MPI_INIT
-   use lcm_exchange_directions, only: lcm_exchange_east, lcm_exchange_west, &
+   use lcm_exchange_directions, only: lcm_exchange_east, lcm_exchange_north, &
+                                      lcm_exchange_south, lcm_exchange_west, &
                                       lcm_exchange_x_phase
    use lcm_parallel_state, only: lcm_init_parallel, lcm_parallel_t, &
                                  lcm_set_parallel
@@ -52,6 +53,8 @@ program test_outgoing_particle_message_packing
    call add_particle(505_int64, 125.0_real64, 65.0_real64)
    call add_particle(506_int64, 95.0_real64, 65.0_real64)
    call add_particle(507_int64, 95.0_real64, 80.0_real64)
+   call add_particle(508_int64, 105.0_real64, 90.0_real64)
+   call add_particle(509_int64, 105.0_real64, 55.0_real64)
 
    call lcm_extract_outgoing_particles(lcm_exchange_x_phase)
 
@@ -67,12 +70,16 @@ program test_outgoing_particle_message_packing
                      'local x move id')
    call assert_equal(int(cell_particles(1,1,1)%particles(2)%id), 0, &
                      'first vacated slot cleared')
-   call assert_equal(int(cell_particles(1,1,1)%particles(7)%id), 0, &
+   call assert_equal(int(cell_particles(1,1,1)%particles(9)%id), 0, &
                      'last vacated slot cleared')
    call assert_equal(lcm_send_particle_message_count(lcm_exchange_east), 2, &
                      'east send count')
    call assert_equal(lcm_send_particle_message_count(lcm_exchange_west), 2, &
                      'west send count')
+   call assert_equal(lcm_send_particle_message_count(lcm_exchange_north), 1, &
+                     'staged north send count')
+   call assert_equal(lcm_send_particle_message_count(lcm_exchange_south), 1, &
+                     'staged south send count')
    call lcm_get_send_particle_message(lcm_exchange_east, 1, message)
    call assert_equal(int(message%particle%id), 502, 'east particle id')
    call lcm_get_send_particle_message(lcm_exchange_east, 2, message)
@@ -86,6 +93,10 @@ program test_outgoing_particle_message_packing
    call assert_equal(int(message%particle%id), 506, 'first west particle id')
    call lcm_get_send_particle_message(lcm_exchange_west, 2, message)
    call assert_equal(int(message%particle%id), 507, 'second west particle id')
+   call lcm_get_send_particle_message(lcm_exchange_north, 1, message)
+   call assert_equal(int(message%particle%id), 508, 'north particle id')
+   call lcm_get_send_particle_message(lcm_exchange_south, 1, message)
+   call assert_equal(int(message%particle%id), 509, 'south particle id')
 
    call MPI_COMM_FREE(communicator, ierr)
    call MPI_FINALIZE(ierr)

@@ -72,8 +72,12 @@ program test_periodic_particle_destination_wrapping
    call assert_wrapped_message(lcm_exchange_west, 608, 3, 0, &
                                29.0_real64, -1.0_real64, 'south-west x phase')
 
-   call assert_equal(total_particle_count(), 8, &
-                     'x payload transport reinserts every periodic particle')
+   call assert_equal(total_particle_count(), 2, &
+                     'x-only particles are inserted before staged y transport')
+   call assert_equal(lcm_send_particle_message_count(lcm_exchange_south), 3, &
+                     'original and corner south routes are combined')
+   call assert_equal(lcm_send_particle_message_count(lcm_exchange_north), 3, &
+                     'original and corner north routes are combined')
    call lcm_exchange_particle_phase(lcm_exchange_y_phase)
 
    call assert_wrapped_message(lcm_exchange_south, 603, 1, 2, &
