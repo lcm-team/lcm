@@ -1,7 +1,8 @@
 !> Low-level typed MPI transport for directional particle-message payloads.
 module lcm_particle_mpi_transport
+   use iso_fortran_env, only: int64
    use mpi_f08, only: MPI_IRECV, MPI_ISEND, MPI_PROC_NULL, MPI_Request, &
-                      MPI_Status, MPI_SUCCESS, MPI_WAITALL
+                      MPI_Status, MPI_SUCCESS, MPI_TYPE_SIZE, MPI_WAITALL
    use lcm_exchange_directions, only: lcm_exchange_direction_for_phase, &
                                       lcm_exchange_directions_per_phase, &
                                       lcm_exchange_neighbor_rank, &
@@ -15,6 +16,13 @@ module lcm_particle_mpi_transport
       lcm_mark_receive_particle_messages_received, &
       lcm_send_particle_message_count
    use lcm_particle_mpi_datatype, only: lcm_get_particle_mpi_datatype
+   use lcm_particle_exchange_metrics, only: &
+      lcm_particle_exchange_metrics_are_enabled, &
+      lcm_particle_exchange_metrics_timer_t, &
+      lcm_record_particle_payload_exchange, &
+      lcm_record_particle_payload_sent, &
+      lcm_start_particle_exchange_metrics_timer, &
+      lcm_stop_particle_exchange_metrics_timer
    use lcm_types, only: lcm_particle_mpi_message_t
 
    implicit none
@@ -41,18 +49,29 @@ contains
       integer :: receive_count
       integer :: receive_direction
       integer :: request_count
-      integer :: send_count
+      integer :: send_counts(lcm_exchange_directions_per_phase)
+      integer :: particle_payload_bytes
       integer :: source_rank
       type(lcm_particle_mpi_message_t), contiguous, pointer :: messages(:)
       type(MPI_Request) :: requests( &
          2 * lcm_exchange_directions_per_phase)
       type(MPI_Status) :: statuses( &
          2 * lcm_exchange_directions_per_phase)
+      logical :: measure_payload_exchange
+      type(lcm_particle_exchange_metrics_timer_t) :: metrics_timer
 
       if (.not. parallel_state%is_set) return
       call lcm_require_valid_exchange_phase(phase)
 
       request_count = 0
+      send_counts = 0
+      particle_payload_bytes = 0
+      ! Measure payload request preparation, posting, and completion. Marking
+      ! completed receive buffers below remains outside this metric.
+      measure_payload_exchange = lcm_particle_exchange_metrics_are_enabled()
+      if (measure_payload_exchange) then
+         call lcm_start_particle_exchange_metrics_timer(metrics_timer)
+      endif
       do phase_direction = 1, lcm_exchange_directions_per_phase
          direction = lcm_exchange_direction_for_phase(phase, phase_direction)
          receive_direction = lcm_exchange_opposite_direction(direction)
@@ -78,15 +97,16 @@ contains
       do phase_direction = 1, lcm_exchange_directions_per_phase
          direction = lcm_exchange_direction_for_phase(phase, phase_direction)
          destination_rank = lcm_exchange_neighbor_rank(direction)
-         send_count = lcm_send_particle_message_count(direction)
+         send_counts(phase_direction) = &
+            lcm_send_particle_message_count(direction)
 
-         if (send_count > 0) then
+         if (send_counts(phase_direction) > 0) then
             if (destination_rank == MPI_PROC_NULL .or. destination_rank < 0) then
                error stop 'LCM particle payload has no valid destination rank'
             endif
             call lcm_get_send_particle_message_view(direction, messages)
             request_count = request_count + 1
-            call MPI_ISEND(messages, send_count, &
+            call MPI_ISEND(messages, send_counts(phase_direction), &
                            lcm_get_particle_mpi_datatype(), destination_rank, &
                            particle_payload_tag_base + direction, &
                            parallel_state%parallel%communicator, &
@@ -99,6 +119,23 @@ contains
          call MPI_WAITALL(request_count, requests(1:request_count), &
                           statuses(1:request_count), ierr)
          call require_mpi_success(ierr, 'complete particle-payload transport')
+      endif
+
+      if (measure_payload_exchange) then
+         call lcm_record_particle_payload_exchange( &
+            phase, lcm_stop_particle_exchange_metrics_timer(metrics_timer))
+         if (any(send_counts > 0)) then
+            call MPI_TYPE_SIZE(lcm_get_particle_mpi_datatype(), &
+                               particle_payload_bytes, ierr)
+            call require_mpi_success(ierr, 'query the particle-payload size')
+         endif
+         do phase_direction = 1, lcm_exchange_directions_per_phase
+            direction = lcm_exchange_direction_for_phase(phase, phase_direction)
+            call lcm_record_particle_payload_sent( &
+               direction, int(send_counts(phase_direction), int64), &
+               int(send_counts(phase_direction), int64) * &
+                  int(particle_payload_bytes, int64))
+         enddo
       endif
 
       do phase_direction = 1, lcm_exchange_directions_per_phase

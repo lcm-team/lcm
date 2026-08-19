@@ -2,13 +2,18 @@ program test_particle_exchange_mpi
    use iso_fortran_env, only: int64, real64
    use mpi_f08, only: MPI_CART_COORDS, MPI_CART_CREATE, MPI_CART_RANK, &
                       MPI_COMM_FREE, MPI_COMM_RANK, MPI_COMM_SIZE, &
-                      MPI_COMM_WORLD, MPI_Comm, MPI_FINALIZE, MPI_INIT
+                      MPI_COMM_WORLD, MPI_Comm, MPI_FINALIZE, MPI_INIT, &
+                      MPI_TYPE_SIZE
    use lcm_exchange_directions, only: lcm_exchange_north, lcm_exchange_south, &
                                       lcm_exchange_x_phase, lcm_exchange_y_phase
    use lcm_grid_state, only: lcm_set_grid
    use lcm_parallel_state, only: lcm_init_parallel, lcm_parallel_t, lcm_set_parallel
    use lcm_particle_exchange, only: lcm_exchange_particle_phase
    use lcm_particle_exchange_buffers, only: lcm_send_particle_message_count
+   use lcm_particle_exchange_metrics, only: lcm_get_particle_exchange_metrics, &
+      lcm_particle_exchange_metrics_t, lcm_reset_particle_exchange_metrics, &
+      lcm_set_particle_exchange_metrics_enabled
+   use lcm_particle_mpi_datatype, only: lcm_get_particle_mpi_datatype
    use lcm_particle_state, only: cell_particles, lcm_add_particle, &
                                  lcm_allocate_particle_cells
    use lcm_types, only: lcm_grid_t, lcm_init_grid, lcm_particle_t
@@ -28,9 +33,11 @@ program test_particle_exchange_mpi
    integer :: final_i
    integer :: final_j
    integer :: mpi_size
+   integer :: particle_payload_bytes
    integer, parameter :: particles_per_route = 3
    type(lcm_parallel_t) :: parallel
    type(lcm_particle_t) :: expected_particle
+   type(lcm_particle_exchange_metrics_t) :: metrics
    type(lcm_particle_t) :: particle
    logical :: periodicity(2)
    integer :: rank
@@ -61,6 +68,8 @@ program test_particle_exchange_mpi
                       2 * coordinates(1) + 1, 2 * coordinates(2) + 1, 1)
    call lcm_set_grid(grid)
    call lcm_allocate_particle_cells()
+   call lcm_reset_particle_exchange_metrics()
+   call lcm_set_particle_exchange_metrics_enabled(.true.)
 
    ! Every rank sends one particle toward the diagonally opposite rank:
    ! NE, NW, SE, and SW are therefore exercised in the same 2x2 run.
@@ -99,6 +108,71 @@ program test_particle_exchange_mpi
 
    call assert_equal(total_particle_count(), particles_per_route, &
                      'final local particle count')
+   call lcm_get_particle_exchange_metrics(metrics)
+   call MPI_TYPE_SIZE(lcm_get_particle_mpi_datatype(), particle_payload_bytes, ierr)
+   call assert_equal(int(metrics%x_count_exchange_calls), 1, &
+                     'one x count exchange measured')
+   call assert_equal(int(metrics%y_count_exchange_calls), 1, &
+                     'one y count exchange measured')
+   call assert_equal(int(metrics%x_payload_exchange_calls), 1, &
+                     'one x payload exchange measured')
+   call assert_equal(int(metrics%y_payload_exchange_calls), 1, &
+                     'one y payload exchange measured')
+   call assert_equal(int(metrics%x_received_insertion_calls), 1, &
+                     'one x received insertion measured')
+   call assert_equal(int(metrics%y_received_insertion_calls), 1, &
+                     'one y received insertion measured')
+   call assert_equal(int(metrics%x_particles_inserted), particles_per_route, &
+                     'x received particles inserted')
+   call assert_equal(int(metrics%y_particles_inserted), particles_per_route, &
+                     'y received particles inserted')
+   if (coordinates(1) == 0) then
+      call assert_directional_send_metrics( &
+         metrics%east_particles_sent, metrics%east_payload_bytes_sent, &
+         particles_per_route, particle_payload_bytes, 'east')
+      call assert_directional_send_metrics( &
+         metrics%west_particles_sent, metrics%west_payload_bytes_sent, &
+         0, particle_payload_bytes, 'west')
+   else
+      call assert_directional_send_metrics( &
+         metrics%east_particles_sent, metrics%east_payload_bytes_sent, &
+         0, particle_payload_bytes, 'east')
+      call assert_directional_send_metrics( &
+         metrics%west_particles_sent, metrics%west_payload_bytes_sent, &
+         particles_per_route, particle_payload_bytes, 'west')
+   endif
+   if (coordinates(2) == 0) then
+      call assert_directional_send_metrics( &
+         metrics%north_particles_sent, metrics%north_payload_bytes_sent, &
+         particles_per_route, particle_payload_bytes, 'north')
+      call assert_directional_send_metrics( &
+         metrics%south_particles_sent, metrics%south_payload_bytes_sent, &
+         0, particle_payload_bytes, 'south')
+   else
+      call assert_directional_send_metrics( &
+         metrics%north_particles_sent, metrics%north_payload_bytes_sent, &
+         0, particle_payload_bytes, 'north')
+      call assert_directional_send_metrics( &
+         metrics%south_particles_sent, metrics%south_payload_bytes_sent, &
+         particles_per_route, particle_payload_bytes, 'south')
+   endif
+   call assert_equal_int64( &
+      metrics%east_particles_sent + metrics%west_particles_sent + &
+      metrics%south_particles_sent + metrics%north_particles_sent, &
+      int(2 * particles_per_route, int64), &
+      'corner routes are sent once in each cardinal phase')
+   call assert_nonnegative(metrics%x_count_exchange_seconds, &
+                           'x count exchange time')
+   call assert_nonnegative(metrics%y_count_exchange_seconds, &
+                           'y count exchange time')
+   call assert_nonnegative(metrics%x_payload_exchange_seconds, &
+                           'x payload exchange time')
+   call assert_nonnegative(metrics%y_payload_exchange_seconds, &
+                           'y payload exchange time')
+   call assert_nonnegative(metrics%x_received_insertion_seconds, &
+                           'x received insertion time')
+   call assert_nonnegative(metrics%y_received_insertion_seconds, &
+                           'y received insertion time')
    call assert_equal(cell_particles(final_i,final_j,1)%count, &
                      particles_per_route, &
                      'particles inserted in final diagonal destination cell')
@@ -215,6 +289,31 @@ contains
       if (.not. condition) error stop 'assertion failed: ' // description
    end subroutine assert_true
 
+   subroutine assert_directional_send_metrics(particles_sent, bytes_sent, &
+                                               expected_particles, &
+                                               bytes_per_particle, direction)
+      integer(int64), intent(in) :: particles_sent
+      integer(int64), intent(in) :: bytes_sent
+      integer, intent(in) :: expected_particles
+      integer, intent(in) :: bytes_per_particle
+      character(len=*), intent(in) :: direction
+
+      call assert_equal_int64(particles_sent, int(expected_particles, int64), &
+                              direction // ' particles sent')
+      call assert_equal_int64( &
+         bytes_sent, int(expected_particles, int64) * &
+                        int(bytes_per_particle, int64), &
+         direction // ' payload bytes sent')
+   end subroutine assert_directional_send_metrics
+
+   subroutine assert_equal_int64(actual, expected, description)
+      integer(int64), intent(in) :: actual
+      integer(int64), intent(in) :: expected
+      character(len=*), intent(in) :: description
+
+      if (actual /= expected) error stop 'assertion failed: ' // description
+   end subroutine assert_equal_int64
+
    integer function total_particle_count() result(count)
       integer :: i
       integer :: j
@@ -238,4 +337,10 @@ contains
       if (actual /= expected) error stop 'assertion failed: ' // description
    end subroutine assert_equal
 
+   subroutine assert_nonnegative(actual, description)
+      real(real64), intent(in) :: actual
+      character(len=*), intent(in) :: description
+
+      if (actual < 0.0_real64) error stop 'assertion failed: ' // description
+   end subroutine assert_nonnegative
 end program test_particle_exchange_mpi

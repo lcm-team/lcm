@@ -45,6 +45,8 @@ set(LCM_CORE_SOURCES
   "${LCM_SOURCE_DIR}/lcm_grid_state.f90"
   "${LCM_SOURCE_DIR}/lcm_exchange_directions.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_migration.f90"
+  "${LCM_SOURCE_DIR}/lcm_particle_exchange_metrics.f90"
+  "${LCM_SOURCE_DIR}/lcm_particle_exchange_timing_summary.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_exchange_buffers.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_count_exchange.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_mpi_transport.f90"
@@ -54,6 +56,7 @@ set(LCM_CORE_SOURCES
   "${LCM_SOURCE_DIR}/lcm_velocity_interpolation.f90"
   "${LCM_SOURCE_DIR}/lcm_user.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_state.f90"
+  "${LCM_SOURCE_DIR}/lcm_particle_storage_metrics.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_exchange.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_boundaries.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_source.f90"
@@ -500,6 +503,34 @@ add_test(
           ${MPIEXEC_POSTFLAGS}
 )
 
+add_executable(test_particle_exchange_timing_summary
+  tests/integration/test_particle_exchange_timing_summary.f90
+)
+
+target_link_libraries(test_particle_exchange_timing_summary
+  PRIVATE
+    lcm
+    MPI::MPI_Fortran
+)
+
+set_target_properties(test_particle_exchange_timing_summary
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME particle_exchange_timing_summary_serial
+  COMMAND test_particle_exchange_timing_summary serial
+)
+
+add_test(
+  NAME particle_exchange_timing_summary_mpi_4
+  COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4
+          ${MPIEXEC_PREFLAGS}
+          $<TARGET_FILE:test_particle_exchange_timing_summary>
+          ${MPIEXEC_POSTFLAGS}
+)
+
 add_executable(test_lcm_advance_particle_exchange_mpi
   tests/integration/test_lcm_advance_particle_exchange_mpi.f90
 )
@@ -688,6 +719,25 @@ set_target_properties(test_particle_cell_removal
 add_test(
   NAME particle_cell_removal
   COMMAND test_particle_cell_removal
+)
+
+add_executable(test_particle_storage_metrics
+  tests/unit/test_particle_storage_metrics.f90
+)
+
+target_link_libraries(test_particle_storage_metrics
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_particle_storage_metrics
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME particle_storage_metrics
+  COMMAND test_particle_storage_metrics
 )
 
 add_executable(test_minimal_les_host_top_particle_boundary

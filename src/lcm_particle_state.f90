@@ -34,6 +34,14 @@ module lcm_particle_state
                                      lcm_migration_local_cell, &
                                      lcm_migration_outgoing, &
                                      lcm_particle_migration_t
+   use lcm_particle_exchange_metrics, only: &
+      lcm_particle_exchange_metrics_are_enabled, &
+      lcm_particle_exchange_metrics_timer_t, &
+      lcm_record_particle_outgoing_preparation, &
+      lcm_record_particle_ownership_update, &
+      lcm_record_received_particle_insertion, &
+      lcm_start_particle_exchange_metrics_timer, &
+      lcm_stop_particle_exchange_metrics_timer
    use lcm_particle_properties, only: lcm_particle_radius
    use lcm_types, only: lcm_particle_cell_t, lcm_particle_mpi_message_t, &
                         lcm_particle_t
@@ -501,6 +509,11 @@ contains
    !> are discarded before this routine returns.
    subroutine lcm_prepare_particle_migration()
       type(lcm_particle_cell_migration_plan_t), allocatable :: migration_plan(:,:,:)
+      integer(int64) :: particles_examined
+      integer(int64) :: x_particles_outgoing
+      integer(int64) :: y_particles_outgoing
+      logical :: measure_migration_preparation
+      type(lcm_particle_exchange_metrics_timer_t) :: metrics_timer
 
       call require_particle_cells_allocated()
       if (planned_x_send_buffers_are_ready .or. &
@@ -508,13 +521,41 @@ contains
          error stop 'LCM particle migration is already prepared'
       endif
 
+      measure_migration_preparation = &
+         lcm_particle_exchange_metrics_are_enabled()
+      if (measure_migration_preparation) then
+         particles_examined = 0_int64
+         x_particles_outgoing = 0_int64
+         y_particles_outgoing = 0_int64
+         call lcm_start_particle_exchange_metrics_timer(metrics_timer)
+      endif
+
       call lcm_clear_particle_exchange_phase_buffers(lcm_exchange_x_phase)
       call lcm_clear_particle_exchange_phase_buffers(lcm_exchange_y_phase)
       allocate(migration_plan(size(cell_particles, 1), &
                               size(cell_particles, 2), &
                               size(cell_particles, 3)))
-      call build_local_particle_migration_plan(migration_plan)
+      if (measure_migration_preparation) then
+         call build_local_particle_migration_plan( &
+            migration_plan, particles_examined, x_particles_outgoing, &
+            y_particles_outgoing)
+      else
+         call build_local_particle_migration_plan(migration_plan)
+      endif
       call apply_particle_migration_plan(migration_plan, parallel_state%is_set)
+
+      if (measure_migration_preparation) then
+         ! The single pass classifies both phases. Attribute its combined time
+         ! and its one full-population examination to x preparation; original
+         ! y routes require no second population scan.
+         call lcm_record_particle_outgoing_preparation( &
+            lcm_exchange_x_phase, &
+            lcm_stop_particle_exchange_metrics_timer(metrics_timer), &
+            particles_examined, x_particles_outgoing)
+         call lcm_record_particle_outgoing_preparation( &
+            lcm_exchange_y_phase, 0.0_real64, 0_int64, &
+            y_particles_outgoing)
+      endif
 
       planned_x_send_buffers_are_ready = parallel_state%is_set
       planned_y_send_buffers_are_ready = parallel_state%is_set
@@ -526,9 +567,13 @@ contains
    !> x-received particles are checked for a second, corner-routing y hop.
    subroutine lcm_extract_outgoing_particles(phase)
       integer, intent(in) :: phase
+      integer(int64) :: particles_examined
+      integer(int64) :: particles_outgoing
       integer :: i
       integer :: j
       integer :: k
+      logical :: measure_outgoing_preparation
+      type(lcm_particle_exchange_metrics_timer_t) :: metrics_timer
 
       call require_particle_cells_allocated()
       call lcm_require_valid_exchange_phase(phase)
@@ -550,13 +595,30 @@ contains
 
       ! Preserve direct y-phase use when no initial x plan preceded it.
       call lcm_clear_particle_exchange_phase_buffers(phase)
+      measure_outgoing_preparation = lcm_particle_exchange_metrics_are_enabled()
+      if (measure_outgoing_preparation) then
+         particles_examined = 0_int64
+         particles_outgoing = 0_int64
+         call lcm_start_particle_exchange_metrics_timer(metrics_timer)
+      endif
       do k = 1, size(cell_particles, 3)
          do j = 1, size(cell_particles, 2)
             do i = 1, size(cell_particles, 1)
-               call compact_outgoing_particles_from_cell(i, j, k, phase)
+               if (measure_outgoing_preparation) then
+                  call compact_outgoing_particles_from_cell( &
+                     i, j, k, phase, particles_examined, particles_outgoing)
+               else
+                  call compact_outgoing_particles_from_cell(i, j, k, phase)
+               endif
             enddo
          enddo
       enddo
+
+      if (measure_outgoing_preparation) then
+         call lcm_record_particle_outgoing_preparation( &
+            phase, lcm_stop_particle_exchange_metrics_timer(metrics_timer), &
+            particles_examined, particles_outgoing)
+      endif
    end subroutine lcm_extract_outgoing_particles
 
    !> Insert payloads received during one cardinal exchange phase.
@@ -573,24 +635,62 @@ contains
       integer :: local_j
       integer :: message_count
       integer :: phase_direction
+      integer(int64) :: particles_inserted
+      integer(int64) :: y_particles_examined
+      integer(int64) :: y_particles_forwarded
+      logical :: measure_received_insertion
+      type(lcm_particle_exchange_metrics_timer_t) :: metrics_timer
       type(lcm_particle_mpi_message_t), contiguous, pointer :: messages(:)
 
       call require_particle_cells_allocated()
       call lcm_require_valid_exchange_phase(phase)
 
+      measure_received_insertion = lcm_particle_exchange_metrics_are_enabled()
+      if (measure_received_insertion) then
+         particles_inserted = 0_int64
+         y_particles_examined = 0_int64
+         y_particles_forwarded = 0_int64
+         call lcm_start_particle_exchange_metrics_timer(metrics_timer)
+      endif
+
       do phase_direction = 1, lcm_exchange_directions_per_phase
          direction = lcm_exchange_direction_for_phase(phase, phase_direction)
          message_count = lcm_receive_particle_message_count(direction)
          if (message_count == 0) cycle
+         if (measure_received_insertion) then
+            particles_inserted = particles_inserted + int(message_count, int64)
+         endif
          call lcm_get_receive_particle_message_view(direction, messages)
          do index = 1, message_count
             call received_message_local_indices(messages(index), phase, local_i, local_j)
-            if (phase == lcm_exchange_x_phase .and. &
-                forward_x_received_particle_in_y(messages(index))) cycle
+            if (phase == lcm_exchange_x_phase) then
+               if (measure_received_insertion) then
+                  y_particles_examined = y_particles_examined + 1_int64
+               endif
+               if (forward_x_received_particle_in_y(messages(index))) then
+                  if (measure_received_insertion) then
+                     y_particles_forwarded = y_particles_forwarded + 1_int64
+                  endif
+                  cycle
+               endif
+            endif
             call lcm_add_particle(local_i, local_j, messages(index)%k, &
                                   messages(index)%particle)
          enddo
       enddo
+
+      if (measure_received_insertion) then
+         call lcm_record_received_particle_insertion( &
+            phase, lcm_stop_particle_exchange_metrics_timer(metrics_timer), &
+            particles_inserted)
+         if (phase == lcm_exchange_x_phase) then
+            ! The corner-routing check is included in x insertion time, but its
+            ! particle examinations and forwarded traffic belong to y routing.
+            call lcm_record_particle_outgoing_preparation( &
+               lcm_exchange_y_phase, 0.0_real64, y_particles_examined, &
+               y_particles_forwarded)
+         endif
+      endif
    end subroutine lcm_insert_received_particles
 
    subroutine received_message_local_indices(message, phase, local_i, local_j)
@@ -652,11 +752,15 @@ contains
    !> Retained particles preserve their original relative order. Outgoing
    !> particles are copied directly to their directional MPI message buffer,
    !> so removing several particles never repeatedly shifts the cell array.
-   subroutine compact_outgoing_particles_from_cell(i, j, k, phase)
+   subroutine compact_outgoing_particles_from_cell(i, j, k, phase, &
+                                                    particles_examined, &
+                                                    particles_outgoing)
       integer, intent(in) :: i
       integer, intent(in) :: j
       integer, intent(in) :: k
       integer, intent(in) :: phase
+      integer(int64), intent(inout), optional :: particles_examined
+      integer(int64), intent(inout), optional :: particles_outgoing
       integer :: direction
       integer :: new_i
       integer :: new_j
@@ -670,6 +774,9 @@ contains
 
       original_count = cell_particles(i,j,k)%count
       retained_count = 0
+      if (present(particles_examined)) then
+         particles_examined = particles_examined + int(original_count, int64)
+      endif
 
       do read_index = 1, original_count
          call lcm_locate_particle_cell( &
@@ -680,6 +787,9 @@ contains
 
          if (particle_leaves_to_neighbor_rank(new_i, new_j, new_k, phase, &
                                               direction)) then
+            if (present(particles_outgoing)) then
+               particles_outgoing = particles_outgoing + 1_int64
+            endif
             call append_outgoing_particle( &
                cell_particles(i,j,k)%particles(read_index), global_i, global_j, new_k, &
                phase, direction)
@@ -701,22 +811,51 @@ contains
 
    subroutine lcm_update_particle_cell_ownership()
       type(lcm_particle_cell_migration_plan_t), allocatable :: plan(:,:,:)
+      integer(int64) :: particle_examinations
+      integer(int64) :: particles_moved
+      logical :: measure_ownership_update
+      type(lcm_particle_exchange_metrics_timer_t) :: metrics_timer
 
       call require_particle_cells_allocated()
 
+      measure_ownership_update = lcm_particle_exchange_metrics_are_enabled()
+      if (measure_ownership_update) then
+         particle_examinations = 0_int64
+         particles_moved = 0_int64
+         call lcm_start_particle_exchange_metrics_timer(metrics_timer)
+      endif
+
       allocate(plan(size(cell_particles, 1), size(cell_particles, 2), &
                     size(cell_particles, 3)))
-      call build_local_particle_migration_plan(plan)
+      if (measure_ownership_update) then
+         call build_local_particle_migration_plan( &
+            plan, particle_examinations, local_particles_moved=particles_moved)
+      else
+         call build_local_particle_migration_plan(plan)
+      endif
       call apply_particle_migration_plan(plan, .false.)
+
+      if (measure_ownership_update) then
+         call lcm_record_particle_ownership_update( &
+            lcm_stop_particle_exchange_metrics_timer(metrics_timer), &
+            particle_examinations, particles_moved)
+      endif
    end subroutine lcm_update_particle_cell_ownership
 
    !> Classify every original local particle once without mutating storage.
-   subroutine build_local_particle_migration_plan(plan)
+   subroutine build_local_particle_migration_plan( &
+      plan, particles_examined, x_particles_outgoing, y_particles_outgoing, &
+      local_particles_moved)
       type(lcm_particle_cell_migration_plan_t), intent(inout) :: plan(:,:,:)
+      integer(int64), intent(inout), optional :: particles_examined
+      integer(int64), intent(inout), optional :: x_particles_outgoing
+      integer(int64), intent(inout), optional :: y_particles_outgoing
+      integer(int64), intent(inout), optional :: local_particles_moved
       integer :: i
       integer :: j
       integer :: k
       integer :: n
+      integer :: phase
 
       do k = 1, size(cell_particles, 3)
          do j = 1, size(cell_particles, 2)
@@ -729,6 +868,24 @@ contains
                   call lcm_classify_particle_migration( &
                      cell_particles(i,j,k)%particles(n), i, j, k, &
                      plan(i,j,k)%entries(n))
+                  if (present(particles_examined)) then
+                     particles_examined = particles_examined + 1_int64
+                  endif
+                  if (plan(i,j,k)%entries(n)%disposition == &
+                      lcm_migration_local_cell) then
+                     if (present(local_particles_moved)) then
+                        local_particles_moved = local_particles_moved + 1_int64
+                     endif
+                  elseif (migration_has_active_route(plan(i,j,k)%entries(n))) then
+                     phase = migration_exchange_phase(plan(i,j,k)%entries(n))
+                     if (phase == lcm_exchange_x_phase .and. &
+                         present(x_particles_outgoing)) then
+                        x_particles_outgoing = x_particles_outgoing + 1_int64
+                     elseif (phase == lcm_exchange_y_phase .and. &
+                             present(y_particles_outgoing)) then
+                        y_particles_outgoing = y_particles_outgoing + 1_int64
+                     endif
+                  endif
                enddo
             enddo
          enddo

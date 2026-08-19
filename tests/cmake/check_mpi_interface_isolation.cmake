@@ -7,6 +7,7 @@ set(LCM_MPI_BOUNDARY_SOURCES
   "${LCM_SOURCE_DIR}/lcm_particle_count_exchange.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_mpi_datatype.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_mpi_transport.f90"
+  "${LCM_SOURCE_DIR}/lcm_particle_exchange_timing_summary.f90"
 )
 
 file(GLOB LCM_STANDALONE_SOURCES "${LCM_SOURCE_DIR}/lcm_*.f90")

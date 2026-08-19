@@ -1,6 +1,9 @@
 program test_particle_cell_ownership
    use iso_fortran_env, only: int64, real64
    use lcm_grid_state, only: lcm_set_grid
+   use lcm_particle_exchange_metrics, only: lcm_get_particle_exchange_metrics, &
+      lcm_particle_exchange_metrics_t, lcm_reset_particle_exchange_metrics, &
+      lcm_set_particle_exchange_metrics_enabled
    use lcm_particle_state, only: cell_particles, lcm_add_particle, &
                                  lcm_allocate_particle_cells, &
                                  lcm_update_particle_cell_ownership
@@ -9,12 +12,25 @@ program test_particle_cell_ownership
    implicit none
 
    type(lcm_grid_t) :: grid
+   type(lcm_particle_exchange_metrics_t) :: metrics
 
    call configure_grid()
    call lcm_allocate_particle_cells(4)
    call add_particles()
+   call lcm_reset_particle_exchange_metrics()
+   call lcm_set_particle_exchange_metrics_enabled(.true.)
 
    call lcm_update_particle_cell_ownership()
+
+   call lcm_get_particle_exchange_metrics(metrics)
+   call assert_true(metrics%ownership_update_calls == 1_int64, &
+                    'one ownership update measured')
+   call assert_true(metrics%ownership_particle_examinations == 8_int64, &
+                    'actual ownership examination operations')
+   call assert_true(metrics%ownership_particles_moved == 4_int64, &
+                    'particles moved between local cells')
+   call assert_true(metrics%ownership_update_seconds >= 0.0_real64, &
+                    'ownership update time is nonnegative')
 
    call assert_true(cell_particles(1,1,1)%count == 3, "original cell count")
    call assert_true(cell_particles(2,1,1)%count == 3, "east cell count")
