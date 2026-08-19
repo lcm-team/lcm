@@ -543,6 +543,9 @@ contains
          call build_local_particle_migration_plan(migration_plan)
       endif
       call apply_particle_migration_plan(migration_plan, parallel_state%is_set)
+      ! Automatic deallocation would otherwise happen after the timer stops,
+      ! hiding the cost of destroying the per-cell temporary metadata.
+      deallocate(migration_plan)
 
       if (measure_migration_preparation) then
          ! The single pass classifies both phases. Attribute its combined time
