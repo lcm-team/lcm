@@ -20,6 +20,20 @@ module lcm_particle_exchange_metrics
 
    private
 
+   integer, parameter, public :: lcm_timing_advance_total = 1
+   integer, parameter, public :: lcm_timing_prepare_particle_velocities = 2
+   integer, parameter, public :: lcm_timing_refine_particle_velocities = 3
+   integer, parameter, public :: lcm_timing_update_particle_positions = 4
+   integer, parameter, public :: lcm_timing_particle_boundaries = 5
+   integer, parameter, public :: lcm_timing_migration_total = 6
+   integer, parameter, public :: lcm_timing_migration_buffer_clear = 7
+   integer, parameter, public :: lcm_timing_migration_plan_allocate = 8
+   integer, parameter, public :: lcm_timing_migration_plan_classification = 9
+   integer, parameter, public :: lcm_timing_migration_plan_apply = 10
+   integer, parameter, public :: lcm_timing_migration_plan_deallocate = 11
+   integer, parameter, public :: lcm_timing_particle_exchange_total = 12
+   integer, parameter, public :: lcm_timing_particle_sources = 13
+
    type, public :: lcm_particle_exchange_metrics_t
       real(real64) :: x_outgoing_preparation_seconds = 0.0_real64
       real(real64) :: y_outgoing_preparation_seconds = 0.0_real64
@@ -30,6 +44,19 @@ module lcm_particle_exchange_metrics
       real(real64) :: x_received_insertion_seconds = 0.0_real64
       real(real64) :: y_received_insertion_seconds = 0.0_real64
       real(real64) :: ownership_update_seconds = 0.0_real64
+      real(real64) :: advance_total_seconds = 0.0_real64
+      real(real64) :: prepare_particle_velocities_seconds = 0.0_real64
+      real(real64) :: refine_particle_velocities_seconds = 0.0_real64
+      real(real64) :: update_particle_positions_seconds = 0.0_real64
+      real(real64) :: particle_boundaries_seconds = 0.0_real64
+      real(real64) :: migration_total_seconds = 0.0_real64
+      real(real64) :: migration_buffer_clear_seconds = 0.0_real64
+      real(real64) :: migration_plan_allocate_seconds = 0.0_real64
+      real(real64) :: migration_plan_classification_seconds = 0.0_real64
+      real(real64) :: migration_plan_apply_seconds = 0.0_real64
+      real(real64) :: migration_plan_deallocate_seconds = 0.0_real64
+      real(real64) :: particle_exchange_total_seconds = 0.0_real64
+      real(real64) :: particle_sources_seconds = 0.0_real64
       integer(int64) :: x_particles_examined = 0_int64
       integer(int64) :: y_particles_examined = 0_int64
       integer(int64) :: x_particles_outgoing = 0_int64
@@ -73,6 +100,7 @@ module lcm_particle_exchange_metrics
    public :: lcm_record_particle_payload_exchange
    public :: lcm_record_particle_payload_sent
    public :: lcm_record_received_particle_insertion
+   public :: lcm_record_stage_timing
    public :: lcm_reset_particle_exchange_metrics
    public :: lcm_set_particle_exchange_metrics_enabled
    public :: lcm_start_particle_exchange_metrics_timer
@@ -281,5 +309,69 @@ contains
       particle_exchange_metrics%ownership_particles_moved = &
          particle_exchange_metrics%ownership_particles_moved + particles_moved
    end subroutine lcm_record_particle_ownership_update
+
+   !> Accumulate one explicitly named stage without adding collectives to the
+   !> timestep path. Parent timers and their component timers are both exposed
+   !> so reporting code can preserve, rather than sum, their nesting.
+   subroutine lcm_record_stage_timing(stage, elapsed_seconds)
+      integer, intent(in) :: stage
+      real(real64), intent(in) :: elapsed_seconds
+
+      if (.not. metrics_enabled) return
+
+      select case (stage)
+      case (lcm_timing_advance_total)
+         particle_exchange_metrics%advance_total_seconds = &
+            particle_exchange_metrics%advance_total_seconds + elapsed_seconds
+      case (lcm_timing_prepare_particle_velocities)
+         particle_exchange_metrics%prepare_particle_velocities_seconds = &
+            particle_exchange_metrics%prepare_particle_velocities_seconds + &
+            elapsed_seconds
+      case (lcm_timing_refine_particle_velocities)
+         particle_exchange_metrics%refine_particle_velocities_seconds = &
+            particle_exchange_metrics%refine_particle_velocities_seconds + &
+            elapsed_seconds
+      case (lcm_timing_update_particle_positions)
+         particle_exchange_metrics%update_particle_positions_seconds = &
+            particle_exchange_metrics%update_particle_positions_seconds + &
+            elapsed_seconds
+      case (lcm_timing_particle_boundaries)
+         particle_exchange_metrics%particle_boundaries_seconds = &
+            particle_exchange_metrics%particle_boundaries_seconds + &
+            elapsed_seconds
+      case (lcm_timing_migration_total)
+         particle_exchange_metrics%migration_total_seconds = &
+            particle_exchange_metrics%migration_total_seconds + elapsed_seconds
+      case (lcm_timing_migration_buffer_clear)
+         particle_exchange_metrics%migration_buffer_clear_seconds = &
+            particle_exchange_metrics%migration_buffer_clear_seconds + &
+            elapsed_seconds
+      case (lcm_timing_migration_plan_allocate)
+         particle_exchange_metrics%migration_plan_allocate_seconds = &
+            particle_exchange_metrics%migration_plan_allocate_seconds + &
+            elapsed_seconds
+      case (lcm_timing_migration_plan_classification)
+         particle_exchange_metrics%migration_plan_classification_seconds = &
+            particle_exchange_metrics%migration_plan_classification_seconds + &
+            elapsed_seconds
+      case (lcm_timing_migration_plan_apply)
+         particle_exchange_metrics%migration_plan_apply_seconds = &
+            particle_exchange_metrics%migration_plan_apply_seconds + &
+            elapsed_seconds
+      case (lcm_timing_migration_plan_deallocate)
+         particle_exchange_metrics%migration_plan_deallocate_seconds = &
+            particle_exchange_metrics%migration_plan_deallocate_seconds + &
+            elapsed_seconds
+      case (lcm_timing_particle_exchange_total)
+         particle_exchange_metrics%particle_exchange_total_seconds = &
+            particle_exchange_metrics%particle_exchange_total_seconds + &
+            elapsed_seconds
+      case (lcm_timing_particle_sources)
+         particle_exchange_metrics%particle_sources_seconds = &
+            particle_exchange_metrics%particle_sources_seconds + elapsed_seconds
+      case default
+         error stop 'LCM timing stage is invalid'
+      end select
+   end subroutine lcm_record_stage_timing
 
 end module lcm_particle_exchange_metrics
