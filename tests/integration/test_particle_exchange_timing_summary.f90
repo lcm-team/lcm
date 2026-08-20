@@ -13,8 +13,22 @@ program test_particle_exchange_timing_summary
       lcm_record_particle_ownership_update, &
       lcm_record_particle_payload_exchange, &
       lcm_record_received_particle_insertion, &
+      lcm_record_stage_timing, &
       lcm_reset_particle_exchange_metrics, &
-      lcm_set_particle_exchange_metrics_enabled
+      lcm_set_particle_exchange_metrics_enabled, &
+      lcm_timing_advance_total, &
+      lcm_timing_migration_buffer_clear, &
+      lcm_timing_migration_plan_allocate, &
+      lcm_timing_migration_plan_apply, &
+      lcm_timing_migration_plan_classification, &
+      lcm_timing_migration_plan_deallocate, &
+      lcm_timing_migration_total, &
+      lcm_timing_particle_boundaries, &
+      lcm_timing_particle_exchange_total, &
+      lcm_timing_particle_sources, &
+      lcm_timing_prepare_particle_velocities, &
+      lcm_timing_refine_particle_velocities, &
+      lcm_timing_update_particle_positions
    use lcm_particle_exchange_timing_summary, only: &
       lcm_get_particle_exchange_timing_summary, &
       lcm_particle_exchange_timing_summary_t, &
@@ -96,6 +110,32 @@ contains
          lcm_exchange_y_phase, 8.0_real64 * rank_factor, 0_int64)
       call lcm_record_particle_ownership_update( &
          9.0_real64 * rank_factor, 0_int64, 0_int64)
+      call lcm_record_stage_timing( &
+         lcm_timing_advance_total, 10.0_real64 * rank_factor)
+      call lcm_record_stage_timing( &
+         lcm_timing_prepare_particle_velocities, 11.0_real64 * rank_factor)
+      call lcm_record_stage_timing( &
+         lcm_timing_refine_particle_velocities, 12.0_real64 * rank_factor)
+      call lcm_record_stage_timing( &
+         lcm_timing_update_particle_positions, 13.0_real64 * rank_factor)
+      call lcm_record_stage_timing( &
+         lcm_timing_particle_boundaries, 14.0_real64 * rank_factor)
+      call lcm_record_stage_timing( &
+         lcm_timing_migration_total, 15.0_real64 * rank_factor)
+      call lcm_record_stage_timing( &
+         lcm_timing_migration_buffer_clear, 16.0_real64 * rank_factor)
+      call lcm_record_stage_timing( &
+         lcm_timing_migration_plan_allocate, 17.0_real64 * rank_factor)
+      call lcm_record_stage_timing( &
+         lcm_timing_migration_plan_classification, 18.0_real64 * rank_factor)
+      call lcm_record_stage_timing( &
+         lcm_timing_migration_plan_apply, 19.0_real64 * rank_factor)
+      call lcm_record_stage_timing( &
+         lcm_timing_migration_plan_deallocate, 20.0_real64 * rank_factor)
+      call lcm_record_stage_timing( &
+         lcm_timing_particle_exchange_total, 21.0_real64 * rank_factor)
+      call lcm_record_stage_timing( &
+         lcm_timing_particle_sources, 22.0_real64 * rank_factor)
    end subroutine record_synthetic_timings
 
    subroutine assert_all_timings(actual, minimum_factor, maximum_factor, &
@@ -127,6 +167,42 @@ contains
                          'y received insertion')
       call assert_timing(actual%ownership_update, 9.0_real64, minimum_factor, &
                          maximum_factor, mean_factor, 'ownership update')
+      call assert_timing(actual%advance_total, 10.0_real64, minimum_factor, &
+                         maximum_factor, mean_factor, 'advance total')
+      call assert_timing(actual%prepare_particle_velocities, 11.0_real64, &
+                         minimum_factor, maximum_factor, mean_factor, &
+                         'prepare particle velocities')
+      call assert_timing(actual%refine_particle_velocities, 12.0_real64, &
+                         minimum_factor, maximum_factor, mean_factor, &
+                         'refine particle velocities')
+      call assert_timing(actual%update_particle_positions, 13.0_real64, &
+                         minimum_factor, maximum_factor, mean_factor, &
+                         'update particle positions')
+      call assert_timing(actual%particle_boundaries, 14.0_real64, &
+                         minimum_factor, maximum_factor, mean_factor, &
+                         'particle boundaries')
+      call assert_timing(actual%migration_total, 15.0_real64, minimum_factor, &
+                         maximum_factor, mean_factor, 'migration total')
+      call assert_timing(actual%migration_buffer_clear, 16.0_real64, &
+                         minimum_factor, maximum_factor, mean_factor, &
+                         'migration buffer clear')
+      call assert_timing(actual%migration_plan_allocate, 17.0_real64, &
+                         minimum_factor, maximum_factor, mean_factor, &
+                         'migration plan allocate')
+      call assert_timing(actual%migration_plan_classification, 18.0_real64, &
+                         minimum_factor, maximum_factor, mean_factor, &
+                         'migration plan classification')
+      call assert_timing(actual%migration_plan_apply, 19.0_real64, &
+                         minimum_factor, maximum_factor, mean_factor, &
+                         'migration plan apply')
+      call assert_timing(actual%migration_plan_deallocate, 20.0_real64, &
+                         minimum_factor, maximum_factor, mean_factor, &
+                         'migration plan deallocate')
+      call assert_timing(actual%particle_exchange_total, 21.0_real64, &
+                         minimum_factor, maximum_factor, mean_factor, &
+                         'particle exchange total')
+      call assert_timing(actual%particle_sources, 22.0_real64, minimum_factor, &
+                         maximum_factor, mean_factor, 'particle sources')
    end subroutine assert_all_timings
 
    subroutine assert_timing(actual, coefficient, minimum_factor, &

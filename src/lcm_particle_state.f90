@@ -40,8 +40,15 @@ module lcm_particle_state
       lcm_record_particle_outgoing_preparation, &
       lcm_record_particle_ownership_update, &
       lcm_record_received_particle_insertion, &
+      lcm_record_stage_timing, &
       lcm_start_particle_exchange_metrics_timer, &
-      lcm_stop_particle_exchange_metrics_timer
+      lcm_stop_particle_exchange_metrics_timer, &
+      lcm_timing_migration_buffer_clear, &
+      lcm_timing_migration_plan_allocate, &
+      lcm_timing_migration_plan_apply, &
+      lcm_timing_migration_plan_classification, &
+      lcm_timing_migration_plan_deallocate, &
+      lcm_timing_migration_total
    use lcm_particle_properties, only: lcm_particle_radius
    use lcm_types, only: lcm_particle_cell_t, lcm_particle_mpi_message_t, &
                         lcm_particle_t
@@ -513,7 +520,9 @@ contains
       integer(int64) :: x_particles_outgoing
       integer(int64) :: y_particles_outgoing
       logical :: measure_migration_preparation
-      type(lcm_particle_exchange_metrics_timer_t) :: metrics_timer
+      real(real64) :: migration_total_seconds
+      type(lcm_particle_exchange_metrics_timer_t) :: migration_timer
+      type(lcm_particle_exchange_metrics_timer_t) :: stage_timer
 
       call require_particle_cells_allocated()
       if (planned_x_send_buffers_are_ready .or. &
@@ -527,14 +536,27 @@ contains
          particles_examined = 0_int64
          x_particles_outgoing = 0_int64
          y_particles_outgoing = 0_int64
-         call lcm_start_particle_exchange_metrics_timer(metrics_timer)
+         call lcm_start_particle_exchange_metrics_timer(migration_timer)
+         call lcm_start_particle_exchange_metrics_timer(stage_timer)
       endif
 
       call lcm_clear_particle_exchange_phase_buffers(lcm_exchange_x_phase)
       call lcm_clear_particle_exchange_phase_buffers(lcm_exchange_y_phase)
+      if (measure_migration_preparation) then
+         call lcm_record_stage_timing( &
+            lcm_timing_migration_buffer_clear, &
+            lcm_stop_particle_exchange_metrics_timer(stage_timer))
+         call lcm_start_particle_exchange_metrics_timer(stage_timer)
+      endif
       allocate(migration_plan(size(cell_particles, 1), &
                               size(cell_particles, 2), &
                               size(cell_particles, 3)))
+      if (measure_migration_preparation) then
+         call lcm_record_stage_timing( &
+            lcm_timing_migration_plan_allocate, &
+            lcm_stop_particle_exchange_metrics_timer(stage_timer))
+         call lcm_start_particle_exchange_metrics_timer(stage_timer)
+      endif
       if (measure_migration_preparation) then
          call build_local_particle_migration_plan( &
             migration_plan, particles_examined, x_particles_outgoing, &
@@ -542,18 +564,37 @@ contains
       else
          call build_local_particle_migration_plan(migration_plan)
       endif
+      if (measure_migration_preparation) then
+         call lcm_record_stage_timing( &
+            lcm_timing_migration_plan_classification, &
+            lcm_stop_particle_exchange_metrics_timer(stage_timer))
+         call lcm_start_particle_exchange_metrics_timer(stage_timer)
+      endif
       call apply_particle_migration_plan(migration_plan, parallel_state%is_set)
+      if (measure_migration_preparation) then
+         call lcm_record_stage_timing( &
+            lcm_timing_migration_plan_apply, &
+            lcm_stop_particle_exchange_metrics_timer(stage_timer))
+         call lcm_start_particle_exchange_metrics_timer(stage_timer)
+      endif
       ! Automatic deallocation would otherwise happen after the timer stops,
       ! hiding the cost of destroying the per-cell temporary metadata.
       deallocate(migration_plan)
 
       if (measure_migration_preparation) then
+         call lcm_record_stage_timing( &
+            lcm_timing_migration_plan_deallocate, &
+            lcm_stop_particle_exchange_metrics_timer(stage_timer))
+         migration_total_seconds = &
+            lcm_stop_particle_exchange_metrics_timer(migration_timer)
+         call lcm_record_stage_timing( &
+            lcm_timing_migration_total, migration_total_seconds)
          ! The single pass classifies both phases. Attribute its combined time
          ! and its one full-population examination to x preparation; original
          ! y routes require no second population scan.
          call lcm_record_particle_outgoing_preparation( &
             lcm_exchange_x_phase, &
-            lcm_stop_particle_exchange_metrics_timer(metrics_timer), &
+            migration_total_seconds, &
             particles_examined, x_particles_outgoing)
          call lcm_record_particle_outgoing_preparation( &
             lcm_exchange_y_phase, 0.0_real64, 0_int64, &
