@@ -1,44 +1,188 @@
-# Building LCM
+# Build and Run DALES–LCM on LISE
 
-This repository is being moved toward a standalone LCM library. The current
-CMake build is an early compilation target, not a complete scientific driver.
+This guide builds standalone LCM, links DALES to it, and runs an LCM
+experiment. The build and run directories are separate from source checkouts.
 
-## Requirements
+## 1. Choose locations
 
-- CMake 3.20 or newer
-- A Fortran compiler
-- MPI Fortran compiler support
+Set these paths to the DALES and LCM checkouts you intend to build. Do not
+point `LCM_ROOT` at the LCM source directory: it must point at the completed
+LCM *build* directory.
 
-On macOS with Homebrew, this usually means `gcc`, `open-mpi`, and `cmake`.
-
-## Default Build
-
-Configure and build:
-
-```sh
-cmake -S . -B build
-cmake --build build
+```bash
+export PROJECT=/scratch/usr/bekmah93/lcm_particle_scalability
+export LCM_SRC="${PROJECT}/src/lcm"
+export DALES_SRC="${PROJECT}/src/dales"
+export LCM_BUILD="${PROJECT}/build/lcm-smoke"
+export DALES_BUILD="${PROJECT}/build/dales-smoke"
 ```
 
-The default target builds a static `lcm` library from the core files that can
-currently compile outside SAM with temporary compatibility stubs.
+Use fresh, uniquely named build directories for a different compiler, source
+revision, or build type. Never reuse an Intel CMake build directory for GNU,
+or vice versa.
 
-## Temporary Compatibility Stubs
+## 2. Intel + Intel MPI build
 
-The `stubs/sam_compat.f90` file provides placeholder SAM modules such as
-`grid`, `params`, `vars`, timers, and output hooks. These stubs are only a
-compilation aid. They are not a scientific coupling layer and should be replaced
-as the standalone LCM interface is designed.
+Load one consistent Intel MPI dependency stack:
 
-## Full SAM-Derived Source Probe
+```bash
+module purge
+module load NHRZIBenv
+module load sw.clx.el9
+module load slurm
+module load intel/2025.3
+module load impi/2021.15
+module load cmake/3.31.9
+module load hdf5-parallel/impi/intel/1.14.4
+module load netcdf-parallel/impi/intel/4.9.2
+module load fftw3/intel/3.3.10
 
-To ask CMake to try every copied SAM-derived source file:
-
-```sh
-cmake -S . -B build -DLCM_BUILD_ALL_SAM_SOURCES=ON
-cmake --build build
+export FC=mpiifx
+export NetCDF_ROOT="$(nf-config --prefix)"
 ```
 
-This is expected to expose remaining SAM coupling assumptions, including
-precision choices, thermodynamic fields, SGS tendencies, precipitation arrays,
-MPI/domain decomposition, and output interfaces.
+Configure and compile LCM:
+
+```bash
+cmake -S "${LCM_SRC}" -B "${LCM_BUILD}" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_Fortran_COMPILER=mpiifx \
+  -DCMAKE_Fortran_FLAGS:STRING="-fpp"
+
+cmake --build "${LCM_BUILD}" --parallel 8
+```
+
+The `-fpp` flag tells Intel Fortran to process LCM's conditional `#ifdef`
+source blocks before compilation. Without it, Intel may compile both branches
+and report duplicate declarations.
+
+Configure and compile DALES linked to this LCM build:
+
+```bash
+cmake -S "${DALES_SRC}" -B "${DALES_BUILD}" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_Fortran_COMPILER=mpiifx \
+  -DENABLE_LCM=ON \
+  -DLCM_ROOT="${LCM_BUILD}" \
+  -DNetCDF_ROOT="${NetCDF_ROOT}"
+
+cmake --build "${DALES_BUILD}" --parallel 8
+```
+
+The executable is `${DALES_BUILD}/bin/dales`.
+
+## 3. GNU + Open MPI build
+
+Alternatively, use GNU Fortran with Open MPI instead of the Intel compiler
+stack. Load the following modules; do not mix them with the Intel MPI modules
+above.
+
+```bash
+module purge
+module load NHRZIBenv
+module load sw.clx.el9
+module load slurm
+module load gcc/13.3.0
+module load openmpi/gcc/5.0.3
+module load cmake/3.31.9
+module load hdf5-parallel/ompi/gcc/1.14.4
+module load netcdf-parallel/ompi/gcc/4.9.2
+module load fftw3/gcc/3.3.10
+
+export FC=mpif90
+export NetCDF_ROOT="$(nf-config --prefix)"
+```
+
+Use GNU build directories separate from the Intel build directories:
+
+```bash
+export LCM_BUILD="${PROJECT}/build/lcm-smoke-gfortran"
+export DALES_BUILD="${PROJECT}/build/dales-smoke-gfortran"
+
+cmake -S "${LCM_SRC}" -B "${LCM_BUILD}" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_Fortran_COMPILER=mpif90
+cmake --build "${LCM_BUILD}" --parallel 8
+
+cmake -S "${DALES_SRC}" -B "${DALES_BUILD}" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_Fortran_COMPILER=mpif90 \
+  -DENABLE_LCM=ON \
+  -DLCM_ROOT="${LCM_BUILD}" \
+  -DNetCDF_ROOT="${NetCDF_ROOT}"
+cmake --build "${DALES_BUILD}" --parallel 8
+```
+
+LCM's CMake configuration enables GNU preprocessing (`-cpp`) automatically.
+
+## 4. Run an LCM experiment
+
+Choose a run directory containing the DALES input files and edit
+`namoptions.001` for the scientific case. To activate LCM, it must
+contain at least:
+
+```fortran
+&NAMMICROPHYSICS
+imicro = 12
+/
+
+&NAMLCM
+np_xy = 50
+nzl = 10
+init_aero = 'bin'
+unit_aero = '1/m3'
+switch_ice = .false.
+/
+```
+
+The MPI layout in the namelist must agree with the Slurm task count. The smoke
+example below uses `nprocx = 2`, `nprocy = 2`, and four tasks. Change those
+values together when using another decomposition.
+
+Create `submit_lcm_smoke.sbatch` in the run directory. This is the Intel
+smoke-test template:
+
+```bash
+#!/bin/bash
+#SBATCH --job-name=lcm-smoke4
+#SBATCH --partition=cpu-clx:test
+#SBATCH --nodes=1
+#SBATCH --ntasks=4
+#SBATCH --ntasks-per-node=4
+#SBATCH --cpus-per-task=1
+#SBATCH --hint=nomultithread
+#SBATCH --exclusive
+#SBATCH --time=00:10:00
+#SBATCH --output=slurm-%j.out
+#SBATCH --error=slurm-%j.err
+
+set -euo pipefail
+
+module purge
+module load NHRZIBenv
+module load sw.clx.el9
+module load slurm
+module load intel/2025.3
+module load impi/2021.15
+module load hdf5-parallel/impi/intel/1.14.4
+module load netcdf-parallel/impi/intel/4.9.2
+module load fftw3/intel/3.3.10
+
+export LD_LIBRARY_PATH="$(nf-config --prefix)/lib:${LD_LIBRARY_PATH:-}"
+export DALES=/scratch/usr/bekmah93/lcm_particle_scalability/build/dales-smoke/bin/dales
+
+srun --nodes=1 --ntasks=4 --ntasks-per-node=4 --cpus-per-task=1 \
+  --cpu-bind=cores "${DALES}" namoptions.001 > dales.out 2> dales.err
+```
+
+For a GNU build, use the same Slurm resources and `srun` line, but load the
+same GNU/Open-MPI modules used at build time and set `DALES` to the GNU binary.
+
+Submit and monitor:
+
+```bash
+sbatch submit_lcm_smoke.sbatch
+squeue -u "$USER"
+```
+
+After completion, inspect `dales.out` and `dales.err`.
