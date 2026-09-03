@@ -150,7 +150,7 @@ To run tests whose names match a pattern, for example particle exchange tests:
 ctest --test-dir "${LCM_BUILD}" -R particle_exchange --output-on-failure
 ```
 
-## 5. Run an LCM experiment
+## 5. Run a DALES–LCM experiment
 
 Choose a run directory containing the DALES input files and edit
 `namoptions.001` for the scientific case. To activate LCM, it must
