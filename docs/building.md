@@ -174,6 +174,18 @@ The MPI layout in the namelist must agree with the Slurm task count. The smoke
 example below uses `nprocx = 2`, `nprocy = 2`, and four tasks. Change those
 values together when using another decomposition.
 
+The DALES smoke case uses `runtime = 10800` by default, which is three hours of
+simulated time and can take substantially longer than a quick startup check.
+For a short DALES–LCM smoke run, change the `runtime` entry in
+`namoptions.001` before submitting:
+
+```fortran
+runtime = 60  ! 60 seconds of simulated time; use 10800 for the full smoke case
+```
+
+This changes the simulated duration only; choose a longer value for a
+scientific experiment.
+
 In the run directory, create a file named `submit_lcm_smoke.sbatch`. Copy the
 following Intel smoke-test script into that file. Replace the value of `DALES`
 with the absolute path to the `bin/dales` executable produced by your DALES
@@ -221,6 +233,16 @@ Submit and monitor:
 ```bash
 sbatch submit_lcm_smoke.sbatch
 squeue -u "$USER"
+```
+
+The `srun` command redirects DALES standard output and standard error to
+`dales.out` and `dales.err`, respectively. Therefore `slurm-<jobid>.out` is
+normally empty and `slurm-<jobid>.err` contains only Slurm messages (for
+example, cancellation or node errors). Monitor DALES while it runs with:
+
+```bash
+tail -f dales.out
+tail -f dales.err
 ```
 
 After completion, inspect `dales.out` and `dales.err`.
