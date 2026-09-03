@@ -3,25 +3,36 @@
 This guide builds standalone LCM, links DALES to it, and runs an LCM
 experiment. The build and run directories are separate from source checkouts.
 
-## 1. Choose locations
+## 1. Choose source and build directories
 
-Set these paths to the DALES and LCM checkouts you intend to build. Do not
-point `LCM_ROOT` at the LCM source directory: it must point at the completed
-LCM *build* directory.
+The paths below are examples. Choose the locations that suit your work; source
+and build directories do not need to share a parent directory. CMake creates
+the build directories when it configures the project. Do not point `LCM_ROOT`
+at the LCM source directory: it must point at the completed LCM *build*
+directory.
 
 ```bash
-export PROJECT=/scratch/usr/bekmah93/lcm_particle_scalability
-export LCM_SRC="${PROJECT}/src/lcm"
-export DALES_SRC="${PROJECT}/src/dales"
-export LCM_BUILD="${PROJECT}/build/lcm-smoke"
-export DALES_BUILD="${PROJECT}/build/dales-smoke"
+export LCM_SRC="/home/${USER}/src/lcm"
+export DALES_SRC="/home/${USER}/src/dales"
+export LCM_BUILD="/scratch/usr/${USER}/build/lcm-smoke"
+export DALES_BUILD="/scratch/usr/${USER}/build/dales-smoke"
 ```
 
 Use fresh, uniquely named build directories for a different compiler, source
 revision, or build type. Never reuse an Intel CMake build directory for GNU,
 or vice versa.
 
-## 2. Intel + Intel MPI build
+## 2. Prepare the DALES checkout
+
+DALES uses Git submodules, including `external/ecbuild`, which CMake requires
+during configuration. Run this once after cloning DALES, or whenever the
+submodules have not been initialized:
+
+```bash
+git -C "${DALES_SRC}" submodule update --init --recursive
+```
+
+## 3. Intel + Intel MPI build
 
 Load one consistent Intel MPI dependency stack:
 
@@ -71,7 +82,7 @@ cmake --build "${DALES_BUILD}" --parallel 8
 
 The executable is `${DALES_BUILD}/bin/dales`.
 
-## 3. GNU + Open MPI build
+## 4. GNU + Open MPI build
 
 Alternatively, use GNU Fortran with Open MPI instead of the Intel compiler
 stack. Load the following modules; do not mix them with the Intel MPI modules
@@ -96,8 +107,8 @@ export NetCDF_ROOT="$(nf-config --prefix)"
 Use GNU build directories separate from the Intel build directories:
 
 ```bash
-export LCM_BUILD="${PROJECT}/build/lcm-smoke-gfortran"
-export DALES_BUILD="${PROJECT}/build/dales-smoke-gfortran"
+export LCM_BUILD="/scratch/usr/${USER}/build/lcm-smoke-gfortran"
+export DALES_BUILD="/scratch/usr/${USER}/build/dales-smoke-gfortran"
 
 cmake -S "${LCM_SRC}" -B "${LCM_BUILD}" \
   -DCMAKE_BUILD_TYPE=Release \
@@ -115,7 +126,31 @@ cmake --build "${DALES_BUILD}" --parallel 8
 
 LCM's CMake configuration enables GNU preprocessing (`-cpp`) automatically.
 
-## 4. Run an LCM experiment
+## 4. Run LCM tests with CTest
+
+CMake registers LCM's unit and integration tests during configuration. `ctest`
+reads that test list from the LCM build directory and runs it. Some tests use
+MPI, so run the suite in a compute-node allocation with at least four tasks:
+
+```bash
+salloc --partition=cpu-clx:test --nodes=1 --ntasks=4 --time=00:10:00
+ctest --test-dir "${LCM_BUILD}" --output-on-failure
+exit
+```
+
+To list the registered tests without running them:
+
+```bash
+ctest --test-dir "${LCM_BUILD}" -N
+```
+
+To run tests whose names match a pattern, for example particle exchange tests:
+
+```bash
+ctest --test-dir "${LCM_BUILD}" -R particle_exchange --output-on-failure
+```
+
+## 5. Run an LCM experiment
 
 Choose a run directory containing the DALES input files and edit
 `namoptions.001` for the scientific case. To activate LCM, it must
