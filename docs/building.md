@@ -174,8 +174,10 @@ The MPI layout in the namelist must agree with the Slurm task count. The smoke
 example below uses `nprocx = 2`, `nprocy = 2`, and four tasks. Change those
 values together when using another decomposition.
 
-Create `submit_lcm_smoke.sbatch` in the run directory. This is the Intel
-smoke-test template:
+In the run directory, create a file named `submit_lcm_smoke.sbatch`. Copy the
+following Intel smoke-test script into that file. Replace the value of `DALES`
+with the absolute path to the `bin/dales` executable produced by your DALES
+build.
 
 ```bash
 #!/bin/bash
@@ -204,6 +206,7 @@ module load netcdf-parallel/impi/intel/4.9.2
 module load fftw3/intel/3.3.10
 
 export LD_LIBRARY_PATH="$(nf-config --prefix)/lib:${LD_LIBRARY_PATH:-}"
+# Replace this path with the DALES executable from your own build.
 export DALES=/scratch/usr/bekmah93/lcm_particle_scalability/build/dales-smoke/bin/dales
 
 srun --nodes=1 --ntasks=4 --ntasks-per-node=4 --cpus-per-task=1 \
