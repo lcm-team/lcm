@@ -44,6 +44,7 @@ set(LCM_CORE_SOURCES
   "${LCM_SOURCE_DIR}/lcm_particle_properties.f90"
   "${LCM_SOURCE_DIR}/lcm_grid_state.f90"
   "${LCM_SOURCE_DIR}/lcm_exchange_directions.f90"
+  "${LCM_SOURCE_DIR}/lcm_particle_migration.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_exchange_buffers.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_count_exchange.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_mpi_transport.f90"
@@ -341,6 +342,25 @@ add_test(
   COMMAND test_exchange_directions
 )
 
+add_executable(test_particle_migration_metadata
+  tests/unit/test_particle_migration_metadata.f90
+)
+
+target_link_libraries(test_particle_migration_metadata
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_particle_migration_metadata
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME particle_migration_metadata
+  COMMAND test_particle_migration_metadata
+)
+
 add_executable(test_local_subdomain_bounds
   tests/unit/test_local_subdomain_bounds.f90
 )
@@ -477,6 +497,28 @@ add_test(
   NAME particle_exchange_mpi_4_corner_routes
   COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4
           ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_particle_exchange_mpi>
+          ${MPIEXEC_POSTFLAGS}
+)
+
+add_executable(test_particle_exchange_mpi_edge_cases
+  tests/integration/test_particle_exchange_mpi_edge_cases.f90
+)
+
+target_link_libraries(test_particle_exchange_mpi_edge_cases
+  PRIVATE
+    lcm
+    MPI::MPI_Fortran
+)
+
+set_target_properties(test_particle_exchange_mpi_edge_cases
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME particle_exchange_mpi_4_edge_cases
+  COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4
+          ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_particle_exchange_mpi_edge_cases>
           ${MPIEXEC_POSTFLAGS}
 )
 

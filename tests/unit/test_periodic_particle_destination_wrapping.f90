@@ -72,8 +72,12 @@ program test_periodic_particle_destination_wrapping
    call assert_wrapped_message(lcm_exchange_west, 608, 3, 0, &
                                29.0_real64, -1.0_real64, 'south-west x phase')
 
-   call assert_equal(total_particle_count(), 8, &
-                     'x payload transport reinserts every periodic particle')
+   call assert_equal(total_particle_count(), 2, &
+                     'x-only particles are inserted before staged y transport')
+   call assert_equal(lcm_send_particle_message_count(lcm_exchange_south), 3, &
+                     'original and corner south routes are combined')
+   call assert_equal(lcm_send_particle_message_count(lcm_exchange_north), 3, &
+                     'original and corner north routes are combined')
    call lcm_exchange_particle_phase(lcm_exchange_y_phase)
 
    call assert_wrapped_message(lcm_exchange_south, 603, 1, 2, &
@@ -90,6 +94,13 @@ program test_periodic_particle_destination_wrapping
                                29.0_real64, 19.0_real64, 'south-west corner')
    call assert_equal(total_particle_count(), 8, &
                      'y payload transport preserves every periodic particle')
+
+   ! A second preparation cycle must be allowed after both staged phases were
+   ! consumed. All wrapped particles are already local, so no new sends occur.
+   call lcm_exchange_particle_phase(lcm_exchange_x_phase)
+   call lcm_exchange_particle_phase(lcm_exchange_y_phase)
+   call assert_equal(total_particle_count(), 8, &
+                     'subsequent migration cycle preserves every particle')
 
    call MPI_COMM_FREE(communicator, ierr)
    call MPI_FINALIZE(ierr)

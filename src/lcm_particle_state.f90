@@ -16,7 +16,11 @@ module lcm_particle_state
    use lcm_exchange_directions, only: lcm_exchange_direction_from_offset, &
                                       lcm_exchange_direction_for_phase, &
                                       lcm_exchange_directions_per_phase, &
+                                      lcm_exchange_east, &
                                       lcm_exchange_neighbor_rank, &
+                                      lcm_exchange_north, &
+                                      lcm_exchange_south, &
+                                      lcm_exchange_west, &
                                       lcm_exchange_x_phase, &
                                       lcm_exchange_y_phase, &
                                       lcm_require_valid_exchange_phase
@@ -26,6 +30,10 @@ module lcm_particle_state
                                             lcm_get_receive_particle_message_view, &
                                             lcm_receive_particle_message_count
    use lcm_particle_mpi_messages, only: lcm_pack_particle_mpi_message
+   use lcm_particle_migration, only: lcm_classify_particle_migration, &
+                                     lcm_migration_local_cell, &
+                                     lcm_migration_outgoing, &
+                                     lcm_particle_migration_t
    use lcm_particle_properties, only: lcm_particle_radius
    use lcm_types, only: lcm_particle_cell_t, lcm_particle_mpi_message_t, &
                         lcm_particle_t
@@ -51,6 +59,7 @@ module lcm_particle_state
    public :: lcm_update_particle_positions
    public :: lcm_reflect_particles_at_top
    public :: lcm_apply_particles_at_bottom
+   public :: lcm_prepare_particle_migration
    public :: lcm_extract_outgoing_particles
    public :: lcm_insert_received_particles
    public :: lcm_update_particle_cell_ownership
@@ -67,6 +76,18 @@ module lcm_particle_state
    integer(int64), protected, save :: n_id = 0_int64
    logical, save :: aerosol_initialization_template_is_set = .false.
    logical, protected, save :: particle_id_counter_is_initialized = .false.
+   logical, save :: planned_x_send_buffers_are_ready = .false.
+   logical, save :: planned_y_send_buffers_are_ready = .false.
+
+   !> Snapshot of migration decisions for one source cell.
+   !>
+   !> The entries describe only the particles present when the plan is built.
+   !> Storage is not mutated until every original particle has been classified,
+   !> preventing particles appended to a later cell from being processed twice.
+   type :: lcm_particle_cell_migration_plan_t
+      integer :: count = 0
+      type(lcm_particle_migration_t), allocatable :: entries(:)
+   end type lcm_particle_cell_migration_plan_t
 
    integer, parameter :: liquid_particle_type = 1
    integer, parameter :: ice_nucleating_particle_type = 2
@@ -196,6 +217,8 @@ contains
             enddo
          enddo
       enddo
+      planned_x_send_buffers_are_ready = .false.
+      planned_y_send_buffers_are_ready = .false.
    end subroutine lcm_reset_particle_cells
 
    subroutine lcm_initialize_computational_particles()
@@ -470,11 +493,37 @@ contains
       enddo
    end subroutine lcm_apply_particles_at_bottom
 
+   !> Classify and apply one post-boundary migration plan.
+   !>
+   !> Local moves are completed for both serial and parallel execution. When
+   !> MPI state is available, cardinal send buffers are also populated for the
+   !> following two transport phases. The plan and its particle-index snapshot
+   !> are discarded before this routine returns.
+   subroutine lcm_prepare_particle_migration()
+      type(lcm_particle_cell_migration_plan_t), allocatable :: migration_plan(:,:,:)
+
+      call require_particle_cells_allocated()
+      if (planned_x_send_buffers_are_ready .or. &
+          planned_y_send_buffers_are_ready) then
+         error stop 'LCM particle migration is already prepared'
+      endif
+
+      call lcm_clear_particle_exchange_phase_buffers(lcm_exchange_x_phase)
+      call lcm_clear_particle_exchange_phase_buffers(lcm_exchange_y_phase)
+      allocate(migration_plan(size(cell_particles, 1), &
+                              size(cell_particles, 2), &
+                              size(cell_particles, 3)))
+      call build_local_particle_migration_plan(migration_plan)
+      call apply_particle_migration_plan(migration_plan, parallel_state%is_set)
+
+      planned_x_send_buffers_are_ready = parallel_state%is_set
+      planned_y_send_buffers_are_ready = parallel_state%is_set
+   end subroutine lcm_prepare_particle_migration
+
    !> Extract particles leaving in one horizontal cardinal phase.
    !>
-   !> The x phase must be transported and its received particles inserted
-   !> before the y phase starts.  A corner-crossing particle is consequently
-   !> transferred once in x and then classified again for its y transfer.
+   !> The initial plan stages original x and y routes. After x transport, only
+   !> x-received particles are checked for a second, corner-routing y hop.
    subroutine lcm_extract_outgoing_particles(phase)
       integer, intent(in) :: phase
       integer :: i
@@ -483,8 +532,24 @@ contains
 
       call require_particle_cells_allocated()
       call lcm_require_valid_exchange_phase(phase)
-      call lcm_clear_particle_exchange_phase_buffers(phase)
 
+      if (phase == lcm_exchange_x_phase) then
+         ! Production advancement prepares immediately after boundary handling.
+         ! Preserve direct phase-level use by preparing lazily when necessary.
+         if (.not. planned_x_send_buffers_are_ready) then
+            call lcm_prepare_particle_migration()
+         endif
+         planned_x_send_buffers_are_ready = .false.
+         return
+      elseif (planned_y_send_buffers_are_ready) then
+         ! Original y routes were staged by the initial plan and corner routes
+         ! were appended while inserting x receives. Do not clear or rescan.
+         planned_y_send_buffers_are_ready = .false.
+         return
+      endif
+
+      ! Preserve direct y-phase use when no initial x plan preceded it.
+      call lcm_clear_particle_exchange_phase_buffers(phase)
       do k = 1, size(cell_particles, 3)
          do j = 1, size(cell_particles, 2)
             do i = 1, size(cell_particles, 1)
@@ -496,11 +561,10 @@ contains
 
    !> Insert payloads received during one cardinal exchange phase.
    !>
-   !> After the x phase, y may still be outside this intermediate rank for a
-   !> corner-crossing particle. Such a particle is placed temporarily in the
-   !> nearest y-edge cell; its physical y coordinate makes the following y
-   !> phase extract it for the second hop. After the y phase both horizontal
-   !> destination indices must be local.
+   !> After the x phase, a corner-crossing particle may still be outside this
+   !> intermediate rank in y. Such particles are forwarded directly to the
+   !> staged y send buffers; other received particles are inserted locally.
+   !> After the y phase both horizontal destination indices must be local.
    subroutine lcm_insert_received_particles(phase)
       integer, intent(in) :: phase
       integer :: direction
@@ -521,6 +585,8 @@ contains
          call lcm_get_receive_particle_message_view(direction, messages)
          do index = 1, message_count
             call received_message_local_indices(messages(index), phase, local_i, local_j)
+            if (phase == lcm_exchange_x_phase .and. &
+                forward_x_received_particle_in_y(messages(index))) cycle
             call lcm_add_particle(local_i, local_j, messages(index)%k, &
                                   messages(index)%particle)
          enddo
@@ -554,6 +620,32 @@ contains
          error stop 'LCM exchange phase is invalid'
       end select
    end subroutine received_message_local_indices
+
+   !> Append an x-received corner particle directly to its y send buffer.
+   !>
+   !> Returns true only when the particle has an active south/north neighbor
+   !> route and therefore must not be inserted into local cell storage.
+   logical function forward_x_received_particle_in_y(message)
+      type(lcm_particle_mpi_message_t), intent(in) :: message
+      integer :: direction
+      integer :: local_j
+
+      forward_x_received_particle_in_y = .false.
+      local_j = message%global_j - grid_state%grid%global_j_start + 1
+      if (local_j < 1) then
+         direction = lcm_exchange_south
+      elseif (local_j > grid_state%grid%ny_local) then
+         direction = lcm_exchange_north
+      else
+         return
+      endif
+
+      if (lcm_exchange_neighbor_rank(direction) < 0) return
+      call append_outgoing_particle(message%particle, message%global_i, &
+                                    message%global_j, message%k, &
+                                    lcm_exchange_y_phase, direction)
+      forward_x_received_particle_in_y = .true.
+   end function forward_x_received_particle_in_y
 
    !> Classify one cell's particles and compact retained particles in one pass.
    !>
@@ -608,39 +700,145 @@ contains
    end subroutine compact_outgoing_particles_from_cell
 
    subroutine lcm_update_particle_cell_ownership()
+      type(lcm_particle_cell_migration_plan_t), allocatable :: plan(:,:,:)
+
+      call require_particle_cells_allocated()
+
+      allocate(plan(size(cell_particles, 1), size(cell_particles, 2), &
+                    size(cell_particles, 3)))
+      call build_local_particle_migration_plan(plan)
+      call apply_particle_migration_plan(plan, .false.)
+   end subroutine lcm_update_particle_cell_ownership
+
+   !> Classify every original local particle once without mutating storage.
+   subroutine build_local_particle_migration_plan(plan)
+      type(lcm_particle_cell_migration_plan_t), intent(inout) :: plan(:,:,:)
       integer :: i
       integer :: j
       integer :: k
       integer :: n
-      integer :: new_i
-      integer :: new_j
-      integer :: new_k
-      logical :: is_local
-
-      call require_particle_cells_allocated()
 
       do k = 1, size(cell_particles, 3)
          do j = 1, size(cell_particles, 2)
             do i = 1, size(cell_particles, 1)
-               n = 1
-               do while (n <= cell_particles(i,j,k)%count)
-                  call lcm_locate_particle_cell( &
-                     cell_particles(i,j,k)%particles(n)%x, &
-                     cell_particles(i,j,k)%particles(n)%y, &
-                     cell_particles(i,j,k)%particles(n)%z, &
-                     new_i, new_j, new_k, is_local)
+               plan(i,j,k)%count = cell_particles(i,j,k)%count
+               if (plan(i,j,k)%count == 0) cycle
 
-                  if (is_local .and. (new_i /= i .or. new_j /= j .or. &
-                                       new_k /= k)) then
-                     call lcm_move_particle(i, j, k, n, new_i, new_j, new_k)
-                  else
-                     n = n + 1
-                  endif
+               allocate(plan(i,j,k)%entries(plan(i,j,k)%count))
+               do n = 1, plan(i,j,k)%count
+                  call lcm_classify_particle_migration( &
+                     cell_particles(i,j,k)%particles(n), i, j, k, &
+                     plan(i,j,k)%entries(n))
                enddo
             enddo
          enddo
       enddo
-   end subroutine lcm_update_particle_cell_ownership
+   end subroutine build_local_particle_migration_plan
+
+   !> Compact every source cell once and then append local moves in batches.
+   !>
+   !> During initial exchange preparation, every active cardinal route is
+   !> packed into its send buffer and removed during the same compaction.
+   !> Inactive physical-edge routes remain cell-owned.
+   subroutine apply_particle_migration_plan(plan, extract_outgoing)
+      type(lcm_particle_cell_migration_plan_t), intent(in) :: plan(:,:,:)
+      logical, intent(in) :: extract_outgoing
+      type(lcm_particle_cell_t), allocatable :: incoming(:,:,:)
+      integer :: i
+      integer :: j
+      integer :: k
+      integer :: n
+      integer :: retained_count
+      type(lcm_particle_migration_t) :: migration
+
+      allocate(incoming(size(cell_particles, 1), size(cell_particles, 2), &
+                        size(cell_particles, 3)))
+
+      do k = 1, size(cell_particles, 3)
+         do j = 1, size(cell_particles, 2)
+            do i = 1, size(cell_particles, 1)
+               retained_count = 0
+               do n = 1, plan(i,j,k)%count
+                  migration = plan(i,j,k)%entries(n)
+                  if (migration%disposition == lcm_migration_local_cell) then
+                     call stage_local_particle( &
+                        incoming, migration, &
+                        cell_particles(i,j,k)%particles(n))
+                  elseif (extract_outgoing .and. &
+                          migration_has_active_route(migration)) then
+                     call append_outgoing_particle( &
+                        cell_particles(i,j,k)%particles(n), &
+                        migration%global_i, migration%global_j, migration%k, &
+                        migration_exchange_phase(migration), migration%direction)
+                  else
+                     retained_count = retained_count + 1
+                     if (retained_count /= n) then
+                        cell_particles(i,j,k)%particles(retained_count) = &
+                           cell_particles(i,j,k)%particles(n)
+                     endif
+                  endif
+               enddo
+
+               if (retained_count < plan(i,j,k)%count) then
+                  cell_particles(i,j,k)%particles( &
+                     retained_count + 1:plan(i,j,k)%count) = lcm_particle_t()
+               endif
+               cell_particles(i,j,k)%count = retained_count
+            enddo
+         enddo
+      enddo
+
+      do k = 1, size(cell_particles, 3)
+         do j = 1, size(cell_particles, 2)
+            do i = 1, size(cell_particles, 1)
+               call append_particle_batch(cell_particles(i,j,k), &
+                                          incoming(i,j,k))
+            enddo
+         enddo
+      enddo
+   end subroutine apply_particle_migration_plan
+
+   logical function migration_has_active_route(migration)
+      type(lcm_particle_migration_t), intent(in) :: migration
+
+      migration_has_active_route = &
+         migration%disposition == lcm_migration_outgoing
+      if (.not. migration_has_active_route) return
+
+      ! A geometric crossing at a non-periodic physical edge has no neighbor
+      ! and therefore remains cell-owned, matching the existing phase logic.
+      migration_has_active_route = &
+         lcm_exchange_neighbor_rank(migration%direction) >= 0
+   end function migration_has_active_route
+
+   integer function migration_exchange_phase(migration) result(phase)
+      type(lcm_particle_migration_t), intent(in) :: migration
+
+      select case (migration%direction)
+      case (lcm_exchange_west, lcm_exchange_east)
+         phase = lcm_exchange_x_phase
+      case (lcm_exchange_south, lcm_exchange_north)
+         phase = lcm_exchange_y_phase
+      case default
+         error stop 'LCM particle migration has no exchange phase'
+      end select
+   end function migration_exchange_phase
+
+   subroutine stage_local_particle(incoming, migration, particle)
+      type(lcm_particle_cell_t), intent(inout) :: incoming(:,:,:)
+      type(lcm_particle_migration_t), intent(in) :: migration
+      type(lcm_particle_t), intent(in) :: particle
+      integer :: destination_i
+      integer :: destination_j
+
+      destination_i = migration%global_i - &
+                      grid_state%grid%global_i_start + 1
+      destination_j = migration%global_j - &
+                      grid_state%grid%global_j_start + 1
+      call validate_cell_index(destination_i, destination_j, migration%k)
+      call append_particle_to_cell( &
+         incoming(destination_i,destination_j,migration%k), particle)
+   end subroutine stage_local_particle
 
    subroutine init_particle_properties(i, j, k, cell_particle_index, particle)
       integer, intent(in) :: i
@@ -1697,6 +1895,26 @@ contains
       cell%count = cell%count + 1
       cell%particles(cell%count) = particle
    end subroutine append_particle_to_cell
+
+   !> Append a staged group with at most one destination-cell resize.
+   subroutine append_particle_batch(cell, batch)
+      type(lcm_particle_cell_t), intent(inout) :: cell
+      type(lcm_particle_cell_t), intent(in) :: batch
+      integer :: first
+      integer :: required_capacity
+
+      if (batch%count == 0) return
+
+      first = cell%count + 1
+      required_capacity = cell%count + batch%count
+      if (required_capacity > cell%capacity) then
+         call resize_cell_storage( &
+            cell, max(required_capacity, next_capacity(cell%capacity)))
+      endif
+
+      cell%particles(first:required_capacity) = batch%particles(1:batch%count)
+      cell%count = required_capacity
+   end subroutine append_particle_batch
 
    logical function particle_leaves_to_neighbor_rank(new_i, new_j, new_k, phase, &
                                                      direction)
