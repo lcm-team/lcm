@@ -25,5 +25,3 @@ The tests are grouped by the behavior they verify.
 | `test_particle_location`, `test_local_subdomain_bounds`, `test_vertical_boundary_bounds` | Location and domain-boundary classification |
 | `test_velocity_interpolation`, `test_particle_radius` | Velocity interpolation and particle radius |
 | `test_parallel_state`, `test_boundary_config`, `test_field_attachment` | Parallel configuration and host-field attachment |
-
-The migration tests cover particle transport only. Two-way thermodynamic coupling will require separate tests.
