@@ -1,8 +1,9 @@
 program test_particle_exchange_mpi
    use iso_fortran_env, only: int64, real64
    use mpi_f08, only: MPI_CART_COORDS, MPI_CART_CREATE, MPI_CART_RANK, &
-                      MPI_COMM_FREE, MPI_COMM_RANK, MPI_COMM_SIZE, &
-                      MPI_COMM_WORLD, MPI_Comm, MPI_FINALIZE, MPI_INIT
+                      MPI_ALLREDUCE, MPI_COMM_FREE, MPI_COMM_RANK, MPI_COMM_SIZE, &
+                      MPI_COMM_WORLD, MPI_Comm, MPI_FINALIZE, MPI_INIT, MPI_INTEGER, &
+                      MPI_SUM
    use lcm_exchange_directions, only: lcm_exchange_north, lcm_exchange_south, &
                                       lcm_exchange_x_phase, lcm_exchange_y_phase
    use lcm_grid_state, only: lcm_set_grid
@@ -28,6 +29,8 @@ program test_particle_exchange_mpi
    integer :: final_i
    integer :: final_j
    integer :: mpi_size
+   integer :: global_particle_count
+   integer :: local_particle_count
    integer, parameter :: particles_per_route = 3
    type(lcm_parallel_t) :: parallel
    type(lcm_particle_t) :: expected_particle
@@ -99,6 +102,11 @@ program test_particle_exchange_mpi
 
    call assert_equal(total_particle_count(), particles_per_route, &
                      'final local particle count')
+   local_particle_count = total_particle_count()
+   call MPI_ALLREDUCE(local_particle_count, global_particle_count, 1, &
+                      MPI_INTEGER, MPI_SUM, communicator, ierr)
+   call assert_equal(global_particle_count, 4 * particles_per_route, &
+                     'global particle conservation after migration')
    call assert_equal(cell_particles(final_i,final_j,1)%count, &
                      particles_per_route, &
                      'particles inserted in final diagonal destination cell')
