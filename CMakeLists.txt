@@ -500,6 +500,28 @@ add_test(
           ${MPIEXEC_POSTFLAGS}
 )
 
+add_executable(test_particle_exchange_mpi_edge_cases
+  tests/integration/test_particle_exchange_mpi_edge_cases.f90
+)
+
+target_link_libraries(test_particle_exchange_mpi_edge_cases
+  PRIVATE
+    lcm
+    MPI::MPI_Fortran
+)
+
+set_target_properties(test_particle_exchange_mpi_edge_cases
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME particle_exchange_mpi_4_edge_cases
+  COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4
+          ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_particle_exchange_mpi_edge_cases>
+          ${MPIEXEC_POSTFLAGS}
+)
+
 add_executable(test_lcm_advance_particle_exchange_mpi
   tests/integration/test_lcm_advance_particle_exchange_mpi.f90
 )
