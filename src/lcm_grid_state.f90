@@ -10,6 +10,7 @@ module lcm_grid_state
    public :: t_lcm_grid_state
    public :: grid_state
    public :: lcm_set_grid
+   public :: lcm_local_subdomain_bounds
    public :: lcm_vertical_boundary_inset
 
    !> Keep particles away from the exact physical z faces before ownership.
@@ -90,6 +91,28 @@ contains
 
       call initialize_geometry()
    end subroutine lcm_set_grid
+
+   !> Return the inclusive global-cell bounds of this rank's LCM storage.
+   !>
+   !> The bounds are derived rather than stored separately: local particle
+   !> cells always use indices 1:nx_local and 1:ny_local, while
+   !> global_i_start/global_j_start identify their first global cells.
+   subroutine lcm_local_subdomain_bounds(global_i_first, global_i_last, &
+                                         global_j_first, global_j_last)
+      integer, intent(out) :: global_i_first
+      integer, intent(out) :: global_i_last
+      integer, intent(out) :: global_j_first
+      integer, intent(out) :: global_j_last
+
+      if (.not. grid_state%is_set) then
+         error stop 'LCM grid must be initialized before requesting subdomain bounds'
+      endif
+
+      global_i_first = grid_state%grid%global_i_start
+      global_i_last = global_i_first + grid_state%grid%nx_local - 1
+      global_j_first = grid_state%grid%global_j_start
+      global_j_last = global_j_first + grid_state%grid%ny_local - 1
+   end subroutine lcm_local_subdomain_bounds
 
    subroutine initialize_geometry()
       integer :: i, j

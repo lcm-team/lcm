@@ -4,8 +4,19 @@ project(lcm LANGUAGES Fortran)
 
 option(LCM_BUILD_COMPAT_STUBS "Build LCM with temporary SAM compatibility stubs" ON)
 option(LCM_BUILD_ALL_SAM_SOURCES "Attempt to build all SAM-derived LCM source files" OFF)
+option(LCM_BUILD_EXPERIMENTAL_BENCHMARKS
+  "Build opt-in experimental LCM performance benchmarks"
+  OFF
+)
 
 enable_testing()
+
+add_test(
+  NAME mpi_interface_isolation
+  COMMAND ${CMAKE_COMMAND}
+          -DLCM_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/src
+          -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/cmake/check_mpi_interface_isolation.cmake
+)
 
 find_package(MPI REQUIRED COMPONENTS Fortran)
 
@@ -26,15 +37,23 @@ endif()
 set(LCM_CORE_SOURCES
   "${LCM_SOURCE_DIR}/lcm_parameters.f90"
   "${LCM_SOURCE_DIR}/lcm_types.f90"
+  "${LCM_SOURCE_DIR}/lcm_particle_mpi_messages.f90"
+  "${LCM_SOURCE_DIR}/lcm_particle_mpi_datatype.f90"
+  "${LCM_SOURCE_DIR}/lcm_parallel_state.f90"
   "${LCM_SOURCE_DIR}/lcm_boundary_diagnostics.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_properties.f90"
   "${LCM_SOURCE_DIR}/lcm_grid_state.f90"
+  "${LCM_SOURCE_DIR}/lcm_exchange_directions.f90"
+  "${LCM_SOURCE_DIR}/lcm_particle_exchange_buffers.f90"
+  "${LCM_SOURCE_DIR}/lcm_particle_count_exchange.f90"
+  "${LCM_SOURCE_DIR}/lcm_particle_mpi_transport.f90"
   "${LCM_SOURCE_DIR}/lcm_field_state.f90"
   "${LCM_SOURCE_DIR}/lcm_random.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_location.f90"
   "${LCM_SOURCE_DIR}/lcm_velocity_interpolation.f90"
   "${LCM_SOURCE_DIR}/lcm_user.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_state.f90"
+  "${LCM_SOURCE_DIR}/lcm_particle_exchange.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_boundaries.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_source.f90"
   "${LCM_SOURCE_DIR}/micro_user_vars.f90"
@@ -81,9 +100,10 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
 endif()
 
 target_link_libraries(lcm
+  PUBLIC
+    MPI::MPI_Fortran
   PRIVATE
     lcm_sam_compat
-    MPI::MPI_Fortran
 )
 
 target_include_directories(lcm
@@ -95,6 +115,10 @@ set_target_properties(lcm lcm_sam_compat
   PROPERTIES
     Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
 )
+
+if(LCM_BUILD_EXPERIMENTAL_BENCHMARKS)
+  add_subdirectory(benchmarks/experimental/particle_exchange)
+endif()
 
 add_executable(test_initial_particle_population
   tests/integration/test_initial_particle_population.f90
@@ -237,6 +261,248 @@ add_test(
   COMMAND test_particle_cell_ownership
 )
 
+add_executable(test_parallel_state
+  tests/unit/test_parallel_state.f90
+)
+
+target_link_libraries(test_parallel_state
+  PRIVATE
+    lcm
+    MPI::MPI_Fortran
+)
+
+set_target_properties(test_parallel_state
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME parallel_state
+  COMMAND test_parallel_state
+)
+
+add_executable(test_particle_message
+  tests/unit/test_particle_message.f90
+)
+
+target_link_libraries(test_particle_message
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_particle_message
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME particle_message
+  COMMAND test_particle_message
+)
+
+add_executable(test_particle_mpi_datatype
+  tests/unit/test_particle_mpi_datatype.f90
+)
+
+target_link_libraries(test_particle_mpi_datatype
+  PRIVATE
+    lcm
+    MPI::MPI_Fortran
+)
+
+set_target_properties(test_particle_mpi_datatype
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME particle_mpi_datatype_mpi_2
+  COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2
+          ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_particle_mpi_datatype>
+          ${MPIEXEC_POSTFLAGS}
+)
+
+add_executable(test_exchange_directions
+  tests/unit/test_exchange_directions.f90
+)
+
+target_link_libraries(test_exchange_directions
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_exchange_directions
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME exchange_directions
+  COMMAND test_exchange_directions
+)
+
+add_executable(test_local_subdomain_bounds
+  tests/unit/test_local_subdomain_bounds.f90
+)
+
+target_link_libraries(test_local_subdomain_bounds
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_local_subdomain_bounds
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME local_subdomain_bounds
+  COMMAND test_local_subdomain_bounds
+)
+
+add_executable(test_particle_exchange_buffers
+  tests/unit/test_particle_exchange_buffers.f90
+)
+
+target_link_libraries(test_particle_exchange_buffers
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_particle_exchange_buffers
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME particle_exchange_buffers
+  COMMAND test_particle_exchange_buffers
+)
+
+add_executable(test_outgoing_particle_message_packing
+  tests/unit/test_outgoing_particle_message_packing.f90
+)
+
+target_link_libraries(test_outgoing_particle_message_packing
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_outgoing_particle_message_packing
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME outgoing_particle_message_packing
+  COMMAND test_outgoing_particle_message_packing
+)
+
+add_executable(test_periodic_particle_destination_wrapping
+  tests/unit/test_periodic_particle_destination_wrapping.f90
+)
+
+target_link_libraries(test_periodic_particle_destination_wrapping
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_periodic_particle_destination_wrapping
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME periodic_particle_destination_wrapping
+  COMMAND test_periodic_particle_destination_wrapping
+)
+
+add_executable(test_particle_count_exchange
+  tests/unit/test_particle_count_exchange.f90
+)
+
+target_link_libraries(test_particle_count_exchange
+  PRIVATE
+    lcm
+    MPI::MPI_Fortran
+)
+
+set_target_properties(test_particle_count_exchange
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME particle_count_exchange
+  COMMAND test_particle_count_exchange
+)
+
+add_test(
+  NAME particle_count_exchange_mpi_2
+  COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2
+          ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_particle_count_exchange>
+          ${MPIEXEC_POSTFLAGS}
+)
+
+add_test(
+  NAME particle_count_exchange_mpi_2_nonperiodic
+  COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2
+          ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_particle_count_exchange>
+          ${MPIEXEC_POSTFLAGS} nonperiodic
+)
+
+add_test(
+  NAME particle_count_exchange_mpi_4_cartesian
+  COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4
+          ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_particle_count_exchange>
+          ${MPIEXEC_POSTFLAGS} square
+)
+
+add_executable(test_particle_exchange_mpi
+  tests/integration/test_particle_exchange_mpi.f90
+)
+
+target_link_libraries(test_particle_exchange_mpi
+  PRIVATE
+    lcm
+    MPI::MPI_Fortran
+)
+
+set_target_properties(test_particle_exchange_mpi
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME particle_exchange_mpi_4_corner_routes
+  COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4
+          ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_particle_exchange_mpi>
+          ${MPIEXEC_POSTFLAGS}
+)
+
+add_executable(test_lcm_advance_particle_exchange_mpi
+  tests/integration/test_lcm_advance_particle_exchange_mpi.f90
+)
+
+target_link_libraries(test_lcm_advance_particle_exchange_mpi
+  PRIVATE
+    lcm
+    MPI::MPI_Fortran
+)
+
+set_target_properties(test_lcm_advance_particle_exchange_mpi
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME lcm_advance_mpi_4_particle_exchange
+  COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4
+          ${MPIEXEC_PREFLAGS}
+          $<TARGET_FILE:test_lcm_advance_particle_exchange_mpi>
+          ${MPIEXEC_POSTFLAGS}
+)
+
 add_executable(test_minimal_les_host_cell_crossing
   tests/integration/minimal_les_host.f90
   tests/integration/test_minimal_les_host_cell_crossing.f90
@@ -286,7 +552,7 @@ set_target_properties(test_minimal_les_host_outgoing_particles
 )
 
 add_test(
-  NAME minimal_les_host_outgoing_particles
+  NAME minimal_les_host_serial_particle_exchange
   COMMAND test_minimal_les_host_outgoing_particles
 )
 

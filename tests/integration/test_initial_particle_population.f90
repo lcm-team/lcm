@@ -5,6 +5,7 @@ program test_initial_particle_population
                                  lcm_initialize, lcm_set_config, lcm_set_grid
    use lcm_initialization_state, only: lcm_initial_particle_count_global, &
                                        lcm_initial_particle_count_local
+   use lcm_parallel_state, only: parallel_state
    use lcm_particle_state, only: cell_particles, lcm_add_particle
    use lcm_types, only: lcm_particle_t
 
@@ -23,9 +24,9 @@ program test_initial_particle_population
 
    type(lcm_config_t) :: config
    type(lcm_grid_t) :: grid
-   real(real64), target :: u(nx_local, ny_local, nz)
-   real(real64), target :: v(nx_local, ny_local, nz)
-   real(real64), target :: w(nx_local, ny_local, nz)
+   real(real64), target :: u(nx_local + 1, ny_local, nz)
+   real(real64), target :: v(nx_local, ny_local + 1, nz)
+   real(real64), target :: w(nx_local, ny_local, nz + 1)
    real(real64), target :: static_energy(nx_local, ny_local, nz)
    real(real64), target :: temperature(nx_local, ny_local, nz)
    real(real64), target :: qv(nx_local, ny_local, nz)
@@ -50,8 +51,7 @@ program test_initial_particle_population
    call lcm_init_grid(grid, nx_local, ny_local, nz, nx_local, ny_local, &
                       1, nx_local, 1, ny_local,                         &
                       50.0_real64, 50.0_real64, z_center, z_face, dz,   &
-                      0, 0, 0, 0, 0, 1, 1, 1, 1,                        &
-                      -1, -1, -1, -1, .true., .true., 1)
+                      0, 0, 0, 1, 1, 1)
    call lcm_set_grid(grid)
 
    u = 0.0_real64
@@ -357,7 +357,8 @@ contains
 
       tracked_particles_per_subdomain = &
          max(1, config%n_track_particles / &
-                grid%n_subdomains_x / grid%n_subdomains_y)
+                parallel_state%parallel%dimensions(1) / &
+                parallel_state%parallel%dimensions(2))
       tracking_period = int(expected_count) / tracked_particles_per_subdomain
       marker_divisor = int(expected_count) / config%n_track_particles
 

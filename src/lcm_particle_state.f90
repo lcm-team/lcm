@@ -13,8 +13,22 @@ module lcm_particle_state
    use lcm_parameters, only: epsv, fac_cond, molecular_weight_water, pi, &
                              rho_liq, rv, surface_tension_water
    use lcm_particle_location, only: lcm_locate_particle_cell
+   use lcm_exchange_directions, only: lcm_exchange_direction_from_offset, &
+                                      lcm_exchange_direction_for_phase, &
+                                      lcm_exchange_directions_per_phase, &
+                                      lcm_exchange_neighbor_rank, &
+                                      lcm_exchange_x_phase, &
+                                      lcm_exchange_y_phase, &
+                                      lcm_require_valid_exchange_phase
+   use lcm_parallel_state, only: parallel_state
+   use lcm_particle_exchange_buffers, only: lcm_append_send_particle_message, &
+                                            lcm_clear_particle_exchange_phase_buffers, &
+                                            lcm_get_receive_particle_message_view, &
+                                            lcm_receive_particle_message_count
+   use lcm_particle_mpi_messages, only: lcm_pack_particle_mpi_message
    use lcm_particle_properties, only: lcm_particle_radius
-   use lcm_types, only: lcm_particle_cell_t, lcm_particle_t
+   use lcm_types, only: lcm_particle_cell_t, lcm_particle_mpi_message_t, &
+                        lcm_particle_t
    use lcm_user, only: lcm_user_init_particles
    use lcm_velocity_interpolation, only: lcm_interpolate_particle_velocity
    use lcm_random, only: randomu
@@ -37,8 +51,9 @@ module lcm_particle_state
    public :: lcm_update_particle_positions
    public :: lcm_reflect_particles_at_top
    public :: lcm_apply_particles_at_bottom
+   public :: lcm_extract_outgoing_particles
+   public :: lcm_insert_received_particles
    public :: lcm_update_particle_cell_ownership
-   public :: lcm_clear_outgoing_particles
    public :: set_particle_position
    public :: particle_random_seed_id
    public :: cell_tabs_lcm
@@ -46,20 +61,8 @@ module lcm_particle_state
    public :: qsatw_liquid
    public :: inverse_error_function_approx
    public :: ice_freezing_temperature
-   public :: lcm_outgoing_particle_t
-   public :: outgoing_particles
-   public :: n_outgoing_particles
-
-   type :: lcm_outgoing_particle_t
-      type(lcm_particle_t) :: particle
-      integer :: x_direction = 0
-      integer :: y_direction = 0
-   end type lcm_outgoing_particle_t
-
    type(lcm_particle_cell_t), allocatable, protected, save :: cell_particles(:,:,:)
-   type(lcm_outgoing_particle_t), allocatable, protected, save :: outgoing_particles(:)
    type(lcm_particle_t), allocatable, save :: aerosol_initialization_template(:)
-   integer, protected, save :: n_outgoing_particles = 0
    integer(int64), protected, save :: n_step_id = 0_int64
    integer(int64), protected, save :: n_id = 0_int64
    logical, save :: aerosol_initialization_template_is_set = .false.
@@ -108,8 +111,6 @@ contains
       allocate(cell_particles(grid_state%grid%nx_local, &
                               grid_state%grid%ny_local, &
                               grid_state%grid%nz))
-      call lcm_clear_outgoing_particles()
-
       if (capacity > 0) then
          do k = 1, capacity_vertical_levels
             do j = 1, grid_state%grid%ny_local
@@ -197,10 +198,6 @@ contains
       enddo
    end subroutine lcm_reset_particle_cells
 
-   subroutine lcm_clear_outgoing_particles()
-      n_outgoing_particles = 0
-   end subroutine lcm_clear_outgoing_particles
-
    subroutine lcm_initialize_computational_particles()
       integer :: i, j, k, n
       integer :: initialization_levels
@@ -235,12 +232,12 @@ contains
 
       call require_grid_set()
 
-      n_subdomains = int(grid_state%grid%n_subdomains_x, int64) * &
-                     int(grid_state%grid%n_subdomains_y, int64)
+      n_subdomains = int(parallel_state%parallel%dimensions(1), int64) * &
+                     int(parallel_state%parallel%dimensions(2), int64)
       subdomain_id = &
-         int(grid_state%grid%subdomain_y_index, int64) * &
-         int(grid_state%grid%n_subdomains_x, int64) + &
-         int(grid_state%grid%subdomain_x_index, int64)
+         int(parallel_state%parallel%coordinates(2), int64) * &
+         int(parallel_state%parallel%dimensions(1), int64) + &
+         int(parallel_state%parallel%coordinates(1), int64)
 
       n_step_id = huge(1_int64) / n_subdomains
       n_id = n_step_id * subdomain_id
@@ -473,6 +470,143 @@ contains
       enddo
    end subroutine lcm_apply_particles_at_bottom
 
+   !> Extract particles leaving in one horizontal cardinal phase.
+   !>
+   !> The x phase must be transported and its received particles inserted
+   !> before the y phase starts.  A corner-crossing particle is consequently
+   !> transferred once in x and then classified again for its y transfer.
+   subroutine lcm_extract_outgoing_particles(phase)
+      integer, intent(in) :: phase
+      integer :: i
+      integer :: j
+      integer :: k
+
+      call require_particle_cells_allocated()
+      call lcm_require_valid_exchange_phase(phase)
+      call lcm_clear_particle_exchange_phase_buffers(phase)
+
+      do k = 1, size(cell_particles, 3)
+         do j = 1, size(cell_particles, 2)
+            do i = 1, size(cell_particles, 1)
+               call compact_outgoing_particles_from_cell(i, j, k, phase)
+            enddo
+         enddo
+      enddo
+   end subroutine lcm_extract_outgoing_particles
+
+   !> Insert payloads received during one cardinal exchange phase.
+   !>
+   !> After the x phase, y may still be outside this intermediate rank for a
+   !> corner-crossing particle. Such a particle is placed temporarily in the
+   !> nearest y-edge cell; its physical y coordinate makes the following y
+   !> phase extract it for the second hop. After the y phase both horizontal
+   !> destination indices must be local.
+   subroutine lcm_insert_received_particles(phase)
+      integer, intent(in) :: phase
+      integer :: direction
+      integer :: index
+      integer :: local_i
+      integer :: local_j
+      integer :: message_count
+      integer :: phase_direction
+      type(lcm_particle_mpi_message_t), contiguous, pointer :: messages(:)
+
+      call require_particle_cells_allocated()
+      call lcm_require_valid_exchange_phase(phase)
+
+      do phase_direction = 1, lcm_exchange_directions_per_phase
+         direction = lcm_exchange_direction_for_phase(phase, phase_direction)
+         message_count = lcm_receive_particle_message_count(direction)
+         if (message_count == 0) cycle
+         call lcm_get_receive_particle_message_view(direction, messages)
+         do index = 1, message_count
+            call received_message_local_indices(messages(index), phase, local_i, local_j)
+            call lcm_add_particle(local_i, local_j, messages(index)%k, &
+                                  messages(index)%particle)
+         enddo
+      enddo
+   end subroutine lcm_insert_received_particles
+
+   subroutine received_message_local_indices(message, phase, local_i, local_j)
+      type(lcm_particle_mpi_message_t), intent(in) :: message
+      integer, intent(in) :: phase
+      integer, intent(out) :: local_i
+      integer, intent(out) :: local_j
+
+      local_i = message%global_i - grid_state%grid%global_i_start + 1
+      local_j = message%global_j - grid_state%grid%global_j_start + 1
+
+      if (local_i < 1 .or. local_i > grid_state%grid%nx_local) then
+         error stop 'LCM received particle x destination is not local'
+      endif
+      if (message%k < 1 .or. message%k > grid_state%grid%nz) then
+         error stop 'LCM received particle vertical destination is not local'
+      endif
+
+      select case (phase)
+      case (lcm_exchange_x_phase)
+         local_j = max(1, min(grid_state%grid%ny_local, local_j))
+      case (lcm_exchange_y_phase)
+         if (local_j < 1 .or. local_j > grid_state%grid%ny_local) then
+            error stop 'LCM received particle y destination is not local'
+         endif
+      case default
+         error stop 'LCM exchange phase is invalid'
+      end select
+   end subroutine received_message_local_indices
+
+   !> Classify one cell's particles and compact retained particles in one pass.
+   !>
+   !> Retained particles preserve their original relative order. Outgoing
+   !> particles are copied directly to their directional MPI message buffer,
+   !> so removing several particles never repeatedly shifts the cell array.
+   subroutine compact_outgoing_particles_from_cell(i, j, k, phase)
+      integer, intent(in) :: i
+      integer, intent(in) :: j
+      integer, intent(in) :: k
+      integer, intent(in) :: phase
+      integer :: direction
+      integer :: new_i
+      integer :: new_j
+      integer :: new_k
+      integer :: global_i
+      integer :: global_j
+      integer :: original_count
+      integer :: read_index
+      integer :: retained_count
+      logical :: is_local
+
+      original_count = cell_particles(i,j,k)%count
+      retained_count = 0
+
+      do read_index = 1, original_count
+         call lcm_locate_particle_cell( &
+            cell_particles(i,j,k)%particles(read_index)%x, &
+            cell_particles(i,j,k)%particles(read_index)%y, &
+            cell_particles(i,j,k)%particles(read_index)%z, &
+            new_i, new_j, new_k, is_local, global_i, global_j)
+
+         if (particle_leaves_to_neighbor_rank(new_i, new_j, new_k, phase, &
+                                              direction)) then
+            call append_outgoing_particle( &
+               cell_particles(i,j,k)%particles(read_index), global_i, global_j, new_k, &
+               phase, direction)
+         else
+            retained_count = retained_count + 1
+            if (retained_count /= read_index) then
+               cell_particles(i,j,k)%particles(retained_count) = &
+                  cell_particles(i,j,k)%particles(read_index)
+            endif
+         endif
+      enddo
+
+      if (retained_count < original_count) then
+         cell_particles(i,j,k)%particles(retained_count + 1:original_count) = &
+            lcm_particle_t()
+      endif
+      cell_particles(i,j,k)%count = retained_count
+   end subroutine compact_outgoing_particles_from_cell
+
    subroutine lcm_update_particle_cell_ownership()
       integer :: i
       integer :: j
@@ -481,8 +615,6 @@ contains
       integer :: new_i
       integer :: new_j
       integer :: new_k
-      integer :: x_direction
-      integer :: y_direction
       logical :: is_local
 
       call require_particle_cells_allocated()
@@ -501,11 +633,6 @@ contains
                   if (is_local .and. (new_i /= i .or. new_j /= j .or. &
                                        new_k /= k)) then
                      call lcm_move_particle(i, j, k, n, new_i, new_j, new_k)
-                  elseif (particle_leaves_to_neighbor_rank(new_i, new_j, new_k, &
-                                                           x_direction, y_direction)) then
-                     call append_outgoing_particle( &
-                        cell_particles(i,j,k)%particles(n), x_direction, y_direction)
-                     call lcm_remove_particle(i, j, k, n)
                   else
                      n = n + 1
                   endif
@@ -575,8 +702,8 @@ contains
 
       tracked_particles_per_subdomain = &
          max(1, config_state%n_track_particles / &
-                grid_state%grid%n_subdomains_x / &
-                grid_state%grid%n_subdomains_y)
+                parallel_state%parallel%dimensions(1) / &
+                parallel_state%parallel%dimensions(2))
       tracking_period = initial_particle_count_for_tracking() / &
                         tracked_particles_per_subdomain
       marker_divisor = initial_particle_count_for_tracking() / &
@@ -960,9 +1087,9 @@ contains
    end function particle_random_seed_id
 
    integer function particle_subdomain_id() result(subdomain_id)
-      subdomain_id = grid_state%grid%subdomain_y_index * &
-                     grid_state%grid%n_subdomains_x + &
-                     grid_state%grid%subdomain_x_index
+      subdomain_id = parallel_state%parallel%coordinates(2) * &
+                     parallel_state%parallel%dimensions(1) + &
+                     parallel_state%parallel%coordinates(1)
    end function particle_subdomain_id
 
    subroutine set_equal_mode_weight(i, j, k, n, i_mode, np_mode)
@@ -1571,62 +1698,96 @@ contains
       cell%particles(cell%count) = particle
    end subroutine append_particle_to_cell
 
-   logical function particle_leaves_to_neighbor_rank(new_i, new_j, new_k, &
-                                                     x_direction, y_direction)
+   logical function particle_leaves_to_neighbor_rank(new_i, new_j, new_k, phase, &
+                                                     direction)
       integer, intent(in) :: new_i
       integer, intent(in) :: new_j
       integer, intent(in) :: new_k
-      integer, intent(out) :: x_direction
-      integer, intent(out) :: y_direction
+      integer, intent(in) :: phase
+      integer, intent(out) :: direction
+      integer :: offset
 
-      x_direction = 0
-      y_direction = 0
+      direction = 0
+      offset = 0
       particle_leaves_to_neighbor_rank = .false.
 
       if (new_k < 1 .or. new_k > grid_state%grid%nz) return
 
-      if (new_i < 1) x_direction = -1
-      if (new_i > grid_state%grid%nx_local) x_direction = 1
-      if (new_j < 1) y_direction = -1
-      if (new_j > grid_state%grid%ny_local) y_direction = 1
+      select case (phase)
+      case (lcm_exchange_x_phase)
+         if (new_i < 1) offset = -1
+         if (new_i > grid_state%grid%nx_local) offset = 1
+      case (lcm_exchange_y_phase)
+         if (new_j < 1) offset = -1
+         if (new_j > grid_state%grid%ny_local) offset = 1
+      case default
+         error stop 'LCM exchange phase is invalid'
+      end select
 
-      if (x_direction == 0 .and. y_direction == 0) return
-      if (x_direction < 0 .and. grid_state%grid%west_rank < 0) return
-      if (x_direction > 0 .and. grid_state%grid%east_rank < 0) return
-      if (y_direction < 0 .and. grid_state%grid%south_rank < 0) return
-      if (y_direction > 0 .and. grid_state%grid%north_rank < 0) return
+      if (offset == 0) return
+      direction = lcm_exchange_direction_from_offset(phase, offset)
+      if (lcm_exchange_neighbor_rank(direction) < 0) return
 
       particle_leaves_to_neighbor_rank = .true.
    end function particle_leaves_to_neighbor_rank
 
-   subroutine append_outgoing_particle(particle, x_direction, y_direction)
+   subroutine append_outgoing_particle(particle, global_i, global_j, k, phase, direction)
       type(lcm_particle_t), intent(in) :: particle
-      integer, intent(in) :: x_direction
-      integer, intent(in) :: y_direction
+      integer, intent(in) :: global_i
+      integer, intent(in) :: global_j
+      integer, intent(in) :: k
+      integer, intent(in) :: phase
+      integer, intent(in) :: direction
+      integer :: destination_global_i
+      integer :: destination_global_j
+      type(lcm_particle_mpi_message_t) :: message
+      type(lcm_particle_t) :: particle_to_send
 
-      call ensure_outgoing_particle_capacity(n_outgoing_particles + 1)
+      destination_global_i = global_i
+      destination_global_j = global_j
+      particle_to_send = particle
+      call wrap_periodic_particle_destination(phase, destination_global_i, &
+                                              destination_global_j, &
+                                              particle_to_send)
 
-      n_outgoing_particles = n_outgoing_particles + 1
-      outgoing_particles(n_outgoing_particles)%particle = particle
-      outgoing_particles(n_outgoing_particles)%x_direction = x_direction
-      outgoing_particles(n_outgoing_particles)%y_direction = y_direction
+      call lcm_pack_particle_mpi_message(destination_global_i, &
+                                         destination_global_j, k, &
+                                         particle_to_send, message)
+      call lcm_append_send_particle_message(direction, message)
    end subroutine append_outgoing_particle
 
-   subroutine ensure_outgoing_particle_capacity(required_capacity)
-      integer, intent(in) :: required_capacity
-      type(lcm_outgoing_particle_t), allocatable :: previous_particles(:)
-      integer :: new_capacity
+   !> Wrap communication metadata and coordinates only at global periodic edges.
+   !>
+   !> Internal MPI-subdomain crossings retain their global destination indices
+   !> and physical coordinates.  The original cell-owned particle has already
+   !> been removed, so the wrapped copy becomes the outgoing payload.
+   subroutine wrap_periodic_particle_destination(phase, global_i, global_j, particle)
+      integer, intent(in) :: phase
+      integer, intent(inout) :: global_i
+      integer, intent(inout) :: global_j
+      type(lcm_particle_t), intent(inout) :: particle
+      real(real64) :: x_width
+      real(real64) :: y_width
 
-      if (.not. allocated(outgoing_particles)) then
-         allocate(outgoing_particles(max(1, required_capacity)))
-         return
-      endif
-      if (required_capacity <= size(outgoing_particles)) return
-
-      new_capacity = max(required_capacity, 2 * size(outgoing_particles))
-      call move_alloc(outgoing_particles, previous_particles)
-      allocate(outgoing_particles(new_capacity))
-      outgoing_particles(1:n_outgoing_particles) = previous_particles(1:n_outgoing_particles)
-   end subroutine ensure_outgoing_particle_capacity
+      select case (phase)
+      case (lcm_exchange_x_phase)
+         if (parallel_state%parallel%periodicity(1) .and. &
+             (global_i < 1 .or. global_i > grid_state%grid%nx_global)) then
+            x_width = real(grid_state%grid%nx_global, real64) * grid_state%grid%dx
+            global_i = modulo(global_i - 1, grid_state%grid%nx_global) + 1
+            particle%x = modulo(particle%x, x_width)
+         endif
+      case (lcm_exchange_y_phase)
+         if (grid_state%grid%y_dimension == 1 .and. &
+             parallel_state%parallel%periodicity(2) .and. &
+             (global_j < 1 .or. global_j > grid_state%grid%ny_global)) then
+            y_width = real(grid_state%grid%ny_global, real64) * grid_state%grid%dy
+            global_j = modulo(global_j - 1, grid_state%grid%ny_global) + 1
+            particle%y = modulo(particle%y, y_width)
+         endif
+      case default
+         error stop 'LCM exchange phase is invalid'
+      end select
+   end subroutine wrap_periodic_particle_destination
 
 end module lcm_particle_state

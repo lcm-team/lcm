@@ -26,6 +26,10 @@ identified and moved behind a cleaner host-model interface.
 See [`docs/building.md`](docs/building.md) for the current standalone build
 instructions.
 
+The accepted ownership and MPI boundary for standalone particle exchange is
+documented in
+[`docs/particle_exchange_architecture.md`](docs/particle_exchange_architecture.md).
+
 ## Development Checks
 
 This repository uses the Python `pre-commit` framework for lightweight,

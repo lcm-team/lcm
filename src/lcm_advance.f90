@@ -3,8 +3,12 @@ module lcm_advance_mod
    use iso_fortran_env, only: real64
    use lcm_config_state, only: config_is_set, config_state
    use lcm_grid_state, only: grid_state
+   use lcm_exchange_directions, only: lcm_exchange_x_phase, &
+                                      lcm_exchange_y_phase
    use lcm_initialization_state, only: lcm_is_initialized
+   use lcm_parallel_state, only: parallel_state
    use lcm_particle_boundaries, only: lcm_apply_particle_boundaries
+   use lcm_particle_exchange, only: lcm_exchange_particle_phase
    use lcm_particle_state, only: lcm_prepare_particle_velocities, &
                                  lcm_refine_particle_velocities, &
                                  lcm_update_particle_cell_ownership, &
@@ -37,8 +41,8 @@ contains
       call prepare_lcm_atmosphere()
       call advance_lcm_particles(time_step)
       call apply_lcm_particle_boundaries()
-      call update_lcm_particle_cell_ownership()
       call exchange_lcm_particles()
+      call update_lcm_particle_cell_ownership()
       call lcm_apply_particle_sources(time_step, current_lcm_step)
       call apply_lcm_microphysics(time_step)
       call prepare_lcm_feedback()
@@ -94,7 +98,13 @@ contains
    end subroutine apply_lcm_microphysics
 
    subroutine exchange_lcm_particles()
-      ! Future particle exchange step for particles crossing rank boundaries.
+      ! Classify and remove particles that leave this rank before the later
+      ! MPI transport step.  Local particles remain cell-owned until the
+      ! ownership update that follows exchange in the advance sequence.
+      if (.not. parallel_state%is_set) return
+
+      call lcm_exchange_particle_phase(lcm_exchange_x_phase)
+      call lcm_exchange_particle_phase(lcm_exchange_y_phase)
    end subroutine exchange_lcm_particles
 
    subroutine update_lcm_particle_cell_ownership()
