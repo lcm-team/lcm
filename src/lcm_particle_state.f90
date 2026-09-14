@@ -36,7 +36,7 @@ module lcm_particle_state
                                      lcm_particle_migration_t
    use lcm_particle_properties, only: lcm_particle_radius
    use lcm_types, only: lcm_particle_cell_t, lcm_particle_mpi_message_t, &
-                        lcm_particle_t
+                        lcm_particle_t, lcm_timer_tic, lcm_timer_toc
    use lcm_user, only: lcm_user_init_particles
    use lcm_velocity_interpolation, only: lcm_interpolate_particle_velocity
    use lcm_random, only: randomu
@@ -283,6 +283,7 @@ contains
       integer :: n
       logical :: is_local
 
+      call lcm_timer_tic('lcm/prepare_particle_velocities')
       call require_particle_cells_allocated()
 
       do k = 1, size(cell_particles, 3)
@@ -303,6 +304,7 @@ contains
             enddo
          enddo
       enddo
+      call lcm_timer_toc('lcm/prepare_particle_velocities')
    end subroutine lcm_prepare_particle_velocities
 
    subroutine lcm_refine_particle_velocities(time_step)
@@ -324,6 +326,7 @@ contains
       real(real64) :: yp
       real(real64) :: zp
 
+      call lcm_timer_tic('lcm/refine_particle_velocities')
       call require_particle_cells_allocated()
 
       if (config_state%n_uvw_iteration < 1) return
@@ -359,6 +362,7 @@ contains
             enddo
          enddo
       enddo
+      call lcm_timer_toc('lcm/refine_particle_velocities')
    end subroutine lcm_refine_particle_velocities
 
    subroutine lcm_update_particle_positions(time_step, current_step)
@@ -370,6 +374,7 @@ contains
       integer :: k
       integer :: n
 
+      call lcm_timer_tic('lcm/update_particle_velocities')
       call require_particle_cells_allocated()
 
       do k = 1, size(cell_particles, 3)
@@ -410,6 +415,7 @@ contains
             enddo
          enddo
       enddo
+      call lcm_timer_toc('lcm/update_particle_velocities')
    end subroutine lcm_update_particle_positions
 
    subroutine lcm_reflect_particles_at_top(ztop)
@@ -420,6 +426,7 @@ contains
       integer :: k
       integer :: n
 
+      call lcm_timer_tic('lcm/reflect_particles_at_top')
       call require_particle_cells_allocated()
 
       do k = 1, size(cell_particles, 3)
@@ -437,6 +444,7 @@ contains
             enddo
          enddo
       enddo
+      call lcm_timer_toc('lcm/reflect_particles_at_top')
    end subroutine lcm_reflect_particles_at_top
 
    subroutine lcm_apply_particles_at_bottom(zbottom, removal_radius, aerosol_density, &
@@ -455,6 +463,7 @@ contains
       integer :: n
       real(real64) :: radius
 
+      call lcm_timer_tic('lcm/apply_particles_at_bottom')
       call require_particle_cells_allocated()
 
       deleted_particle_count = 0_int64
@@ -491,6 +500,7 @@ contains
             enddo
          enddo
       enddo
+      call lcm_timer_toc('lcm/apply_particles_at_bottom')
    end subroutine lcm_apply_particles_at_bottom
 
    !> Classify and apply one post-boundary migration plan.

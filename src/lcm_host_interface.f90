@@ -5,7 +5,8 @@ module lcm_host_interface
    use lcm_grid_state, only: lcm_set_grid
    use lcm_parallel_state, only: lcm_parallel_t, lcm_init_parallel, &
                                  lcm_set_parallel
-   use lcm_initialization_state, only: lcm_configure_runtime, lcm_initialize
+   use lcm_initialization_state, only: lcm_configure_runtime, lcm_initialize, &
+                                       lcm_pass_timer_routines
    use lcm_advance_mod, only: lcm_advance
    use lcm_field_state, only: lcm_attach_field, lcm_attach_fields
 
@@ -24,6 +25,7 @@ module lcm_host_interface
    public :: lcm_set_parallel
    public :: lcm_configure_runtime
    public :: lcm_initialize
+   public :: lcm_pass_timer_routines
    public :: lcm_advance
    public :: lcm_attach_field
    public :: lcm_attach_fields

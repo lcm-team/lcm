@@ -13,6 +13,10 @@ module lcm_types
    public :: lcm_particle_cell_t
    public :: lcm_init_grid
    public :: lcm_init_config
+   public :: timer_tic_ifc
+   public :: timer_toc_ifc
+   public :: lcm_timer_tic
+   public :: lcm_timer_toc
 
    type :: lcm_grid_t
       ! Physical structured-grid geometry only. MPI rank topology is derived
@@ -251,6 +255,21 @@ module lcm_types
       integer :: capacity = 0
       type(lcm_particle_t), allocatable :: particles(:)
    end type lcm_particle_cell_t
+
+   abstract interface
+      ! matches the host model timer routines, without its optional parameters
+      subroutine timer_tic_ifc(timer_name, opt_nvtx_id)
+         character(*), intent(in)      :: timer_name
+         integer, intent(in), optional :: opt_nvtx_id
+      end subroutine
+
+      subroutine timer_toc_ifc(timer_name)
+         character(*), intent(in) :: timer_name
+      end subroutine
+   end interface
+
+   procedure(timer_tic_ifc), pointer :: lcm_timer_tic => null()
+   procedure(timer_toc_ifc), pointer :: lcm_timer_toc => null()
 
 contains
 

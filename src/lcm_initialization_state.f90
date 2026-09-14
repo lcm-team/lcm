@@ -10,6 +10,8 @@ module lcm_initialization_state
    use lcm_grid_state, only: grid_state
    use lcm_particle_state, only: lcm_allocate_particle_cells, &
                                  lcm_initialize_computational_particles
+   use lcm_types, only : timer_tic_ifc, timer_toc_ifc, &
+                         lcm_timer_tic, lcm_timer_toc
 
    implicit none
 
@@ -22,6 +24,7 @@ module lcm_initialization_state
    public :: lcm_initial_particle_count_local
    public :: lcm_initial_particle_count_global
    public :: lcm_initialization_mode
+   public :: lcm_pass_timer_routines
 
    logical, protected, save :: lcm_runtime_is_configured = .false.
    logical, protected, save :: lcm_is_initialized = .false.
@@ -132,5 +135,12 @@ contains
          int(initialization_levels, int64) * &
          int(config_state%np_xy, int64)
    end subroutine initialize_particle_count_state
+
+   subroutine lcm_pass_timer_routines(host_timer_tic, host_timer_toc)
+      procedure(timer_tic_ifc) :: host_timer_tic
+      procedure(timer_toc_ifc) :: host_timer_toc
+      lcm_timer_tic => host_timer_tic
+      lcm_timer_toc => host_timer_toc
+   end subroutine
 
 end module lcm_initialization_state
