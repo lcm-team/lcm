@@ -10,6 +10,7 @@ RUN apt-get update \
         cmake \
         gfortran \
         libopenmpi-dev \
+        make \
         ninja-build \
         openmpi-bin \
     && rm -rf /var/lib/apt/lists/*
