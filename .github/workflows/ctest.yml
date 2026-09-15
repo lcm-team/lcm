@@ -1,0 +1,55 @@
+name: CTest
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ctest-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: GFortran and OpenMPI
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Build the CI image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ci/Dockerfile
+          load: true
+          tags: lcm-ci:ctest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Configure, build, and test
+        shell: bash
+        run: |
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace \
+            lcm-ci:ctest \
+            bash -lc '
+              cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+              cmake --build build --parallel 1
+              ctest --test-dir build --output-on-failure --output-junit build/junit.xml
+            '
+
+      - name: Upload JUnit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctest-junit
+          path: build/junit.xml
+          if-no-files-found: warn
