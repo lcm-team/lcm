@@ -326,10 +326,11 @@ contains
       real(real64) :: yp
       real(real64) :: zp
 
-      call lcm_timer_tic('lcm/refine_particle_velocities')
       call require_particle_cells_allocated()
 
       if (config_state%n_uvw_iteration < 1) return
+
+      call lcm_timer_tic('lcm/refine_particle_velocities')
 
       do k = 1, size(cell_particles, 3)
          do j = 1, size(cell_particles, 2)

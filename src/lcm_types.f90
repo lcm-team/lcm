@@ -256,8 +256,8 @@ module lcm_types
       type(lcm_particle_t), allocatable :: particles(:)
    end type lcm_particle_cell_t
 
+   ! matches the host model (dales) timer routines, with its parameters
    abstract interface
-      ! matches the host model timer routines, without its optional parameters
       subroutine timer_tic_ifc(timer_name, opt_nvtx_id)
          character(*), intent(in)      :: timer_name
          integer, intent(in), optional :: opt_nvtx_id
@@ -268,10 +268,20 @@ module lcm_types
       end subroutine
    end interface
 
-   procedure(timer_tic_ifc), pointer :: lcm_timer_tic => null()
-   procedure(timer_toc_ifc), pointer :: lcm_timer_toc => null()
+   procedure(timer_tic_ifc), pointer :: lcm_timer_tic => timer_tic_noop
+   procedure(timer_toc_ifc), pointer :: lcm_timer_toc => timer_toc_noop
 
 contains
+
+   ! these two routines do nothing and only serve as a placeholder routine to point at
+   subroutine timer_tic_noop(timer_name, opt_nvtx_id)
+      character(*), intent(in)      :: timer_name
+      integer, intent(in), optional :: opt_nvtx_id
+   end subroutine
+
+   subroutine timer_toc_noop(timer_name)
+      character(*), intent(in) :: timer_name
+   end subroutine
 
    subroutine lcm_init_config(config)
       type(lcm_config_t), intent(out) :: config
