@@ -9,6 +9,10 @@ module lcm_types
    public :: lcm_config_t
    public :: lcm_field_state_t
    public :: lcm_particle_t
+   public :: particle_type_liquid_no_in
+   public :: particle_type_liquid_with_in
+   public :: particle_type_ice_no_in
+   public :: particle_type_ice_with_in
    public :: lcm_particle_mpi_message_t
    public :: lcm_particle_cell_t
    public :: lcm_init_grid
@@ -17,6 +21,12 @@ module lcm_types
    public :: timer_toc_ifc
    public :: lcm_timer_tic
    public :: lcm_timer_toc
+
+   ! SAM-LCM iTYPE encoding: sign is phase, magnitude records IN membership.
+   integer, parameter :: particle_type_liquid_no_in = 1
+   integer, parameter :: particle_type_liquid_with_in = 2
+   integer, parameter :: particle_type_ice_no_in = -1
+   integer, parameter :: particle_type_ice_with_in = -2
 
    type :: lcm_grid_t
       ! Physical structured-grid geometry only. MPI rank topology is derived
@@ -191,7 +201,7 @@ module lcm_types
       ! SAM-LCM ivar(iA), ivar(iID), and ivar(iTYPE).
       integer(int64) :: weight = 0_int64
       integer(int64) :: id = 0_int64
-      integer :: particle_type = 0
+      integer :: particle_type = particle_type_liquid_no_in
 
       ! SAM-LCM motion var(iX:iWsgs). Cell ownership remains the primary
       ! location, but these fields preserve the current velocity-advection path.
