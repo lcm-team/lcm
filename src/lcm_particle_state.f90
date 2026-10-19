@@ -48,6 +48,9 @@ module lcm_particle_state
    private
 
    public :: cell_particles
+   public :: lcm_get_particle_cell
+   public :: particle_aerosol_radius
+   public :: particle_bfactor
    public :: lcm_allocate_particle_cells
    public :: lcm_add_particle
    public :: lcm_move_particle
@@ -70,9 +73,10 @@ module lcm_particle_state
    public :: cell_tabs_lcm
    public :: cell_absolute_temperature
    public :: qsatw_liquid
+   public :: esatw_liquid
    public :: inverse_error_function_approx
    public :: ice_freezing_temperature
-   type(lcm_particle_cell_t), allocatable, protected, save :: cell_particles(:,:,:)
+   type(lcm_particle_cell_t), allocatable, target, protected, save :: cell_particles(:,:,:)
    type(lcm_particle_t), allocatable, save :: aerosol_initialization_template(:)
    integer(int64), protected, save :: n_step_id = 0_int64
    integer(int64), protected, save :: n_id = 0_int64
@@ -94,6 +98,15 @@ module lcm_particle_state
    integer, parameter :: n_inv_cdf = 50000000
 
 contains
+
+   function lcm_get_particle_cell(i, j, k) result(particle_cell)
+      integer, intent(in) :: i, j, k
+      type(lcm_particle_cell_t), pointer :: particle_cell
+
+      call require_particle_cells_allocated()
+      call validate_cell_index(i, j, k)
+      particle_cell => cell_particles(i,j,k)
+   end function lcm_get_particle_cell
 
    subroutine lcm_allocate_particle_cells(initial_capacity_per_cell, &
                                           initial_capacity_vertical_levels)
@@ -1550,11 +1563,17 @@ contains
 
       real(real64) :: e
 
-      e = 610.94_real64 * &
-          exp(17.625_real64 * (temperature - 273.15_real64) / &
-              max(temperature - 30.11_real64, 1.0_real64))
+      e = esatw_liquid(temperature)
       qsatw = epsv * e / max(pressure - e, 1.0_real64)
    end function qsatw_liquid
+
+   real(real64) function esatw_liquid(temperature) result(esatw)
+      real(real64), intent(in) :: temperature
+
+      esatw = 610.94_real64 * &
+         exp(17.625_real64 * (temperature - 273.15_real64) / &
+             max(temperature - 30.11_real64, 1.0_real64))
+   end function esatw_liquid
 
    subroutine ice_type_probabilities(in_typeprobs)
       real(real64), intent(out) :: in_typeprobs(4)

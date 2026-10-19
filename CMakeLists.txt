@@ -60,6 +60,7 @@ set(LCM_CORE_SOURCES
   "${LCM_SOURCE_DIR}/micro_user_vars.f90"
   "${LCM_SOURCE_DIR}/micro_vars.f90"
   "${LCM_SOURCE_DIR}/lcm_config_state.f90"
+  "${LCM_SOURCE_DIR}/lcm_condensation.f90"
   "${LCM_SOURCE_DIR}/lcm_initialization_state.f90"
   "${LCM_SOURCE_DIR}/lcm_advance.f90"
   "${LCM_SOURCE_DIR}/lcm_host_interface.f90"
