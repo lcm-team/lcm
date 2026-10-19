@@ -37,8 +37,8 @@ module lcm_particle_state
    use lcm_particle_properties, only: lcm_particle_radius
    use lcm_types, only: lcm_particle_cell_t, lcm_particle_mpi_message_t, &
                         lcm_particle_t, lcm_timer_tic, lcm_timer_toc, &
-                        particle_type_liquid_no_in, &
-                        particle_type_liquid_with_in
+                        liquid_no_in, &
+                        liquid_with_in
    use lcm_user, only: lcm_user_init_particles
    use lcm_velocity_interpolation, only: lcm_interpolate_particle_velocity
    use lcm_random, only: randomu
@@ -879,7 +879,7 @@ contains
       particle%spray_marker = -999
       call set_particle_tracking_marker(i, j, k, cell_particle_index, particle)
 
-      particle%particle_type = particle_type_liquid_no_in
+      particle%particle_type = liquid_no_in
       seed_id = particle_random_seed_id()
       call set_particle_position(i, j, k, seed_id, particle)
       particle%w_sedi = 0.0_real64
@@ -1370,7 +1370,7 @@ contains
          cell_particles(i,j,k)%particles(n)%aerosol_portions(i_mode) = 1.0_real64
       endif
       cell_particles(i,j,k)%particles(n)%particle_type = &
-         particle_type_liquid_no_in
+         liquid_no_in
       cell_particles(i,j,k)%particles(n)%in_surface_area = 0.0_real64
       cell_particles(i,j,k)%particles(n)%freezing_temperature = 233.15_real64
    end subroutine set_particle_aerosol_state
@@ -1606,11 +1606,11 @@ contains
       if (.not. config_state%switch_ice) return
 
       cell_particles(i,j,k)%particles(n)%particle_type = &
-         particle_type_liquid_no_in
+         liquid_no_in
 
       if (real(randomu(seed_id), real64) < real(config_state%frac_ice, real64)) then
          cell_particles(i,j,k)%particles(n)%particle_type = &
-            particle_type_liquid_with_in
+            liquid_with_in
 
          x_rand = real(randomu(seed_id), real64)
          intype = minloc(in_typeprobs - x_rand, &
@@ -1648,7 +1648,7 @@ contains
             ice_freezing_temperature(intype, sfc_in, seed_id)
       else
          cell_particles(i,j,k)%particles(n)%particle_type = &
-            particle_type_liquid_no_in
+            liquid_no_in
          cell_particles(i,j,k)%particles(n)%in_surface_area = 0.0_real64
          cell_particles(i,j,k)%particles(n)%freezing_temperature = 233.15_real64
       endif

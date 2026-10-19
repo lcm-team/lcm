@@ -7,10 +7,10 @@
 module lcm_condensation
    use iso_fortran_env, only: int64, real64
    use lcm_types, only: lcm_particle_cell_t, lcm_particle_t, &
-                        particle_type_liquid_no_in, &
-                        particle_type_liquid_with_in, &
-                        particle_type_ice_no_in, &
-                        particle_type_ice_with_in
+                        liquid_no_in, &
+                        liquid_with_in, &
+                        ice_no_in, &
+                        ice_with_in
    use lcm_parameters, only: pi, rho_liq, rv, specific_heat_dry_air, fac_cond, gravity, &
                              molecular_viscosity_air, thermal_conductivity_air, &
                              water_vapor_diffusivity_air, &
@@ -547,12 +547,12 @@ contains
    subroutine require_liquid_particle(particle)
       type(lcm_particle_t), intent(in) :: particle
 
-      if (particle%particle_type == particle_type_ice_no_in .or. &
-          particle%particle_type == particle_type_ice_with_in) then
+      if (particle%particle_type == ice_no_in .or. &
+          particle%particle_type == ice_with_in) then
          error stop 'LCM condensation: SAM ice-growth/phase-change branches are not yet ported'
       endif
-      if (particle%particle_type /= particle_type_liquid_no_in .and. &
-          particle%particle_type /= particle_type_liquid_with_in) then
+      if (particle%particle_type /= liquid_no_in .and. &
+          particle%particle_type /= liquid_with_in) then
          error stop 'LCM condensation: invalid SAM-compatible particle_type'
       endif
       if (particle%weight <= 0_int64) then

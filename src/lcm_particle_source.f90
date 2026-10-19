@@ -16,8 +16,8 @@ module lcm_particle_source
                                 qsatw_liquid, set_particle_position
    use lcm_parameters, only: molecular_weight_water, pi, rho_liq, rv, &
                              surface_tension_water
-   use lcm_types, only: lcm_particle_t, particle_type_liquid_no_in, &
-                        particle_type_liquid_with_in
+   use lcm_types, only: lcm_particle_t, liquid_no_in, &
+                        liquid_with_in
    use lcm_random, only: randomu
 
    implicit none
@@ -657,7 +657,7 @@ contains
       particle%eta = field_state%qv(i,j,k) - &
                      qsatw_liquid(cell_tabs_lcm(i, j, k), &
                                   field_state%pressure(k))
-      particle%particle_type = particle_type_liquid_no_in
+      particle%particle_type = liquid_no_in
       particle%in_surface_area = 0.0_real64
       particle%freezing_temperature = 233.15_real64
       particle%n_monomer = 1_int64
@@ -738,7 +738,7 @@ contains
       integer :: in_type
 
       in_type = config_state%type_source_in(i_mode)
-      particle%particle_type = particle_type_liquid_with_in
+      particle%particle_type = liquid_with_in
       particle%in_surface_area = 0.0_real64
       particle%in_surface_area(in_type) = real(weight, real64) * sfc_in
       particle%freezing_temperature = ice_freezing_temperature(in_type, sfc_in, seed_id)
