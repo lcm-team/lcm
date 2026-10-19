@@ -48,7 +48,6 @@ module lcm_particle_state
    private
 
    public :: cell_particles
-   public :: lcm_get_particle_cell
    public :: particle_aerosol_radius
    public :: particle_bfactor
    public :: lcm_allocate_particle_cells
@@ -76,7 +75,7 @@ module lcm_particle_state
    public :: esatw_liquid
    public :: inverse_error_function_approx
    public :: ice_freezing_temperature
-   type(lcm_particle_cell_t), allocatable, target, save :: cell_particles(:,:,:)
+   type(lcm_particle_cell_t), allocatable, save :: cell_particles(:,:,:)
    type(lcm_particle_t), allocatable, save :: aerosol_initialization_template(:)
    integer(int64), protected, save :: n_step_id = 0_int64
    integer(int64), protected, save :: n_id = 0_int64
@@ -99,14 +98,6 @@ module lcm_particle_state
 
 contains
 
-   function lcm_get_particle_cell(i, j, k) result(particle_cell)
-      integer, intent(in) :: i, j, k
-      type(lcm_particle_cell_t), pointer :: particle_cell
-
-      call require_particle_cells_allocated()
-      call validate_cell_index(i, j, k)
-      particle_cell => cell_particles(i,j,k)
-   end function lcm_get_particle_cell
 
    subroutine lcm_allocate_particle_cells(initial_capacity_per_cell, &
                                           initial_capacity_vertical_levels)
