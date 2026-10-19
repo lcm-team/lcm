@@ -20,7 +20,7 @@ module lcm_condensation
    use lcm_config_state, only: config_is_set, config_state
    use lcm_field_state, only: field_state
    use lcm_grid_state, only: grid_state
-   use lcm_particle_state, only: lcm_get_particle_cell, &
+   use lcm_particle_state, only: cell_particles, &
                                  particle_aerosol_radius, particle_bfactor, &
                                  qsatw_liquid, esatw_liquid
 
@@ -80,7 +80,6 @@ contains
       integer, intent(in) :: i, j, k, current_step
       real(real64), intent(in) :: time_step
 
-      type(lcm_particle_cell_t), pointer :: particle_cell
       integer :: n, count
       real(real64) :: temperature, pressure, air_density, cell_volume
       real(real64) :: qsatw_pre, esatw_pre, c_liq_pre, a_liq_pre, d_pre
@@ -94,14 +93,22 @@ contains
       real(real64) :: particle_temperature, r0_local
       real(real64) :: bfactor
 
-      particle_cell => lcm_get_particle_cell(i, j, k)
-      count = particle_cell%count
+      if (.not. allocated(cell_particles)) then
+         error stop 'LCM particle cells have not been allocated'
+      endif
+      if (i < 1 .or. i > size(cell_particles, 1) .or. &
+          j < 1 .or. j > size(cell_particles, 2) .or. &
+          k < 1 .or. k > size(cell_particles, 3)) then
+         error stop 'LCM particle cell index is outside the local grid'
+      endif
+
+      count = cell_particles(i,j,k)%count
       if (count <= 0) then
          call save_cell_mean_history(i, j, k)
          return
       endif
 
-      if (.not. allocated(particle_cell%particles)) then
+      if (.not. allocated(cell_particles(i,j,k)%particles)) then
          error stop 'LCM condensation: nonempty particle cell has no storage'
       endif
 
@@ -134,15 +141,15 @@ contains
       ql_local = 0.0_real64
       radiation_integral = 0.0_real64
       do n = 1, count
-         call require_liquid_particle(particle_cell%particles(n))
-         radius = liquid_radius(particle_cell%particles(n))
-         ql_local = ql_local + particle_cell%particles(n)%mass_water / &
+         call require_liquid_particle(cell_particles(i,j,k)%particles(n))
+         radius = liquid_radius(cell_particles(i,j,k)%particles(n))
+         ql_local = ql_local + cell_particles(i,j,k)%particles(n)%mass_water / &
                     (cell_volume * air_density)
          if (config_state%switch_radiation_micro) then
             q_absorb = 1.18_real64 * (1.0_real64 - exp(-0.28e6_real64 * radius))
             radiation_integral = radiation_integral + &
                4.0_real64 * pi * radius**2 * q_absorb * &
-               real(particle_cell%particles(n)%weight, real64) / cell_volume
+               real(cell_particles(i,j,k)%particles(n)%weight, real64) / cell_volume
          endif
       enddo
 
@@ -157,14 +164,14 @@ contains
       dsd_liq = 0.0_real64
       if (.not. config_state%switch_lem_micro) then
          do n = 1, count
-            radius = liquid_radius(particle_cell%particles(n))
+            radius = liquid_radius(cell_particles(i,j,k)%particles(n))
             r0 = growth_length_scale(temperature, esatw_pre, &
                  thermal_conductivity, vapor_diffusivity, &
-                 particle_cell%particles(n), alpha_mordy)
+                 cell_particles(i,j,k)%particles(n), alpha_mordy)
             ventilation = liquid_ventilation(radius, &
-               particle_cell%particles(n)%w_sedi, air_density)
+               cell_particles(i,j,k)%particles(n)%w_sedi, air_density)
             dsd_liq = dsd_liq + &
-               real(particle_cell%particles(n)%weight, real64) * &
+               real(cell_particles(i,j,k)%particles(n)%weight, real64) * &
                radius**2 / (radius + r0) * ventilation
          enddo
 
@@ -197,31 +204,31 @@ contains
             call integrate_liquid_particle(i, j, k, n, time_step, temperature, &
                pressure, air_density, cell_volume, c_liq_pre, d_pre, &
                alpha_factor, supersaturation, radiation, esatw_pre, &
-               thermal_conductivity, vapor_diffusivity, particle_cell)
+               thermal_conductivity, vapor_diffusivity, cell_particles(i,j,k))
          enddo
       else
          do n = 1, count
-            radius = liquid_radius(particle_cell%particles(n))
+            radius = liquid_radius(cell_particles(i,j,k)%particles(n))
             aerosol_radius = particle_aerosol_radius(i, j, k, n)
-            particle_temperature = particle_cell%particles(n)%temperature - &
-               particle_cell%particles(n)%z * gravity / specific_heat_dry_air
+            particle_temperature = cell_particles(i,j,k)%particles(n)%temperature - &
+               cell_particles(i,j,k)%particles(n)%z * gravity / specific_heat_dry_air
             r0 = growth_length_scale(temperature, esatw_pre, thermal_conductivity, &
-               vapor_diffusivity, particle_cell%particles(n), alpha_mordy)
+               vapor_diffusivity, cell_particles(i,j,k)%particles(n), alpha_mordy)
             if (config_state%switch_koehler_micro) then
                bfactor = particle_bfactor(i, j, k, n)
             else
                bfactor = 0.0_real64
             endif
             ventilation = liquid_ventilation(radius, &
-               particle_cell%particles(n)%w_sedi, air_density)
+               cell_particles(i,j,k)%particles(n)%w_sedi, air_density)
             pre_liq = a_liq_pre * 4.0_real64 * pi * c_liq_pre / &
                       (qsatw_pre * (cell_volume / real(count, real64)))
             tau = 1.0_real64 / (pre_liq * &
-               real(particle_cell%particles(n)%weight, real64) * &
+               real(cell_particles(i,j,k)%particles(n)%weight, real64) * &
                radius**2 / (radius + r0) * ventilation)
-            eta_dyn = particle_cell%particles(n)%qv - &
+            eta_dyn = cell_particles(i,j,k)%particles(n)%qv - &
                       qsatw_sam(particle_temperature, pressure)
-            eta_last = particle_cell%particles(n)%eta
+            eta_last = cell_particles(i,j,k)%particles(n)%eta
             forcing = (eta_dyn - eta_last) / time_step
             eta_end = eta_new(eta_last, forcing, tau, time_step)
             eta_integral = eta_int(eta_last, forcing, tau, time_step)
@@ -233,20 +240,20 @@ contains
 
             r0_local = growth_length_scale(temperature, esatw_pre, &
                thermal_conductivity, &
-               vapor_diffusivity, particle_cell%particles(n), alpha_mordy)
+               vapor_diffusivity, cell_particles(i,j,k)%particles(n), alpha_mordy)
             call integrate_liquid_particle(i, j, k, n, time_step, temperature, &
                pressure, air_density, cell_volume, c_liq_pre, d_pre, &
                alpha_factor, supersaturation, radiation, esatw_pre, &
-               thermal_conductivity, vapor_diffusivity, particle_cell, &
+               thermal_conductivity, vapor_diffusivity, cell_particles(i,j,k), &
                local_r0=r0_local, local_bfactor=bfactor, &
                local_ventilation=ventilation)
          enddo
 
          ! SAM saves post-condensation LEM supersaturation for the next step.
          do n = 1, count
-            particle_temperature = particle_cell%particles(n)%temperature - &
-               particle_cell%particles(n)%z * gravity / specific_heat_dry_air
-            particle_cell%particles(n)%eta = particle_cell%particles(n)%qv - &
+            particle_temperature = cell_particles(i,j,k)%particles(n)%temperature - &
+               cell_particles(i,j,k)%particles(n)%z * gravity / specific_heat_dry_air
+            cell_particles(i,j,k)%particles(n)%eta = cell_particles(i,j,k)%particles(n)%qv - &
                qsatw_sam(particle_temperature, pressure)
          enddo
       endif

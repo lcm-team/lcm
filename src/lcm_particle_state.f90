@@ -76,7 +76,7 @@ module lcm_particle_state
    public :: esatw_liquid
    public :: inverse_error_function_approx
    public :: ice_freezing_temperature
-   type(lcm_particle_cell_t), allocatable, target, protected, save :: cell_particles(:,:,:)
+   type(lcm_particle_cell_t), allocatable, target, save :: cell_particles(:,:,:)
    type(lcm_particle_t), allocatable, save :: aerosol_initialization_template(:)
    integer(int64), protected, save :: n_step_id = 0_int64
    integer(int64), protected, save :: n_id = 0_int64
