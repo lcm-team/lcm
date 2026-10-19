@@ -2,12 +2,12 @@
 program test_minimal_les_host_top_particle_boundary
    use iso_fortran_env, only: int64, real64
    use lcm_grid_state, only: grid_state
-   use lcm_host_interface, only: lcm_advance
    use lcm_particle_state, only: cell_particles, lcm_add_particle
    use lcm_types, only: lcm_particle_t
    use minimal_les_host, only: minimal_host_dx, minimal_host_dy, &
                                minimal_host_u, minimal_host_v, minimal_host_w, &
-                               setup_minimal_les_host
+                               setup_minimal_les_host, &
+                               advance_minimal_les_transport
 
    implicit none
 
@@ -19,7 +19,7 @@ program test_minimal_les_host_top_particle_boundary
    call add_top_crossing_particle()
    call add_in_domain_particle()
 
-   call lcm_advance(1.0_real64)
+   call advance_minimal_les_transport(1.0_real64)
 
    call assert_true(cell_particles(1,1,2)%count == 2, &
                     "both integration-test particles remain in the upper cell")

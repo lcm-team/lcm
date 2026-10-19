@@ -1,13 +1,13 @@
 program test_minimal_les_host_outgoing_particles
    use iso_fortran_env, only: int64, real64
-   use lcm_host_interface, only: lcm_advance
    use lcm_exchange_directions, only: lcm_exchange_direction_count
    use lcm_particle_exchange_buffers, only: lcm_send_particle_message_count
    use lcm_particle_state, only: cell_particles, lcm_add_particle, &
                                  lcm_reset_particle_cells
    use lcm_types, only: lcm_particle_t
    use minimal_les_host, only: minimal_host_u, minimal_host_v, &
-                               minimal_host_w, setup_minimal_les_host
+                               minimal_host_w, setup_minimal_les_host, &
+                               advance_minimal_les_transport
 
    implicit none
 
@@ -24,7 +24,7 @@ program test_minimal_les_host_outgoing_particles
    call add_outgoing_particle(9102_int64, 1, 2, 125.0_real64, 199.0_real64)
    call add_outgoing_particle(9103_int64, 2, 2, 199.0_real64, 199.0_real64)
 
-   call lcm_advance(1.0_real64)
+   call advance_minimal_les_transport(1.0_real64)
 
    call assert_true(total_particle_count() == 3, &
                     "serial exchange preserves all particles")
