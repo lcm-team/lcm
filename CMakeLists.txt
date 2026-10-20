@@ -49,6 +49,8 @@ set(LCM_CORE_SOURCES
   "${LCM_SOURCE_DIR}/lcm_particle_count_exchange.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_mpi_transport.f90"
   "${LCM_SOURCE_DIR}/lcm_field_state.f90"
+  "${LCM_SOURCE_DIR}/lcm_physical_process_state.f90"
+  "${LCM_SOURCE_DIR}/lcm_diagnostics_state.f90"
   "${LCM_SOURCE_DIR}/lcm_random.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_location.f90"
   "${LCM_SOURCE_DIR}/lcm_velocity_interpolation.f90"

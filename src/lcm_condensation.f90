@@ -20,6 +20,10 @@ module lcm_condensation
    use lcm_config_state, only: config_is_set, config_state
    use lcm_field_state, only: field_state
    use lcm_grid_state, only: grid_state
+   use lcm_physical_process_state, only: lcm_ensure_cell_mean_history, &
+      lcm_get_cell_mean_history, lcm_save_cell_mean_history
+   use lcm_diagnostics_state, only: lcm_ensure_condensation_diagnostics, &
+      lcm_reset_condensation_diagnostics, lcm_add_condensation_diagnostics
    use lcm_particle_state, only: cell_particles, &
                                  particle_aerosol_radius, particle_bfactor, &
                                  qsatw_liquid, esatw_liquid
@@ -28,16 +32,6 @@ module lcm_condensation
    private
 
    public :: lcm_apply_condensation
-   !> Raw per-step diagnostic increments, before SAM's later normalization.
-   ! TODO: Expose these through the LCM diagnostics interface when a consumer is added.
-   real(real64), allocatable :: condensation_mass(:,:,:)
-   real(real64), allocatable :: evaporation_mass(:,:,:)
-   real(real64), allocatable :: activation_weight(:,:,:)
-   real(real64), allocatable :: deactivation_weight(:,:,:)
-   real(real64), allocatable :: previous_temperature(:,:,:)
-   real(real64), allocatable :: previous_pressure(:,:,:)
-   logical :: cell_mean_history_is_initialized = .false.
-
 contains
 
    !> Apply liquid condensational growth and evaporation to local particles.
@@ -53,9 +47,9 @@ contains
       integer :: nx, ny, nz
 
       call validate_condensation_inputs(time_step)
-      call ensure_diagnostic_storage()
-      call reset_condensation_diagnostics()
-      call ensure_cell_mean_history()
+      call lcm_ensure_condensation_diagnostics()
+      call lcm_reset_condensation_diagnostics()
+      call lcm_ensure_cell_mean_history()
 
       ! SAM's micro_condensation always executes ice growth and phase changes
       ! when ice particles exist. Those branches are not yet ported here, so
@@ -92,7 +86,7 @@ contains
       real(real64) :: eta_dyn, eta_last, forcing, eta_end, eta_integral
       real(real64) :: eta_mean, fsw, supersaturation
       real(real64) :: particle_temperature, r0_local
-      real(real64) :: bfactor
+      real(real64) :: bfactor, previous_temperature_cell, previous_pressure_cell
 
       if (.not. allocated(cell_particles)) then
          error stop 'LCM particle cells have not been allocated'
@@ -105,7 +99,7 @@ contains
 
       count = cell_particles(i,j,k)%count
       if (count <= 0) then
-         call save_cell_mean_history(i, j, k)
+         call lcm_save_cell_mean_history(i, j, k)
          return
       endif
 
@@ -117,6 +111,8 @@ contains
       pressure = field_state%pressure(k)
       air_density = field_state%density(k)
       cell_volume = real(grid_state%dV(k), real64)
+      call lcm_get_cell_mean_history(i, j, k, previous_temperature_cell, &
+                                     previous_pressure_cell)
       call get_growth_coefficients(temperature, pressure, thermal_conductivity, &
                                    vapor_diffusivity)
 
@@ -183,8 +179,7 @@ contains
             eta_dyn = field_state%qv(i,j,k) - &
                       qsatw_sam(temperature, pressure)
             eta_last = field_state%qv(i,j,k) - &
-                       qsatw_sam(previous_temperature(i,j,k), &
-                                 previous_pressure(i,j,k))
+                       qsatw_sam(previous_temperature_cell, previous_pressure_cell)
             forcing = (eta_dyn - eta_last) / time_step
             eta_end = eta_new(eta_last, forcing, tau, time_step)
             eta_integral = eta_int(eta_last, forcing, tau, time_step)
@@ -259,7 +254,7 @@ contains
          enddo
       endif
 
-      call save_cell_mean_history(i, j, k)
+      call lcm_save_cell_mean_history(i, j, k)
    end subroutine micro_condensation_cell
 
    subroutine integrate_liquid_particle(i, j, k, n, time_step, temperature, &
@@ -327,20 +322,15 @@ contains
       endif
 
       if (new_radius > radius) then
-         condensation_mass(i,j,k) = condensation_mass(i,j,k) + &
-            dm * real(particle%weight, real64)
+         call lcm_add_condensation_diagnostics(i, j, k, &
+            dm * real(particle%weight, real64), 0.0_real64, &
+            merge(real(particle%weight, real64), 0.0_real64, &
+               radius <= r_act .and. new_radius > r_act), 0.0_real64)
       else
-         evaporation_mass(i,j,k) = evaporation_mass(i,j,k) + &
-            dm * real(particle%weight, real64)
-      endif
-
-      if (new_radius > r_act .and. radius <= r_act) then
-         activation_weight(i,j,k) = activation_weight(i,j,k) + &
-            real(particle%weight, real64)
-      endif
-      if (new_radius <= r_act .and. radius > r_act) then
-         deactivation_weight(i,j,k) = deactivation_weight(i,j,k) + &
-            real(particle%weight, real64)
+         call lcm_add_condensation_diagnostics(i, j, k, 0.0_real64, &
+            dm * real(particle%weight, real64), 0.0_real64, &
+            merge(real(particle%weight, real64), 0.0_real64, &
+               radius > r_act .and. new_radius <= r_act))
       endif
 
       particle_cell%particles(n) = particle
@@ -570,57 +560,5 @@ contains
          error stop 'LCM condensation requires nonnegative particle water mass'
       endif
    end subroutine require_liquid_particle
-
-   subroutine ensure_diagnostic_storage()
-      integer :: nx, ny, nz
-
-      nx = grid_state%grid%nx_local
-      ny = grid_state%grid%ny_local
-      nz = grid_state%grid%nz
-      if (allocated(condensation_mass)) then
-         if (all(shape(condensation_mass) == [nx,ny,nz])) return
-         deallocate(condensation_mass, evaporation_mass, &
-                    activation_weight, deactivation_weight)
-      endif
-      allocate(condensation_mass(nx,ny,nz), evaporation_mass(nx,ny,nz), &
-               activation_weight(nx,ny,nz), deactivation_weight(nx,ny,nz))
-   end subroutine ensure_diagnostic_storage
-
-   subroutine reset_condensation_diagnostics()
-      condensation_mass = 0.0_real64
-      evaporation_mass = 0.0_real64
-      activation_weight = 0.0_real64
-      deactivation_weight = 0.0_real64
-   end subroutine reset_condensation_diagnostics
-
-   subroutine ensure_cell_mean_history()
-      integer :: nx, ny, nz, i, j, k
-
-      nx = grid_state%grid%nx_local
-      ny = grid_state%grid%ny_local
-      nz = grid_state%grid%nz
-      if (allocated(previous_temperature)) then
-         if (all(shape(previous_temperature) == [nx,ny,nz])) return
-         deallocate(previous_temperature, previous_pressure)
-      endif
-      allocate(previous_temperature(nx,ny,nz), previous_pressure(nx,ny,nz))
-      do k = 1, nz
-         do j = 1, ny
-            do i = 1, nx
-               previous_temperature(i,j,k) = cell_temperature(i,j,k)
-               previous_pressure(i,j,k) = field_state%pressure(k)
-            enddo
-         enddo
-      enddo
-      cell_mean_history_is_initialized = .true.
-   end subroutine ensure_cell_mean_history
-
-   subroutine save_cell_mean_history(i, j, k)
-      integer, intent(in) :: i, j, k
-
-      if (.not. cell_mean_history_is_initialized) return
-      previous_temperature(i,j,k) = cell_temperature(i,j,k)
-      previous_pressure(i,j,k) = field_state%pressure(k)
-   end subroutine save_cell_mean_history
 
 end module lcm_condensation
