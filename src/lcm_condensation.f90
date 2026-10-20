@@ -29,13 +29,14 @@ module lcm_condensation
 
    public :: lcm_apply_condensation
    !> Raw per-step diagnostic increments, before SAM's later normalization.
-   real(real64), allocatable, save, public :: condensation_mass(:,:,:)
-   real(real64), allocatable, save, public :: evaporation_mass(:,:,:)
-   real(real64), allocatable, save, public :: activation_weight(:,:,:)
-   real(real64), allocatable, save, public :: deactivation_weight(:,:,:)
-   real(real64), allocatable, save :: previous_temperature(:,:,:)
-   real(real64), allocatable, save :: previous_pressure(:,:,:)
-   logical, save :: cell_mean_history_is_initialized = .false.
+   ! TODO: Expose these through the LCM diagnostics interface when a consumer is added.
+   real(real64), allocatable :: condensation_mass(:,:,:)
+   real(real64), allocatable :: evaporation_mass(:,:,:)
+   real(real64), allocatable :: activation_weight(:,:,:)
+   real(real64), allocatable :: deactivation_weight(:,:,:)
+   real(real64), allocatable :: previous_temperature(:,:,:)
+   real(real64), allocatable :: previous_pressure(:,:,:)
+   logical :: cell_mean_history_is_initialized = .false.
 
 contains
 
