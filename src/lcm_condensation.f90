@@ -20,10 +20,10 @@ module lcm_condensation
    use lcm_config_state, only: config_is_set, config_state
    use lcm_field_state, only: field_state
    use lcm_grid_state, only: grid_state
-   use lcm_physical_process_state, only: lcm_ensure_cell_mean_history, &
-      lcm_get_cell_mean_history, lcm_save_cell_mean_history
-   use lcm_diagnostics_state, only: lcm_ensure_condensation_diagnostics, &
-      lcm_reset_condensation_diagnostics, lcm_add_condensation_diagnostics
+   use lcm_microphysics_state, only: lcm_ensure_cell_mean_history, &
+      lcm_get_cell_mean_history, lcm_save_cell_mean_history, &
+      lcm_ensure_condensation_diagnostics, lcm_reset_condensation_diagnostics, &
+      lcm_add_condensation_diagnostics
    use lcm_particle_state, only: cell_particles, &
                                  particle_aerosol_radius, particle_bfactor, &
                                  qsatw_liquid, esatw_liquid
