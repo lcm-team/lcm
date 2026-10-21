@@ -84,23 +84,10 @@ contains
       real(real64) :: particle_temperature, r0_local
       real(real64) :: bfactor, previous_temperature_cell, previous_pressure_cell
 
-      if (.not. allocated(cell_particles)) then
-         error stop 'LCM particle cells have not been allocated'
-      endif
-      if (i < 1 .or. i > size(cell_particles, 1) .or. &
-          j < 1 .or. j > size(cell_particles, 2) .or. &
-          k < 1 .or. k > size(cell_particles, 3)) then
-         error stop 'LCM particle cell index is outside the local grid'
-      endif
-
       count = cell_particles(i,j,k)%count
-      if (count <= 0) then
+      if (count == 0) then
          call lcm_save_cell_mean_history(i, j, k)
          return
-      endif
-
-      if (.not. allocated(cell_particles(i,j,k)%particles)) then
-         error stop 'LCM condensation: nonempty particle cell has no storage'
       endif
 
       temperature = cell_tabs_lcm(i, j, k)
