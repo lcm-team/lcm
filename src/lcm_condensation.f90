@@ -99,8 +99,8 @@ contains
       call get_growth_coefficients(temperature, pressure, thermal_conductivity, &
                                    vapor_diffusivity)
 
-      qsatw_pre = qsatw_sam(temperature, pressure)
-      esatw_pre = esatw_sam(temperature)
+      qsatw_pre = qsatw_liquid(temperature, pressure)
+      esatw_pre = esatw_liquid(temperature)
       c_liq_pre = 1.0_real64 / &
          (rv * temperature / (100.0_real64 * esatw_pre * vapor_diffusivity) + &
           (latent_heat_condensation / (rv * temperature) - 1.0_real64) * &
@@ -160,9 +160,9 @@ contains
                       (qsatw_pre * cell_volume)
             tau = 1.0_real64 / (pre_liq * dsd_liq)
             eta_dyn = field_state%qv(i,j,k) - &
-                      qsatw_sam(temperature, pressure)
+                      qsatw_liquid(temperature, pressure)
             eta_last = field_state%qv(i,j,k) - &
-                       qsatw_sam(previous_temperature_cell, previous_pressure_cell)
+                       qsatw_liquid(previous_temperature_cell, previous_pressure_cell)
             forcing = (eta_dyn - eta_last) / time_step
             eta_end = eta_new(eta_last, forcing, tau, time_step)
             eta_integral = eta_int(eta_last, forcing, tau, time_step)
@@ -206,7 +206,7 @@ contains
                real(cell_particles(i,j,k)%particles(n)%weight, real64) * &
                radius**2 / (radius + r0) * ventilation)
             eta_dyn = cell_particles(i,j,k)%particles(n)%qv - &
-                      qsatw_sam(particle_temperature, pressure)
+                      qsatw_liquid(particle_temperature, pressure)
             eta_last = cell_particles(i,j,k)%particles(n)%eta
             forcing = (eta_dyn - eta_last) / time_step
             eta_end = eta_new(eta_last, forcing, tau, time_step)
@@ -215,7 +215,7 @@ contains
             eta_mean = (eta_integral * (1.0_real64 - fsw) + &
                fsw * (eta_last + eta_end) * time_step * 0.5_real64) / time_step
             supersaturation = eta_mean / &
-                              qsatw_sam(particle_temperature, pressure)
+                              qsatw_liquid(particle_temperature, pressure)
 
             r0_local = growth_length_scale(temperature, esatw_pre, &
                thermal_conductivity, &
@@ -233,7 +233,7 @@ contains
             particle_temperature = cell_particles(i,j,k)%particles(n)%temperature - &
                cell_particles(i,j,k)%particles(n)%z * gravity / specific_heat_dry_air
             cell_particles(i,j,k)%particles(n)%eta = cell_particles(i,j,k)%particles(n)%qv - &
-               qsatw_sam(particle_temperature, pressure)
+               qsatw_liquid(particle_temperature, pressure)
          enddo
       endif
 
@@ -472,22 +472,11 @@ contains
       endif
    end subroutine get_growth_coefficients
 
-   real(real64) function esatw_sam(temperature) result(value)
-      real(real64), intent(in) :: temperature
-
-      value = esatw_liquid(temperature)
-   end function esatw_sam
-
-   real(real64) function qsatw_sam(temperature, pressure) result(value)
-      real(real64), intent(in) :: temperature, pressure
-      value = qsatw_liquid(temperature, pressure)
-   end function qsatw_sam
-
    real(real64) function dtqsatw_sam(temperature, pressure) result(value)
       real(real64), intent(in) :: temperature, pressure
 
-      value = (qsatw_sam(temperature + 0.01_real64, pressure) - &
-               qsatw_sam(temperature - 0.01_real64, pressure)) / 0.02_real64
+      value = (qsatw_liquid(temperature + 0.01_real64, pressure) - &
+               qsatw_liquid(temperature - 0.01_real64, pressure)) / 0.02_real64
    end function dtqsatw_sam
 
 
