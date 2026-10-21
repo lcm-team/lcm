@@ -11,10 +11,9 @@ module lcm_microphysics_state
    implicit none
    private
 
-   public :: lcm_ensure_cell_mean_history
+   public :: lcm_initialize_microphysics_state
    public :: lcm_get_cell_mean_history
    public :: lcm_save_cell_mean_history
-   public :: lcm_ensure_condensation_diagnostics
    public :: lcm_reset_condensation_diagnostics
    public :: lcm_add_condensation_diagnostics
 
@@ -29,28 +28,36 @@ module lcm_microphysics_state
 
 contains
 
-   !> Allocate history for the current local grid and seed it from host fields.
-   subroutine lcm_ensure_cell_mean_history()
-      integer :: nx, ny, nz, i, j, k
+   !> Allocate process history and diagnostic accumulators during LCM init.
+   subroutine lcm_initialize_microphysics_state()
+      integer :: nx, ny, nz
+
+      if (allocated(previous_temperature) .or. allocated(condensation_mass)) then
+         error stop 'LCM microphysics state has already been initialized'
+      endif
 
       nx = grid_state%grid%nx_local
       ny = grid_state%grid%ny_local
       nz = grid_state%grid%nz
-      if (allocated(previous_temperature)) then
-         if (all(shape(previous_temperature) == [nx,ny,nz])) return
-         deallocate(previous_temperature, previous_pressure)
-      endif
-
       allocate(previous_temperature(nx,ny,nz), previous_pressure(nx,ny,nz))
-      do k = 1, nz
-         do j = 1, ny
-            do i = 1, nx
+      allocate(condensation_mass(nx,ny,nz), evaporation_mass(nx,ny,nz), &
+               activation_weight(nx,ny,nz), deactivation_weight(nx,ny,nz))
+      call initialize_cell_mean_history()
+   end subroutine lcm_initialize_microphysics_state
+
+   !> Seed cell-mean history from the host state at initialization.
+   subroutine initialize_cell_mean_history()
+      integer :: i, j, k
+
+      do k = 1, size(previous_temperature,3)
+         do j = 1, size(previous_temperature,2)
+            do i = 1, size(previous_temperature,1)
                previous_temperature(i,j,k) = field_state%temperature(i,j,k)
                previous_pressure(i,j,k) = field_state%pressure(k)
             enddo
          enddo
       enddo
-   end subroutine lcm_ensure_cell_mean_history
+   end subroutine initialize_cell_mean_history
 
    !> Return the saved cell-mean temperature and pressure for process forcing.
    subroutine lcm_get_cell_mean_history(i, j, k, temperature, pressure)
@@ -85,20 +92,6 @@ contains
       previous_pressure(i,j,k) = field_state%pressure(k)
    end subroutine lcm_save_cell_mean_history
 
-   subroutine lcm_ensure_condensation_diagnostics()
-      integer :: nx, ny, nz
-
-      nx = grid_state%grid%nx_local
-      ny = grid_state%grid%ny_local
-      nz = grid_state%grid%nz
-      if (allocated(condensation_mass)) then
-         if (all(shape(condensation_mass) == [nx,ny,nz])) return
-         deallocate(condensation_mass, evaporation_mass, &
-                    activation_weight, deactivation_weight)
-      endif
-      allocate(condensation_mass(nx,ny,nz), evaporation_mass(nx,ny,nz), &
-               activation_weight(nx,ny,nz), deactivation_weight(nx,ny,nz))
-   end subroutine lcm_ensure_condensation_diagnostics
 
    subroutine lcm_reset_condensation_diagnostics()
       if (.not. allocated(condensation_mass)) then

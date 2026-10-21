@@ -17,12 +17,11 @@ module lcm_condensation
                              surface_tension_water, latent_heat_condensation, &
                              alpha_mordy, molecular_weight_ffc, f_ffc, &
                              n_avogadro, r_act
-   use lcm_config_state, only: config_is_set, config_state
+   use lcm_config_state, only: config_state
    use lcm_field_state, only: field_state
    use lcm_grid_state, only: grid_state
-   use lcm_microphysics_state, only: lcm_ensure_cell_mean_history, &
-      lcm_get_cell_mean_history, lcm_save_cell_mean_history, &
-      lcm_ensure_condensation_diagnostics, lcm_reset_condensation_diagnostics, &
+   use lcm_microphysics_state, only: lcm_get_cell_mean_history, &
+      lcm_save_cell_mean_history, lcm_reset_condensation_diagnostics, &
       lcm_add_condensation_diagnostics
    use lcm_particle_state, only: cell_particles, &
                                  particle_aerosol_radius, particle_bfactor, &
@@ -46,10 +45,7 @@ contains
       integer :: i, j, k
       integer :: nx, ny, nz
 
-      call validate_condensation_inputs(time_step)
-      call lcm_ensure_condensation_diagnostics()
       call lcm_reset_condensation_diagnostics()
-      call lcm_ensure_cell_mean_history()
 
       ! SAM's micro_condensation always executes ice growth and phase changes
       ! when ice particles exist. Those branches are not yet ported here, so
@@ -516,31 +512,6 @@ contains
                qsatw_sam(temperature - 0.01_real64, pressure)) / 0.02_real64
    end function dtqsatw_sam
 
-   subroutine validate_condensation_inputs(time_step)
-      real(real64), intent(in) :: time_step
-
-      if (time_step <= 0.0_real64) error stop 'LCM condensation time_step must be positive'
-      if (.not. config_is_set) error stop 'LCM condensation requires configured LCM state'
-      if (.not. grid_state%is_set) error stop 'LCM condensation requires initialized grid state'
-      if (.not. field_state%static_energy_is_attached .or. &
-          .not. field_state%temperature_is_attached .or. &
-          .not. field_state%qv_is_attached .or. &
-          .not. field_state%pressure_is_attached .or. &
-          .not. field_state%density_is_attached) then
-         error stop 'LCM condensation requires static_energy, temperature, qv, pressure, and density fields'
-      endif
-      if (config_state%switch_radiation_micro) then
-         if (config_state%switch_analytical_micro) then
-            error stop 'SAM requires radiation condensation with the Euler solver'
-         endif
-         if (.not. field_state%qrad_is_attached) then
-            error stop 'LCM radiation condensation requires attached qrad'
-         endif
-      endif
-      if (any(field_state%density(1:grid_state%grid%nz) <= 0.0_real64)) then
-         error stop 'LCM condensation requires positive air density'
-      endif
-   end subroutine validate_condensation_inputs
 
    subroutine require_liquid_particle(particle)
       type(lcm_particle_t), intent(in) :: particle

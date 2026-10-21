@@ -187,6 +187,10 @@ contains
          error stop 'LCM config nstep_lcm_init must be positive'
       endif
 
+      if (config%switch_radiation_micro .and. config%switch_analytical_micro) then
+         error stop 'LCM config radiation condensation requires the Euler growth solver'
+      endif
+
       if (config%n_uvw_iteration < 0) then
          error stop 'LCM config n_uvw_iteration must not be negative'
       endif
