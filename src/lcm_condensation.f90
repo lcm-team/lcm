@@ -25,7 +25,7 @@ module lcm_condensation
       lcm_add_condensation_diagnostics
    use lcm_particle_state, only: cell_particles, &
                                  particle_aerosol_radius, particle_bfactor, &
-                                 qsatw_liquid, esatw_liquid
+                                 cell_tabs_lcm, qsatw_liquid, esatw_liquid
 
    implicit none
    private
@@ -103,7 +103,7 @@ contains
          error stop 'LCM condensation: nonempty particle cell has no storage'
       endif
 
-      temperature = cell_temperature(i, j, k)
+      temperature = cell_tabs_lcm(i, j, k)
       pressure = field_state%pressure(k)
       air_density = field_state%density(k)
       cell_volume = real(grid_state%dV(k), real64)
@@ -484,15 +484,6 @@ contains
             101325.0_real64 / pressure
       endif
    end subroutine get_growth_coefficients
-
-   real(real64) function cell_temperature(i, j, k) result(temperature)
-      integer, intent(in) :: i, j, k
-
-      ! Match SAM tabs_LCM = static_energy - gamaz, where gamaz is the
-      ! difference between the supplied static energy and temperature fields.
-      temperature = field_state%static_energy(i,j,k) - &
-         (field_state%static_energy(i,j,k) - field_state%temperature(i,j,k))
-   end function cell_temperature
 
    real(real64) function esatw_sam(temperature) result(value)
       real(real64), intent(in) :: temperature

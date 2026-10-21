@@ -10,8 +10,8 @@ module lcm_particle_state
    use lcm_config_state, only: config_state
    use lcm_field_state, only: field_state
    use lcm_grid_state, only: grid_state
-   use lcm_parameters, only: epsv, fac_cond, molecular_weight_water, pi, &
-                             rho_liq, rv, surface_tension_water
+   use lcm_parameters, only: epsv, fac_cond, gravity, molecular_weight_water, pi, &
+                             rho_liq, rv, specific_heat_dry_air, surface_tension_water
    use lcm_particle_location, only: lcm_locate_particle_cell
    use lcm_exchange_directions, only: lcm_exchange_direction_from_offset, &
                                       lcm_exchange_direction_for_phase, &
@@ -1424,7 +1424,7 @@ contains
       integer, intent(in) :: k
 
       ! SAM-LCM diagnoses tabs_LCM as liquid-water static energy minus gamaz.
-      tabs_lcm = field_state%static_energy(i,j,k) - cell_gamaz(i, j, k)
+      tabs_lcm = field_state%static_energy(i,j,k) - cell_gamaz(k)
    end function cell_tabs_lcm
 
    real(real64) function cell_absolute_temperature(i, j, k, tabs_lcm) result(temperature)
@@ -1433,15 +1433,13 @@ contains
       integer, intent(in) :: k
       real(real64), intent(in) :: tabs_lcm
 
-      temperature = tabs_lcm + cell_gamaz(i, j, k)
+      temperature = tabs_lcm + cell_gamaz(k)
    end function cell_absolute_temperature
 
-   real(real64) function cell_gamaz(i, j, k) result(gamaz)
-      integer, intent(in) :: i
-      integer, intent(in) :: j
+   real(real64) function cell_gamaz(k) result(gamaz)
       integer, intent(in) :: k
 
-      gamaz = field_state%static_energy(i,j,k) - field_state%temperature(i,j,k)
+      gamaz = gravity / specific_heat_dry_air * grid_state%grid%z_center(k)
    end function cell_gamaz
 
    real(real64) function particle_aerosol_radius(i, j, k, n) result(r_aero)
