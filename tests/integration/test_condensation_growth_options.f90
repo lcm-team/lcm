@@ -18,6 +18,8 @@ program test_condensation_growth_options
    real(real64), parameter :: relative_tolerance = 1.0e-10_real64
    real(real64) :: baseline_mass, no_koehler_mass
    real(real64) :: variable_thermal_mass, variable_diffusivity_mass
+   real(real64) :: higher_supersaturation_mass, evaporation_mass
+   real(real64) :: evaporation_radius
 
    call setup_minimal_les_host()
    call prepare_supersaturated_cell()
@@ -33,29 +35,43 @@ program test_condensation_growth_options
       error stop 'Kohler effects must be enabled by default'
    endif
 
-   baseline_mass = run_growth_case()
+   baseline_mass = run_growth_case(0.04_real64)
    call assert_true(baseline_mass > initial_particle_mass(), &
                     'supersaturated liquid droplet should grow')
 
    minimal_host_config%switch_koehler_micro = .false.
    call lcm_set_config(minimal_host_config)
-   no_koehler_mass = run_growth_case()
-   call assert_distinct(baseline_mass, no_koehler_mass, &
-                        'Kohler switch must affect growth')
+   no_koehler_mass = run_growth_case(0.04_real64)
+   call assert_greater(no_koehler_mass, baseline_mass, &
+                       'Kohler curvature and solute should restrain growth here')
 
    minimal_host_config%switch_koehler_micro = .true.
+   call lcm_set_config(minimal_host_config)
+   higher_supersaturation_mass = run_growth_case(0.08_real64)
+   call assert_greater(higher_supersaturation_mass, baseline_mass, &
+                       'higher supersaturation should produce more growth')
+
    minimal_host_config%switch_variable_therco = .true.
    call lcm_set_config(minimal_host_config)
-   variable_thermal_mass = run_growth_case()
-   call assert_distinct(baseline_mass, variable_thermal_mass, &
-                        'variable thermal conductivity switch must affect growth')
+   variable_thermal_mass = run_growth_case(0.04_real64)
+   call assert_greater(variable_thermal_mass, baseline_mass, &
+                       'higher variable thermal conductivity should increase growth')
 
    minimal_host_config%switch_variable_therco = .false.
    minimal_host_config%switch_variable_diffelq = .true.
    call lcm_set_config(minimal_host_config)
-   variable_diffusivity_mass = run_growth_case()
-   call assert_distinct(baseline_mass, variable_diffusivity_mass, &
-                        'variable vapor diffusivity switch must affect growth')
+   variable_diffusivity_mass = run_growth_case(0.04_real64)
+   call assert_greater(variable_diffusivity_mass, baseline_mass, &
+                       'higher variable vapor diffusivity should increase growth')
+
+   minimal_host_config%switch_variable_diffelq = .false.
+   call lcm_set_config(minimal_host_config)
+   evaporation_mass = run_growth_case(-0.20_real64)
+   evaporation_radius = radius_from_mass(evaporation_mass)
+   call assert_true(evaporation_mass < initial_particle_mass(), &
+                    'subsaturated liquid droplet should evaporate')
+   call assert_true(evaporation_radius >= aerosol_radius * (1.0_real64 - 1.0e-12_real64), &
+                    'evaporation should not shrink below dry aerosol radius')
 
 contains
 
@@ -64,14 +80,15 @@ contains
 
       gamaz = gravity / specific_heat_dry_air * minimal_host_z_center(1)
       minimal_host_static_energy(1,1,1) = test_temperature + gamaz
-      minimal_host_qv(1,1,1) = 1.04_real64 * &
-         qsatw_liquid(test_temperature, minimal_host_pressure(1))
    end subroutine prepare_supersaturated_cell
 
-   real(real64) function run_growth_case() result(mass_after)
+   real(real64) function run_growth_case(supersaturation_ratio) result(mass_after)
+      real(real64), intent(in) :: supersaturation_ratio
       type(lcm_particle_t) :: particle
 
       call lcm_reset_particle_cells()
+      minimal_host_qv(1,1,1) = (1.0_real64 + supersaturation_ratio) * &
+         qsatw_liquid(test_temperature, minimal_host_pressure(1))
       particle%weight = 1_int64
       particle%particle_type = liquid_no_in
       particle%mass_water = (4.0_real64 / 3.0_real64) * pi * rho_liq * &
@@ -94,13 +111,20 @@ contains
       mass = (4.0_real64 / 3.0_real64) * pi * rho_liq * initial_radius**3
    end function initial_particle_mass
 
-   subroutine assert_distinct(reference, value, message)
-      real(real64), intent(in) :: reference, value
+   real(real64) function radius_from_mass(mass) result(radius)
+      real(real64), intent(in) :: mass
+
+      radius = (mass / ((4.0_real64 / 3.0_real64) * pi * rho_liq))** &
+               (1.0_real64 / 3.0_real64)
+   end function radius_from_mass
+
+   subroutine assert_greater(value, reference, message)
+      real(real64), intent(in) :: value, reference
       character(len=*), intent(in) :: message
 
-      call assert_true(abs(value - reference) > &
+      call assert_true(value > reference + &
          relative_tolerance * max(abs(reference), initial_particle_mass()), message)
-   end subroutine assert_distinct
+   end subroutine assert_greater
 
    subroutine assert_true(condition, message)
       logical, intent(in) :: condition
