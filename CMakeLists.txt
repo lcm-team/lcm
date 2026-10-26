@@ -185,6 +185,26 @@ add_test(
           bin_ice
 )
 
+add_executable(test_condensation_growth_options
+  tests/integration/minimal_les_host.f90
+  tests/integration/test_condensation_growth_options.f90
+)
+
+target_link_libraries(test_condensation_growth_options
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_condensation_growth_options
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME condensation_growth_options
+  COMMAND test_condensation_growth_options
+)
+
 add_executable(test_minimal_les_host_initialization
   tests/integration/minimal_les_host.f90
   tests/integration/minimal_les_host_references.f90
