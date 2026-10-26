@@ -106,10 +106,8 @@ module lcm_types
       logical :: switch_linear_sampling_collection = .true.
       logical :: switch_breakup = .true.
       logical :: switch_analytical_micro = .false.
-      logical :: switch_radiation_micro = .false.
       logical :: switch_lem_micro = .true.
       logical :: switch_koehler_micro = .true.
-      logical :: switch_ffc_micro = .false.
       logical :: switch_variable_therco = .false.
       logical :: switch_variable_diffelq = .false.
       logical :: switch_steady_pichamber = .false.
@@ -185,7 +183,6 @@ module lcm_types
       real(real64), pointer :: temperature(:,:,:) => null()
       real(real64), pointer :: qv(:,:,:) => null()
       real(real64), pointer :: cloud_liquid(:,:,:) => null()
-      real(real64), pointer :: qrad(:,:,:) => null()
       real(real64), pointer :: pressure(:) => null()
       real(real64), pointer :: density(:) => null()
 
@@ -196,7 +193,6 @@ module lcm_types
       logical :: temperature_is_attached = .false.
       logical :: qv_is_attached = .false.
       logical :: cloud_liquid_is_attached = .false.
-      logical :: qrad_is_attached = .false.
       logical :: pressure_is_attached = .false.
       logical :: density_is_attached = .false.
    end type lcm_field_state_t

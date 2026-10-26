@@ -41,10 +41,10 @@ acceptable.
 | Order | SAM source | SAM behavior that must be retained | Standalone mapping / boundary |
 |---:|---|---|---|
 | 1 | 118–133 | Count liquid and ice particles from signed `iTYPE`, build their index lists, start the routine timer. | Iterate typed particles in the cell; classify by the signed SAM-compatible type. Keep timer behavior if the standalone timer API is used. |
-| 2 | 135–179 | Initialize net liquid/ice/fusion changes; optional DISKICE critical supersaturation; choose variable or constant thermal conductivity and diffusivity; compute water and ice saturation/pressure and growth coefficients; set Köhler curvature term or disable both Köhler terms. | Preserve each configured coefficient choice and formula. Use standalone field/parameter inputs and exact SAM saturation functions. |
+| 2 | 135–179 | Initialize net liquid/ice/fusion changes; optional DISKICE critical supersaturation; choose variable or constant thermal conductivity and diffusivity; compute water and ice saturation/pressure and growth coefficients; set Köhler curvature term or disable both Köhler terms. | Preserve the configured constant or variable coefficient formulas. Köhler remains switchable and defaults on. Radiation and FFC are deferred and excluded from the active standalone interface. Use standalone inputs and the LCM saturation functions. |
 | 3 | 181–200 | For every particle, compute aerosol radius and LEM temperature; for liquid compute radius, ventilation, and cell liquid mixing ratio; for ice compute shape capacitance and ice ventilation. | Use named particle fields and cell geometry. Keep motion values such as `w_sedi` read-only. |
-| 4 | 202–230 | If radiation is enabled, compute droplet absorption `Q_a`, area-weighted radiation allocation, liquid share of radiative heating, and zero it below SAM's liquid-water threshold; otherwise set radiation and `Q_a` to zero. | Preserve the entire branch and its configuration restrictions. Add an explicit host radiation input if the current field interface lacks `qrad`; do not replace it with zero or an invented estimate. |
-| 5 | 232–252 | If FFC is enabled, compute droplet area, FFC molecules from aerosol mass and multiplicity, choose the accommodation coefficient using SAM's molecular surface threshold, and derive `r0`; otherwise use the fixed accommodation coefficient and the same `r0` formula. | Preserve constants, formula, threshold, and option. Requires an aerosol-radius/composition calculation equivalent to SAM `get_r_aero`/`get_bfactor`. |
+| 4 | 202–230 | If radiation is enabled, compute droplet absorption `Q_a`, area-weighted radiation allocation, liquid share of radiative heating, and zero it below SAM's liquid-water threshold; otherwise set radiation and `Q_a` to zero. | Deferred: radiation effects are removed from the active standalone implementation and should return only with a dedicated interface and tests. |
+| 5 | 232–252 | If FFC is enabled, compute droplet area, FFC molecules from aerosol mass and multiplicity, choose the accommodation coefficient using SAM's molecular surface threshold, and derive `r0`; otherwise use the fixed accommodation coefficient and the same `r0` formula. | Deferred: FFC effects are removed from the active standalone implementation and should return only with the required aerosol-composition inputs and tests. |
 | 6 | 254–338 | Compute average supersaturation. Non-LEM: form liquid/ice depletion sums and timescale, use current and previous cell vapor/temperature/pressure history, include the ice/water saturation difference in forcing, integrate with SAM `eta_new`/`eta_int`, bound the integral, and apply the initial-step supersaturation cap. LEM: repeat the calculation per particle using SAM's equal cell-volume allocation, particle vapor, temperature, and stored `eta`; include the ice forcing when ice is enabled. Derive liquid supersaturation and, when enabled, ice mixing-ratio and vapor-pressure supersaturation. | Preserve both modes and their exact histories, bounds, and formulas. Cell-mean history must be LCM-owned. Host history/fields remain read-only. Do not use an ice-free shortcut when `switch_ice` is true. |
 | 7 | 339–343 | For non-LEM, calculate DISKICE diffusion parameters; calculate the fitting coefficients used by the DISKICE deposition formulation. | Keep the exact calls when the corresponding ice/habit branch is enabled; avoid computing unused ice-only values in a liquid-only configuration. |
 | 8 | 345–369 (`SAMCHEM`) | Initialize chemistry diagnostics, conditionally call `chem_proc`, and allow its radii to replace the ordinary liquid-growth solution. | Explicit first-port exclusion by prior decision. No chemistry placeholder may alter radius or state. Retain a clear TODO/interface note only. |
@@ -68,7 +68,7 @@ supported:
 | `venteef` | 731–758 | Liquid ventilation for droplets larger than 40 micrometers. |
 | `eta_int` | 760–769 | Integrated absolute supersaturation for the non-LEM and LEM TFL calculation. |
 | `eta_new` | 771–780 | End-of-step absolute supersaturation for the TFL calculation. |
-| `radius_liquid_euler` | 782–842 | SAM Newton-Raphson Euler growth with ventilation, Köhler terms, radiation, molecular length scale, and aerosol-radius lower bound. |
+| `radius_liquid_euler` | 782–842 | SAM Newton-Raphson Euler growth with ventilation, Köhler terms, molecular length scale, and aerosol-radius lower bound. Radiation is deferred. |
 | `mass_ice_euler` | 844–866 | Ice mass growth/deposition/sublimation for the Chen habit path. |
 | `ice_growth_diskice` | 868–952 | DISKICE deposition/sublimation and axis/density evolution. |
 | `capacitance` | 953–982 | Spheroid capacitance for ice. |
@@ -113,8 +113,9 @@ the SAM branch or synthesize replacement physics.
 - `src/lcm_condensation.f90`: first code slice implements the SAM liquid
   condensational growth/evaporation path, including both LEM and non-LEM
   supersaturation calculations, analytical and Euler radius updates, liquid
-  ventilation, Köhler terms, variable transport coefficients, radiation input,
+  ventilation, switchable Köhler terms (default on), variable transport coefficients,
   particle-local LEM temperature/vapor/eta updates, and raw liquid diagnostics.
+  Radiation and FFC are deferred from the active standalone implementation.
   Host fields remain read-only. Ice-enabled configurations and ice particles
   stop with an explicit error until the corresponding SAM branches are ported.
 - Still to implement from the map: ice supersaturation and deposition for both

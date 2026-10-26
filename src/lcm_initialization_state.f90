@@ -108,9 +108,6 @@ contains
       call require_attached_field(field_state%qv_is_attached, "qv")
       call require_attached_field(field_state%pressure_is_attached, "pressure")
       call require_attached_field(field_state%density_is_attached, "density")
-      if (config_state%switch_radiation_micro) then
-         call require_attached_field(field_state%qrad_is_attached, "qrad")
-      endif
    end subroutine validate_initialization_fields
 
    subroutine require_attached_field(is_attached, field_name)

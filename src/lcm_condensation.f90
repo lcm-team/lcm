@@ -15,8 +15,7 @@ module lcm_condensation
                              molecular_viscosity_air, thermal_conductivity_air, &
                              water_vapor_diffusivity_air, &
                              surface_tension_water, latent_heat_condensation, &
-                             alpha_mordy, molecular_weight_ffc, f_ffc, &
-                             n_avogadro, r_act
+                             alpha_mordy, r_act
    use lcm_config_state, only: config_state
    use lcm_field_state, only: field_state
    use lcm_grid_state, only: grid_state
@@ -73,12 +72,11 @@ contains
 
       integer :: n, count
       real(real64) :: temperature, pressure, air_density, cell_volume
-      real(real64) :: qsatw_pre, esatw_pre, c_liq_pre, a_liq_pre, d_pre
+      real(real64) :: qsatw_pre, esatw_pre, c_liq_pre, a_liq_pre
       real(real64) :: thermal_conductivity, vapor_diffusivity
-      real(real64) :: ql_local, radiation, radiation_integral, qrad_liq
-      real(real64) :: alpha_factor, beta_factor
-      real(real64) :: radius, new_radius, aerosol_radius, r0
-      real(real64) :: ventilation, q_absorb, dsd_liq, pre_liq, tau
+      real(real64) :: alpha_factor
+      real(real64) :: radius, aerosol_radius, r0
+      real(real64) :: ventilation, dsd_liq, pre_liq, tau
       real(real64) :: eta_dyn, eta_last, forcing, eta_end, eta_integral
       real(real64) :: eta_mean, fsw, supersaturation
       real(real64) :: particle_temperature, r0_local
@@ -108,9 +106,6 @@ contains
       a_liq_pre = 1.0_real64 + &
          dtqsatw_sam(temperature, pressure) * &
          latent_heat_condensation / specific_heat_dry_air
-      d_pre = (latent_heat_condensation / (rv * temperature) - 1.0_real64) / &
-              (thermal_conductivity * temperature)
-
       if (config_state%switch_koehler_micro) then
          alpha_factor = 2.0_real64 * surface_tension_water / &
                         (rho_liq * rv * temperature)
@@ -118,36 +113,16 @@ contains
          alpha_factor = 0.0_real64
       endif
 
-      ql_local = 0.0_real64
-      radiation_integral = 0.0_real64
       do n = 1, count
          call require_liquid_particle(cell_particles(i,j,k)%particles(n))
-         radius = liquid_radius(cell_particles(i,j,k)%particles(n))
-         ql_local = ql_local + cell_particles(i,j,k)%particles(n)%mass_water / &
-                    (cell_volume * air_density)
-         if (config_state%switch_radiation_micro) then
-            q_absorb = 1.18_real64 * (1.0_real64 - exp(-0.28e6_real64 * radius))
-            radiation_integral = radiation_integral + &
-               4.0_real64 * pi * radius**2 * q_absorb * &
-               real(cell_particles(i,j,k)%particles(n)%weight, real64) / cell_volume
-         endif
       enddo
-
-      radiation = 0.0_real64
-      if (config_state%switch_radiation_micro .and. ql_local >= 1.0e-5_real64 .and. &
-          radiation_integral > 0.0_real64) then
-         ! SAM sets k_liq/k_tot to 1.0 in this routine.
-         qrad_liq = field_state%qrad(i,j,k)
-         radiation = qrad_liq * specific_heat_dry_air * air_density / radiation_integral
-      endif
 
       dsd_liq = 0.0_real64
       if (.not. config_state%switch_lem_micro) then
          do n = 1, count
             radius = liquid_radius(cell_particles(i,j,k)%particles(n))
             r0 = growth_length_scale(temperature, esatw_pre, &
-                 thermal_conductivity, vapor_diffusivity, &
-                 cell_particles(i,j,k)%particles(n), alpha_mordy)
+                 thermal_conductivity, vapor_diffusivity)
             ventilation = liquid_ventilation(radius, &
                cell_particles(i,j,k)%particles(n)%w_sedi, air_density)
             dsd_liq = dsd_liq + &
@@ -181,9 +156,9 @@ contains
 
          do n = 1, count
             call integrate_liquid_particle(i, j, k, n, time_step, temperature, &
-               pressure, air_density, cell_volume, c_liq_pre, d_pre, &
-               alpha_factor, supersaturation, radiation, esatw_pre, &
-               thermal_conductivity, vapor_diffusivity, cell_particles(i,j,k))
+               air_density, cell_volume, c_liq_pre, alpha_factor, supersaturation, &
+               esatw_pre, thermal_conductivity, vapor_diffusivity, &
+               cell_particles(i,j,k))
          enddo
       else
          do n = 1, count
@@ -192,7 +167,7 @@ contains
             particle_temperature = cell_particles(i,j,k)%particles(n)%temperature - &
                cell_particles(i,j,k)%particles(n)%z * gravity / specific_heat_dry_air
             r0 = growth_length_scale(temperature, esatw_pre, thermal_conductivity, &
-               vapor_diffusivity, cell_particles(i,j,k)%particles(n), alpha_mordy)
+               vapor_diffusivity)
             if (config_state%switch_koehler_micro) then
                bfactor = particle_bfactor(i, j, k, n)
             else
@@ -218,12 +193,10 @@ contains
                               qsatw_liquid(particle_temperature, pressure)
 
             r0_local = growth_length_scale(temperature, esatw_pre, &
-               thermal_conductivity, &
-               vapor_diffusivity, cell_particles(i,j,k)%particles(n), alpha_mordy)
+               thermal_conductivity, vapor_diffusivity)
             call integrate_liquid_particle(i, j, k, n, time_step, temperature, &
-               pressure, air_density, cell_volume, c_liq_pre, d_pre, &
-               alpha_factor, supersaturation, radiation, esatw_pre, &
-               thermal_conductivity, vapor_diffusivity, cell_particles(i,j,k), &
+               air_density, cell_volume, c_liq_pre, alpha_factor, supersaturation, &
+               esatw_pre, thermal_conductivity, vapor_diffusivity, cell_particles(i,j,k), &
                local_r0=r0_local, local_bfactor=bfactor, &
                local_ventilation=ventilation)
          enddo
@@ -241,14 +214,14 @@ contains
    end subroutine micro_condensation_cell
 
    subroutine integrate_liquid_particle(i, j, k, n, time_step, temperature, &
-      pressure, air_density, cell_volume, c_liq, d_pre, alpha_factor, &
-      supersaturation, radiation, esatw_pre, thermal_conductivity, &
+      air_density, cell_volume, c_liq, alpha_factor, supersaturation, &
+      esatw_pre, thermal_conductivity, &
       vapor_diffusivity, particle_cell, local_r0, local_bfactor, &
       local_ventilation)
       integer, intent(in) :: i, j, k, n
-      real(real64), intent(in) :: time_step, temperature, pressure
-      real(real64), intent(in) :: air_density, cell_volume, c_liq, d_pre
-      real(real64), intent(in) :: alpha_factor, supersaturation, radiation
+      real(real64), intent(in) :: time_step, temperature
+      real(real64), intent(in) :: air_density, cell_volume, c_liq
+      real(real64), intent(in) :: alpha_factor, supersaturation
       real(real64), intent(in) :: esatw_pre, thermal_conductivity
       real(real64), intent(in) :: vapor_diffusivity
       type(lcm_particle_cell_t), intent(inout) :: particle_cell
@@ -257,8 +230,7 @@ contains
 
       type(lcm_particle_t) :: particle
       real(real64) :: radius, new_radius, aerosol_radius, r0, bfactor
-      real(real64) :: ventilation, q_absorb, dm, dmass_cell
-      real(real64) :: particle_temperature
+      real(real64) :: ventilation, dm, dmass_cell
       integer :: count
 
       particle = particle_cell%particles(n)
@@ -266,7 +238,7 @@ contains
       radius = liquid_radius(particle)
       aerosol_radius = particle_aerosol_radius(i, j, k, n)
       r0 = growth_length_scale(temperature, esatw_pre, &
-         thermal_conductivity, vapor_diffusivity, particle, alpha_mordy)
+         thermal_conductivity, vapor_diffusivity)
       bfactor = 0.0_real64
       if (config_state%switch_koehler_micro) bfactor = &
          particle_bfactor(i, j, k, n)
@@ -275,11 +247,6 @@ contains
       if (present(local_bfactor)) bfactor = local_bfactor
       if (present(local_ventilation)) ventilation = local_ventilation
 
-      q_absorb = 0.0_real64
-      if (config_state%switch_radiation_micro) then
-         q_absorb = 1.18_real64 * (1.0_real64 - exp(-0.28e6_real64 * radius))
-      endif
-
       if (config_state%switch_analytical_micro) then
          new_radius = sqrt(max((radius + r0)**2 + &
             2.0_real64 * time_step * c_liq / rho_liq * &
@@ -287,8 +254,7 @@ contains
       else
          new_radius = radius
          call radius_liquid_euler(new_radius, time_step, r0, c_liq, &
-            supersaturation, ventilation, alpha_factor, bfactor, aerosol_radius, &
-            d_pre, q_absorb * radiation)
+            supersaturation, ventilation, alpha_factor, bfactor, aerosol_radius)
       endif
 
       particle%mass_water = (4.0_real64 / 3.0_real64) * pi * rho_liq * &
@@ -320,11 +286,11 @@ contains
    end subroutine integrate_liquid_particle
 
    subroutine radius_liquid_euler(radius, time_step, r0, c_pre, supersaturation, &
-      ventilation, alpha_factor, beta_factor, aerosol_radius, d_pre, radiation)
+      ventilation, alpha_factor, beta_factor, aerosol_radius)
       real(real64), intent(inout) :: radius
       real(real64), intent(in) :: time_step, r0, c_pre, supersaturation
       real(real64), intent(in) :: ventilation, alpha_factor, beta_factor
-      real(real64), intent(in) :: aerosol_radius, d_pre, radiation
+      real(real64), intent(in) :: aerosol_radius
 
       integer :: iteration
       real(real64) :: r_euler, r_euler_old, relative_change
@@ -340,13 +306,12 @@ contains
          do iteration = 1, 500
             dr2dt = 2.0_real64 * g_pre * ventilation * &
                (supersaturation - alpha_factor / r_euler + &
-                beta_factor / r_euler**3 - d_pre * radiation * r_euler) * &
+                beta_factor / r_euler**3) * &
                r_euler / (r_euler + r0)
             d2r2dtdr2 = g_pre * ventilation * &
                (alpha_factor * r_euler**3 - &
                 beta_factor * (3.0_real64 * r_euler + 2.0_real64 * r0) - &
-                r_euler**3 * (d_pre * radiation * r_euler * &
-                   (r_euler + 2.0_real64 * r0) - r0 * supersaturation)) / &
+                r_euler**3 * r0 * supersaturation) / &
                (r_euler**4 * (r_euler + r0)**2)
 
             dt_euler = min(time_step - t_euler, time_step)
@@ -397,44 +362,16 @@ contains
    end function liquid_radius
 
    real(real64) function growth_length_scale(temperature, esatw, &
-      thermal_conductivity, vapor_diffusivity, particle, alpha) result(r0)
+      thermal_conductivity, vapor_diffusivity) result(r0)
       real(real64), intent(in) :: temperature, esatw
-      real(real64), intent(in) :: thermal_conductivity, vapor_diffusivity, alpha
-      type(lcm_particle_t), intent(in) :: particle
-      real(real64) :: accommodation
+      real(real64), intent(in) :: thermal_conductivity, vapor_diffusivity
 
-      accommodation = alpha
-      if (config_state%switch_ffc_micro) then
-         accommodation = ffc_accommodation(particle, temperature)
-      endif
-      r0 = vapor_diffusivity / accommodation * &
+      r0 = vapor_diffusivity / alpha_mordy * &
          sqrt(2.0_real64 * pi / (rv * temperature)) / &
          (1.0_real64 + vapor_diffusivity * &
           latent_heat_condensation**2 * 100.0_real64 * esatw / &
           (thermal_conductivity * rv**2 * temperature**3))
    end function growth_length_scale
-
-   real(real64) function ffc_accommodation(particle, temperature) result(alpha)
-      type(lcm_particle_t), intent(in) :: particle
-      real(real64), intent(in) :: temperature
-      real(real64) :: droplet_area, n_ffc, radius
-
-      radius = liquid_radius(particle)
-      droplet_area = 4.0_real64 * pi * radius**2
-      n_ffc = f_ffc * particle%mass_aero / &
-         real(particle%weight, real64) / molecular_weight_ffc * n_avogadro
-      if (n_ffc <= 0.0_real64) then
-         error stop 'LCM condensation: SAM FFC path requires positive aerosol mass'
-      endif
-      if (droplet_area / n_ffc < 22.0e-20_real64) then
-         alpha = 1.0e-5_real64
-      else
-         alpha = alpha_mordy
-      endif
-      ! Keep the temperature argument explicit because SAM evaluates this
-      ! accommodation length at the cell/particle temperature for each path.
-      if (temperature <= 0.0_real64) error stop 'LCM condensation: invalid temperature'
-   end function ffc_accommodation
 
    real(real64) function liquid_ventilation(radius, settling_velocity, &
                                              air_density) result(value)

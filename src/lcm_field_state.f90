@@ -17,7 +17,7 @@ module lcm_field_state
 contains
 
    subroutine lcm_attach_fields(u, v, w, static_energy, temperature, qv, &
-                                cloud_liquid, pressure, density, qrad)
+                                cloud_liquid, pressure, density)
       real(real64), intent(in), target, optional :: u(:,:,:)
       real(real64), intent(in), target, optional :: v(:,:,:)
       real(real64), intent(in), target, optional :: w(:,:,:)
@@ -27,7 +27,6 @@ contains
       real(real64), intent(in), target, optional :: cloud_liquid(:,:,:)
       real(real64), intent(in), target, optional :: pressure(:)
       real(real64), intent(in), target, optional :: density(:)
-      real(real64), intent(in), target, optional :: qrad(:,:,:)
       logical :: has_field
 
       if (.not. grid_state%is_set) then
@@ -37,7 +36,7 @@ contains
       has_field = present(u) .or. present(v) .or. present(w) .or. &
                   present(static_energy) .or. present(temperature) .or. &
                   present(qv) .or. present(cloud_liquid) .or. &
-                  present(pressure) .or. present(density) .or. present(qrad)
+                  present(pressure) .or. present(density)
 
       if (.not. has_field) then
          error stop "LCM attach fields requires at least one field"
@@ -85,10 +84,6 @@ contains
          call attach_profile_field(density, field_state%density, &
                                    field_state%density_is_attached, "density")
       endif
-      if (present(qrad)) then
-         call attach_cell_center_field("qrad", qrad, field_state%qrad, &
-                                       field_state%qrad_is_attached)
-      endif
    end subroutine lcm_attach_fields
 
    subroutine lcm_attach_field(name, field)
@@ -127,9 +122,6 @@ contains
          call attach_cell_center_field("cloud_liquid", field, &
                                        field_state%cloud_liquid, &
                                        field_state%cloud_liquid_is_attached)
-      case ("qrad")
-         call attach_cell_center_field("qrad", field, field_state%qrad, &
-                                       field_state%qrad_is_attached)
       case default
          error stop "LCM cannot attach unknown field: " // trim(name)
       end select

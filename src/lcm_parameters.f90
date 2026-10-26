@@ -25,9 +25,6 @@ module lcm_parameters
    public :: fac_fus
    public :: r_act
    public :: alpha_mordy
-   public :: molecular_weight_ffc
-   public :: f_ffc
-   public :: n_avogadro
 
    real(real64), parameter :: pi = &
       3.141592653589793238462643383279502884_real64
@@ -52,8 +49,5 @@ module lcm_parameters
       latent_heat_fusion / specific_heat_dry_air
    real(real64), parameter :: r_act = 1.0e-6_real64
    real(real64), parameter :: alpha_mordy = 0.036_real64
-   real(real64), parameter :: molecular_weight_ffc = 243.0e-3_real64
-   real(real64), parameter :: f_ffc = 0.05_real64
-   real(real64), parameter :: n_avogadro = 6.02214076e23_real64
 
 end module lcm_parameters
