@@ -49,6 +49,7 @@ set(LCM_CORE_SOURCES
   "${LCM_SOURCE_DIR}/lcm_particle_count_exchange.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_mpi_transport.f90"
   "${LCM_SOURCE_DIR}/lcm_field_state.f90"
+  "${LCM_SOURCE_DIR}/lcm_microphysics_state.f90"
   "${LCM_SOURCE_DIR}/lcm_random.f90"
   "${LCM_SOURCE_DIR}/lcm_particle_location.f90"
   "${LCM_SOURCE_DIR}/lcm_velocity_interpolation.f90"
@@ -60,6 +61,8 @@ set(LCM_CORE_SOURCES
   "${LCM_SOURCE_DIR}/micro_user_vars.f90"
   "${LCM_SOURCE_DIR}/micro_vars.f90"
   "${LCM_SOURCE_DIR}/lcm_config_state.f90"
+  "${LCM_SOURCE_DIR}/lcm_lem.f90"
+  "${LCM_SOURCE_DIR}/lcm_condensation.f90"
   "${LCM_SOURCE_DIR}/lcm_initialization_state.f90"
   "${LCM_SOURCE_DIR}/lcm_advance.f90"
   "${LCM_SOURCE_DIR}/lcm_host_interface.f90"
@@ -181,6 +184,26 @@ add_test(
   NAME initial_particle_population_bin_ice
   COMMAND test_initial_particle_population
           bin_ice
+)
+
+add_executable(test_condensation_growth_options
+  tests/integration/minimal_les_host.f90
+  tests/integration/test_condensation_growth_options.f90
+)
+
+target_link_libraries(test_condensation_growth_options
+  PRIVATE
+    lcm
+)
+
+set_target_properties(test_condensation_growth_options
+  PROPERTIES
+    Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
+)
+
+add_test(
+  NAME condensation_growth_options
+  COMMAND test_condensation_growth_options
 )
 
 add_executable(test_minimal_les_host_initialization

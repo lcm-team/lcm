@@ -1,13 +1,13 @@
 program test_minimal_les_host_cell_crossing
    use iso_fortran_env, only: int64, real64
-   use lcm_host_interface, only: lcm_advance
    use lcm_particle_state, only: cell_particles, lcm_add_particle, &
                                  lcm_remove_particle
    use lcm_types, only: lcm_particle_t
    use minimal_les_host, only: minimal_host_dx, minimal_host_dy, &
                                minimal_host_np_xy, minimal_host_u, &
                                minimal_host_v, minimal_host_w, &
-                               minimal_host_z_face, setup_minimal_les_host
+                               minimal_host_z_face, setup_minimal_les_host, &
+                               advance_minimal_les_transport
 
    implicit none
 
@@ -22,7 +22,7 @@ program test_minimal_les_host_cell_crossing
 
    call assert_initial_cell_counts(trim(direction))
 
-   call lcm_advance(1.0_real64)
+   call advance_minimal_les_transport(1.0_real64)
 
    call assert_final_cell_counts(trim(direction))
    call assert_crossing_particle_in_new_cell(trim(direction))

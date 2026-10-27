@@ -10,8 +10,8 @@ module lcm_particle_state
    use lcm_config_state, only: config_state
    use lcm_field_state, only: field_state
    use lcm_grid_state, only: grid_state
-   use lcm_parameters, only: epsv, fac_cond, molecular_weight_water, pi, &
-                             rho_liq, rv, surface_tension_water
+   use lcm_parameters, only: epsv, fac_cond, gravity, molecular_weight_water, pi, &
+                             rho_liq, rv, specific_heat_dry_air, surface_tension_water
    use lcm_particle_location, only: lcm_locate_particle_cell
    use lcm_exchange_directions, only: lcm_exchange_direction_from_offset, &
                                       lcm_exchange_direction_for_phase, &
@@ -36,7 +36,9 @@ module lcm_particle_state
                                      lcm_particle_migration_t
    use lcm_particle_properties, only: lcm_particle_radius
    use lcm_types, only: lcm_particle_cell_t, lcm_particle_mpi_message_t, &
-                        lcm_particle_t, lcm_timer_tic, lcm_timer_toc
+                        lcm_particle_t, lcm_timer_tic, lcm_timer_toc, &
+                        liquid_no_in, &
+                        liquid_with_in
    use lcm_user, only: lcm_user_init_particles
    use lcm_velocity_interpolation, only: lcm_interpolate_particle_velocity
    use lcm_random, only: randomu
@@ -46,6 +48,8 @@ module lcm_particle_state
    private
 
    public :: cell_particles
+   public :: particle_aerosol_radius
+   public :: particle_bfactor
    public :: lcm_allocate_particle_cells
    public :: lcm_add_particle
    public :: lcm_move_particle
@@ -68,9 +72,10 @@ module lcm_particle_state
    public :: cell_tabs_lcm
    public :: cell_absolute_temperature
    public :: qsatw_liquid
+   public :: esatw_liquid
    public :: inverse_error_function_approx
    public :: ice_freezing_temperature
-   type(lcm_particle_cell_t), allocatable, protected, save :: cell_particles(:,:,:)
+   type(lcm_particle_cell_t), allocatable, save :: cell_particles(:,:,:)
    type(lcm_particle_t), allocatable, save :: aerosol_initialization_template(:)
    integer(int64), protected, save :: n_step_id = 0_int64
    integer(int64), protected, save :: n_id = 0_int64
@@ -89,11 +94,10 @@ module lcm_particle_state
       type(lcm_particle_migration_t), allocatable :: entries(:)
    end type lcm_particle_cell_migration_plan_t
 
-   integer, parameter :: liquid_particle_type = 1
-   integer, parameter :: ice_nucleating_particle_type = 2
    integer, parameter :: n_inv_cdf = 50000000
 
 contains
+
 
    subroutine lcm_allocate_particle_cells(initial_capacity_per_cell, &
                                           initial_capacity_vertical_levels)
@@ -866,7 +870,7 @@ contains
       particle%spray_marker = -999
       call set_particle_tracking_marker(i, j, k, cell_particle_index, particle)
 
-      particle%particle_type = liquid_particle_type
+      particle%particle_type = liquid_no_in
       seed_id = particle_random_seed_id()
       call set_particle_position(i, j, k, seed_id, particle)
       particle%w_sedi = 0.0_real64
@@ -1356,7 +1360,8 @@ contains
          cell_particles(i,j,k)%particles(n)%aerosol_portions = 0.0_real64
          cell_particles(i,j,k)%particles(n)%aerosol_portions(i_mode) = 1.0_real64
       endif
-      cell_particles(i,j,k)%particles(n)%particle_type = liquid_particle_type
+      cell_particles(i,j,k)%particles(n)%particle_type = &
+         liquid_no_in
       cell_particles(i,j,k)%particles(n)%in_surface_area = 0.0_real64
       cell_particles(i,j,k)%particles(n)%freezing_temperature = 233.15_real64
    end subroutine set_particle_aerosol_state
@@ -1419,7 +1424,7 @@ contains
       integer, intent(in) :: k
 
       ! SAM-LCM diagnoses tabs_LCM as liquid-water static energy minus gamaz.
-      tabs_lcm = field_state%static_energy(i,j,k) - cell_gamaz(i, j, k)
+      tabs_lcm = field_state%static_energy(i,j,k) - cell_gamaz(k)
    end function cell_tabs_lcm
 
    real(real64) function cell_absolute_temperature(i, j, k, tabs_lcm) result(temperature)
@@ -1428,15 +1433,13 @@ contains
       integer, intent(in) :: k
       real(real64), intent(in) :: tabs_lcm
 
-      temperature = tabs_lcm + cell_gamaz(i, j, k)
+      temperature = tabs_lcm + cell_gamaz(k)
    end function cell_absolute_temperature
 
-   real(real64) function cell_gamaz(i, j, k) result(gamaz)
-      integer, intent(in) :: i
-      integer, intent(in) :: j
+   real(real64) function cell_gamaz(k) result(gamaz)
       integer, intent(in) :: k
 
-      gamaz = field_state%static_energy(i,j,k) - field_state%temperature(i,j,k)
+      gamaz = gravity / specific_heat_dry_air * grid_state%grid%z_center(k)
    end function cell_gamaz
 
    real(real64) function particle_aerosol_radius(i, j, k, n) result(r_aero)
@@ -1549,11 +1552,17 @@ contains
 
       real(real64) :: e
 
-      e = 610.94_real64 * &
-          exp(17.625_real64 * (temperature - 273.15_real64) / &
-              max(temperature - 30.11_real64, 1.0_real64))
+      e = esatw_liquid(temperature)
       qsatw = epsv * e / max(pressure - e, 1.0_real64)
    end function qsatw_liquid
+
+   real(real64) function esatw_liquid(temperature) result(esatw)
+      real(real64), intent(in) :: temperature
+
+      esatw = 610.94_real64 * &
+         exp(17.625_real64 * (temperature - 273.15_real64) / &
+             max(temperature - 30.11_real64, 1.0_real64))
+   end function esatw_liquid
 
    subroutine ice_type_probabilities(in_typeprobs)
       real(real64), intent(out) :: in_typeprobs(4)
@@ -1585,9 +1594,12 @@ contains
 
       if (.not. config_state%switch_ice) return
 
+      cell_particles(i,j,k)%particles(n)%particle_type = &
+         liquid_no_in
+
       if (real(randomu(seed_id), real64) < real(config_state%frac_ice, real64)) then
          cell_particles(i,j,k)%particles(n)%particle_type = &
-            ice_nucleating_particle_type
+            liquid_with_in
 
          x_rand = real(randomu(seed_id), real64)
          intype = minloc(in_typeprobs - x_rand, &
@@ -1624,7 +1636,8 @@ contains
          cell_particles(i,j,k)%particles(n)%freezing_temperature = &
             ice_freezing_temperature(intype, sfc_in, seed_id)
       else
-         cell_particles(i,j,k)%particles(n)%particle_type = liquid_particle_type
+         cell_particles(i,j,k)%particles(n)%particle_type = &
+            liquid_no_in
          cell_particles(i,j,k)%particles(n)%in_surface_area = 0.0_real64
          cell_particles(i,j,k)%particles(n)%freezing_temperature = 233.15_real64
       endif

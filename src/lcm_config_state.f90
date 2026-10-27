@@ -10,8 +10,8 @@ module lcm_config_state
                          switch_linear_sampling_collection,             &
                          switch_breakup, breakup_conserve_mode,         &
                          switch_analytical_micro,                       &
-                         switch_radiation_micro, switch_LEM_micro,      &
-                         switch_koehler_micro, switch_FFC_micro,        &
+                         switch_LEM_micro,                             &
+                         switch_koehler_micro,                         &
                          switch_steady_pichamber,                       &
                          switch_reflective_walls_pichamber,             &
                          switch_walls_pichamber, switch_cloud_tracking, &
@@ -85,10 +85,8 @@ contains
       switch_breakup = config%switch_breakup
       breakup_conserve_mode = config%breakup_conserve_mode
       switch_analytical_micro = config%switch_analytical_micro
-      switch_radiation_micro = config%switch_radiation_micro
       switch_LEM_micro = config%switch_lem_micro
       switch_koehler_micro = config%switch_koehler_micro
-      switch_FFC_micro = config%switch_ffc_micro
       switch_steady_pichamber = config%switch_steady_pichamber
       switch_reflective_walls_pichamber = config%switch_reflective_walls_pichamber
       switch_walls_pichamber = config%switch_walls_pichamber
