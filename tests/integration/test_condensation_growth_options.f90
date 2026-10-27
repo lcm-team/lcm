@@ -19,7 +19,8 @@ program test_condensation_growth_options
    real(real64) :: baseline_mass, no_koehler_mass
    real(real64) :: variable_thermal_mass, variable_diffusivity_mass
    real(real64) :: higher_supersaturation_mass, evaporation_mass
-   real(real64) :: evaporation_radius
+   real(real64) :: evaporation_radius, lem_growth_mass
+   real(real64) :: initial_lem_qv, initial_lem_temperature
 
    call setup_minimal_les_host()
    call prepare_supersaturated_cell()
@@ -38,6 +39,12 @@ program test_condensation_growth_options
    baseline_mass = run_growth_case(0.04_real64)
    call assert_true(baseline_mass > initial_particle_mass(), &
                     'supersaturated liquid droplet should grow')
+   call assert_true(cell_particles(1,1,1)%particles(1)%qv == &
+                    minimal_host_qv(1,1,1), &
+                    'non-LEM growth should not change particle-local vapor')
+   call assert_true(cell_particles(1,1,1)%particles(1)%temperature == &
+                    test_temperature, &
+                    'non-LEM growth should not change particle-local temperature')
 
    minimal_host_config%switch_koehler_micro = .false.
    call lcm_set_config(minimal_host_config)
@@ -73,6 +80,25 @@ program test_condensation_growth_options
    call assert_true(evaporation_radius >= aerosol_radius * (1.0_real64 - 1.0e-12_real64), &
                     'evaporation should not shrink below dry aerosol radius')
 
+   minimal_host_config%switch_lem_micro = .true.
+   call lcm_set_config(minimal_host_config)
+   initial_lem_qv = 1.04_real64 * &
+      qsatw_liquid(test_temperature, minimal_host_pressure(1))
+   initial_lem_temperature = test_temperature
+   lem_growth_mass = run_growth_case(0.04_real64, 1000000_int64)
+   call assert_true(lem_growth_mass > initial_particle_mass(1000000_int64), &
+                    'LEM supersaturated droplet should grow')
+   call assert_true(cell_particles(1,1,1)%particles(1)%qv < initial_lem_qv, &
+                    'LEM condensation should reduce particle-local vapor')
+   call assert_true(cell_particles(1,1,1)%particles(1)%temperature > &
+                    initial_lem_temperature, &
+                    'LEM condensation should warm the particle')
+   call assert_true(abs(cell_particles(1,1,1)%particles(1)%eta - &
+                    (cell_particles(1,1,1)%particles(1)%qv - &
+                     qsatw_liquid(cell_particles(1,1,1)%particles(1)%temperature, &
+                                  minimal_host_pressure(1)))) < 1.0e-14_real64, &
+                    'LEM eta should reflect post-growth vapor and temperature')
+
 contains
 
    subroutine prepare_supersaturated_cell()
@@ -82,19 +108,23 @@ contains
       minimal_host_static_energy(1,1,1) = test_temperature + gamaz
    end subroutine prepare_supersaturated_cell
 
-   real(real64) function run_growth_case(supersaturation_ratio) result(mass_after)
+   real(real64) function run_growth_case(supersaturation_ratio, multiplicity) &
+      result(mass_after)
       real(real64), intent(in) :: supersaturation_ratio
+      integer(int64), intent(in), optional :: multiplicity
       type(lcm_particle_t) :: particle
 
       call lcm_reset_particle_cells()
       minimal_host_qv(1,1,1) = (1.0_real64 + supersaturation_ratio) * &
          qsatw_liquid(test_temperature, minimal_host_pressure(1))
       particle%weight = 1_int64
+      if (present(multiplicity)) particle%weight = multiplicity
       particle%particle_type = liquid_no_in
       particle%mass_water = (4.0_real64 / 3.0_real64) * pi * rho_liq * &
-                            initial_radius**3
+                            initial_radius**3 * real(particle%weight, real64)
       particle%mass_aero = minimal_host_config%rho_aero(1) * &
-         (4.0_real64 / 3.0_real64) * pi * aerosol_radius**3
+         (4.0_real64 / 3.0_real64) * pi * aerosol_radius**3 * &
+         real(particle%weight, real64)
       particle%aerosol_portions(1) = 1.0_real64
       particle%temperature = test_temperature
       particle%qv = minimal_host_qv(1,1,1)
@@ -107,8 +137,14 @@ contains
       mass_after = cell_particles(1,1,1)%particles(1)%mass_water
    end function run_growth_case
 
-   real(real64) function initial_particle_mass() result(mass)
+   real(real64) function initial_particle_mass(multiplicity) result(mass)
+      integer(int64), intent(in), optional :: multiplicity
+      real(real64) :: weight
+
+      weight = 1.0_real64
+      if (present(multiplicity)) weight = real(multiplicity, real64)
       mass = (4.0_real64 / 3.0_real64) * pi * rho_liq * initial_radius**3
+      mass = mass * weight
    end function initial_particle_mass
 
    real(real64) function radius_from_mass(mass) result(radius)
