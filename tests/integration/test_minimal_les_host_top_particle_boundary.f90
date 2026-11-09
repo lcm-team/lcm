@@ -45,6 +45,7 @@ contains
       particle%y = 0.5_real64 * minimal_host_dy
       particle%z = grid_state%ztop - 1.0_real64
       particle%w_sgs = 0.25_real64
+      particle%weight = 1_int64
       call lcm_add_particle(1, 1, 2, particle)
    end subroutine add_top_crossing_particle
 
@@ -56,6 +57,7 @@ contains
       particle%x = 0.5_real64 * minimal_host_dx
       particle%y = 0.5_real64 * minimal_host_dy
       particle%z = 150.0_real64
+      particle%weight = 1_int64
       call lcm_add_particle(1, 1, 2, particle)
    end subroutine add_in_domain_particle
 

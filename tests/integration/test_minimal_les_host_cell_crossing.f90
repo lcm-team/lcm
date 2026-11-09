@@ -70,6 +70,7 @@ contains
          error stop "unknown minimal LES host crossing direction"
       end select
 
+      particle%weight = 1_int64
       call lcm_add_particle(1, 1, 1, particle)
    end subroutine add_particle_near_cell_face
 

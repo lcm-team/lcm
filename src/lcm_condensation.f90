@@ -5,7 +5,7 @@
 !! their complete SAM branches and dependencies are ported; they are never
 !! silently skipped when enabled or when ice particles are present.
 module lcm_condensation
-   use iso_fortran_env, only: int64, real64
+   use iso_fortran_env, only: real64
    use lcm_types, only: lcm_particle_cell_t, lcm_particle_t, &
                         liquid_no_in, &
                         liquid_with_in, &
@@ -74,12 +74,11 @@ contains
       integer, intent(in) :: i, j, k, current_step
       real(real64), intent(in) :: time_step
 
-      integer :: n, count
+      integer :: count
       real(real64) :: temperature, pressure, air_density, cell_volume
       real(real64) :: qsatw_pre, esatw_pre, c_liq_pre, a_liq_pre
       real(real64) :: thermal_conductivity, vapor_diffusivity
       real(real64) :: alpha_factor
-      real(real64) :: weighted_mass_change
 
       count = cell_particles(i,j,k)%count
       if (count == 0) then
@@ -109,10 +108,6 @@ contains
       else
          alpha_factor = 0.0_real64
       endif
-
-      do n = 1, count
-         call require_liquid_particle(cell_particles(i,j,k)%particles(n))
-      enddo
 
       if (config_state%switch_lem_micro) then
          call apply_lem_condensation_cell(i, j, k, count, time_step, &
@@ -151,6 +146,7 @@ contains
 
       depletion_sum = 0.0_real64
       do n = 1, count
+         call require_liquid_particle(cell_particles(i,j,k)%particles(n))
          radius = liquid_radius(cell_particles(i,j,k)%particles(n))
          r0 = growth_length_scale(temperature, esatw_pre, &
             thermal_conductivity, vapor_diffusivity)
@@ -206,6 +202,7 @@ contains
       type(lcm_lem_growth_context_t) :: lem_context
 
       do n = 1, count
+         call require_liquid_particle(cell_particles(i,j,k)%particles(n))
          radius = liquid_radius(cell_particles(i,j,k)%particles(n))
          r0 = growth_length_scale(temperature, esatw_pre, &
             thermal_conductivity, vapor_diffusivity)
@@ -325,6 +322,9 @@ contains
 
       particle%mass_water = (4.0_real64 / 3.0_real64) * pi * rho_liq * &
          new_radius**3 * real(particle%weight, real64)
+      if (.not. (particle%mass_water >= 0.0_real64)) then
+         error stop 'LCM condensation produced invalid particle water mass'
+      endif
       dm = (4.0_real64 / 3.0_real64) * pi * rho_liq * &
            (new_radius**3 - radius**3)
       weighted_mass_change = dm * real(particle%weight, real64)
@@ -461,12 +461,6 @@ contains
       if (particle%particle_type /= liquid_no_in .and. &
           particle%particle_type /= liquid_with_in) then
          error stop 'LCM condensation: invalid SAM-compatible particle_type'
-      endif
-      if (particle%weight <= 0_int64) then
-         error stop 'LCM condensation requires positive particle multiplicity'
-      endif
-      if (particle%mass_water < 0.0_real64) then
-         error stop 'LCM condensation requires nonnegative particle water mass'
       endif
    end subroutine require_liquid_particle
 

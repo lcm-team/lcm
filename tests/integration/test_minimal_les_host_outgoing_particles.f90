@@ -48,6 +48,7 @@ contains
       particle%x = x
       particle%y = y
       particle%z = 50.0_real64
+      particle%weight = 1_int64
       call lcm_add_particle(i, j, 1, particle)
    end subroutine add_outgoing_particle
 

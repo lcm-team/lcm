@@ -155,9 +155,21 @@ contains
 
       call require_particle_cells_allocated()
       call validate_cell_index(i, j, k)
+      call require_valid_particle_mass(particle)
 
       call append_particle_to_cell(cell_particles(i,j,k), particle)
    end subroutine lcm_add_particle
+
+   subroutine require_valid_particle_mass(particle)
+      type(lcm_particle_t), intent(in) :: particle
+
+      if (particle%weight <= 0_int64) then
+         error stop 'LCM particle requires positive multiplicity'
+      endif
+      if (.not. (particle%mass_water >= 0.0_real64)) then
+         error stop 'LCM particle requires nonnegative water mass'
+      endif
+   end subroutine require_valid_particle_mass
 
    subroutine lcm_remove_particle(i, j, k, particle_index)
       integer, intent(in) :: i
@@ -244,10 +256,14 @@ contains
                   particle = lcm_particle_t()
                   particle%id = lcm_next_particle_id()
                   call init_particle_properties(i, j, k, n, particle)
-                  call lcm_add_particle(i, j, k, particle)
+                  ! Aerosol initialization sets the multiplicity after insertion.
+                  call append_particle_to_cell(cell_particles(i,j,k), particle)
                enddo
 
                call lcm_init_particles(i, j, k)
+               do n = 1, cell_particles(i,j,k)%count
+                  call require_valid_particle_mass(cell_particles(i,j,k)%particles(n))
+               enddo
             enddo
          enddo
       enddo
