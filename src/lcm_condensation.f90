@@ -137,14 +137,15 @@ contains
 
       integer :: n
       real(real64) :: previous_temperature, previous_pressure
-      real(real64) :: radius, r0, ventilation, depletion_sum
+      real(real64) :: radius, r0, ventilation, dsd_liq
       real(real64) :: pre_liq, tau, eta_dyn, eta_last, forcing
       real(real64) :: mean_absolute_supersaturation, supersaturation
       real(real64) :: weighted_mass_change
 
       call lcm_get_cell_mean_history(i, j, k, previous_temperature, previous_pressure)
 
-      depletion_sum = 0.0_real64
+      ! Sum the liquid droplet contributions to supersaturation relaxation.
+      dsd_liq = 0.0_real64
       do n = 1, count
          call require_liquid_particle(cell_particles(i,j,k)%particles(n))
          radius = liquid_radius(cell_particles(i,j,k)%particles(n))
@@ -152,15 +153,15 @@ contains
             thermal_conductivity, vapor_diffusivity)
          ventilation = liquid_ventilation(radius, &
             cell_particles(i,j,k)%particles(n)%w_sedi, air_density)
-         depletion_sum = depletion_sum + &
+         dsd_liq = dsd_liq + &
             real(cell_particles(i,j,k)%particles(n)%weight, real64) * &
             radius**2 / (radius + r0) * ventilation
       enddo
 
-      if (depletion_sum > 0.0_real64) then
+      if (dsd_liq > 0.0_real64) then
          pre_liq = a_liq_pre * 4.0_real64 * pi * c_liq_pre / &
-                   (qsatw_pre * cell_volume)
-         tau = 1.0_real64 / (pre_liq * depletion_sum)
+                   (qsatw_pre * air_density * cell_volume)
+         tau = 1.0_real64 / (pre_liq * dsd_liq)
          eta_dyn = field_state%qv(i,j,k) - qsatw_liquid(temperature, pressure)
          eta_last = field_state%qv(i,j,k) - &
                     qsatw_liquid(previous_temperature, previous_pressure)

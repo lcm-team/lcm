@@ -56,8 +56,8 @@ contains
       particle_temperature = particle%temperature - &
          particle%z * gravity / specific_heat_dry_air
       pre_liq = context%a_liq_pre * 4.0_real64 * pi * context%c_liq_pre / &
-                (context%qsatw_pre * &
-                 (context%cell_volume / real(context%particle_count, real64)))
+                (context%qsatw_pre * context%air_density * context%cell_volume / &
+                 real(context%particle_count, real64))
       tau = 1.0_real64 / (pre_liq * &
          real(particle%weight, real64) * context%radius**2 / &
          (context%radius + context%r0) * context%ventilation)

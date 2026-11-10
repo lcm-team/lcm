@@ -7,7 +7,7 @@ program test_condensation_growth_options
                                  lcm_reset_particle_cells, qsatw_liquid
    use lcm_types, only: lcm_particle_t, liquid_no_in
    use minimal_les_host, only: minimal_host_config, minimal_host_static_energy, &
-                               minimal_host_qv, minimal_host_pressure, &
+                               minimal_host_qv, minimal_host_pressure, minimal_host_density, &
                                minimal_host_z_center, setup_minimal_les_host
 
    implicit none
@@ -79,6 +79,7 @@ program test_condensation_growth_options
                     'subsaturated liquid droplet should evaporate')
    call assert_true(evaporation_radius >= aerosol_radius * (1.0_real64 - 1.0e-12_real64), &
                     'evaporation should not shrink below dry aerosol radius')
+   call assert_density_response('non-LEM')
 
    minimal_host_config%switch_lem_micro = .true.
    call lcm_set_config(minimal_host_config)
@@ -98,8 +99,26 @@ program test_condensation_growth_options
                      qsatw_liquid(cell_particles(1,1,1)%particles(1)%temperature, &
                                   minimal_host_pressure(1)))) < 1.0e-14_real64, &
                     'LEM eta should reflect post-growth vapor and temperature')
+   call assert_density_response('LEM')
 
 contains
+
+   subroutine assert_density_response(mode)
+      character(len=*), intent(in) :: mode
+      real(real64) :: initial_density, baseline_growth_mass, denser_growth_mass
+      integer(int64), parameter :: multiplicity = 1000000000_int64
+
+      initial_density = minimal_host_density(1)
+      baseline_growth_mass = run_growth_case(0.04_real64, multiplicity)
+      minimal_host_density(1) = 2.0_real64 * initial_density
+      denser_growth_mass = run_growth_case(0.04_real64, multiplicity)
+      minimal_host_density(1) = initial_density
+
+      ! These droplets are below the ventilation threshold. More air mass
+      ! slows supersaturation depletion, leaving more vapor for growth.
+      call assert_greater(denser_growth_mass, baseline_growth_mass, &
+                          mode // ' growth should increase with air density')
+   end subroutine assert_density_response
 
    subroutine prepare_supersaturated_cell()
       real(real64) :: gamaz
