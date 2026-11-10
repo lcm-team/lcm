@@ -1,6 +1,7 @@
 program test_condensation_growth_options
    use iso_fortran_env, only: int64, real64
    use lcm_condensation, only: lcm_apply_condensation
+   use lcm_host_interface, only: lcm_attach_thermodynamic_history
    use lcm_config_state, only: config_state, lcm_set_config
    use lcm_parameters, only: pi, rho_liq, gravity, specific_heat_dry_air
    use lcm_particle_state, only: cell_particles, lcm_add_particle, &
@@ -8,7 +9,8 @@ program test_condensation_growth_options
    use lcm_types, only: lcm_particle_t, liquid_no_in
    use minimal_les_host, only: minimal_host_config, minimal_host_static_energy, &
                                minimal_host_qv, minimal_host_pressure, minimal_host_density, &
-                               minimal_host_z_center, setup_minimal_les_host
+                               minimal_host_z_center, setup_minimal_les_host, &
+                               minimal_host_nx_local, minimal_host_ny_local, minimal_host_nz
 
    implicit none
 
@@ -21,6 +23,9 @@ program test_condensation_growth_options
    real(real64) :: higher_supersaturation_mass, evaporation_mass
    real(real64) :: evaporation_radius, lem_growth_mass
    real(real64) :: initial_lem_qv, initial_lem_temperature
+   real(real64), target :: history_temperature(minimal_host_nx_local, minimal_host_ny_local, minimal_host_nz)
+   real(real64), target :: history_pressure(minimal_host_nx_local, minimal_host_ny_local, minimal_host_nz)
+   real(real64), target :: history_qv(minimal_host_nx_local, minimal_host_ny_local, minimal_host_nz)
 
    call setup_minimal_les_host()
    call prepare_supersaturated_cell()
@@ -100,8 +105,33 @@ program test_condensation_growth_options
                                   minimal_host_pressure(1)))) < 1.0e-14_real64, &
                     'LEM eta should reflect post-growth vapor and temperature')
    call assert_density_response('LEM')
+   call assert_transported_history_response()
 
 contains
+
+   subroutine assert_transported_history_response()
+      real(real64) :: baseline
+
+      minimal_host_config%switch_lem_micro = .false.
+      call lcm_set_config(minimal_host_config)
+      history_temperature = test_temperature
+      history_pressure = minimal_host_pressure(1)
+      history_qv = 1.04_real64 * qsatw_liquid(test_temperature, minimal_host_pressure(1))
+      call lcm_attach_thermodynamic_history(history_temperature, history_pressure, history_qv)
+      baseline = run_growth_case(0.04_real64)
+
+      history_qv(1,1,1) = history_qv(1,1,1) / 1.02_real64
+      call assert_greater(baseline, run_growth_case(0.04_real64), &
+                          'Lower transported vapor should reduce non-LEM growth')
+      history_qv = 1.04_real64 * qsatw_liquid(test_temperature, minimal_host_pressure(1))
+      history_pressure(1,1,1) = 0.99_real64 * minimal_host_pressure(1)
+      call assert_greater(baseline, run_growth_case(0.04_real64), &
+                          'Lower transported pressure should reduce non-LEM growth')
+      history_pressure = minimal_host_pressure(1)
+      history_temperature(1,1,1) = test_temperature - 0.1_real64
+      call assert_greater(run_growth_case(0.04_real64), baseline, &
+                          'Lower transported temperature should increase non-LEM growth')
+   end subroutine assert_transported_history_response
 
    subroutine assert_density_response(mode)
       character(len=*), intent(in) :: mode

@@ -12,6 +12,7 @@ module lcm_microphysics_state
    private
 
    public :: lcm_initialize_microphysics_state
+   public :: lcm_attach_thermodynamic_history
    public :: lcm_get_cell_mean_history
    public :: lcm_save_cell_mean_history
    public :: lcm_reset_condensation_diagnostics
@@ -19,6 +20,9 @@ module lcm_microphysics_state
 
    real(real64), allocatable :: previous_temperature(:,:,:)
    real(real64), allocatable :: previous_pressure(:,:,:)
+   real(real64), pointer :: transported_temperature(:,:,:) => null()
+   real(real64), pointer :: transported_pressure(:,:,:) => null()
+   real(real64), pointer :: transported_qv(:,:,:) => null()
 
    ! Raw per-step increments, retained for a future diagnostics/output reader.
    real(real64), allocatable :: condensation_mass(:,:,:)
@@ -27,6 +31,24 @@ module lcm_microphysics_state
    real(real64), allocatable :: deactivation_weight(:,:,:)
 
 contains
+
+   !> Attach read-only host tracers containing the transported previous state.
+   !! Temperature is in K, pressure in Pa, and vapor in the same units as qv.
+   !! The host keeps these targets alive and updates them in place.
+   subroutine lcm_attach_thermodynamic_history(temperature, pressure, qv)
+      real(real64), intent(in), target :: temperature(:,:,:), pressure(:,:,:), qv(:,:,:)
+      integer :: local_shape(3)
+
+      if (.not. grid_state%is_set) error stop 'LCM grid must be set before attaching history'
+      local_shape = [grid_state%grid%nx_local, grid_state%grid%ny_local, grid_state%grid%nz]
+      if (any(shape(temperature) /= local_shape) .or. any(shape(pressure) /= local_shape) .or. &
+          any(shape(qv) /= local_shape)) then
+         error stop 'LCM thermodynamic history field shape does not match the grid'
+      endif
+      transported_temperature => temperature
+      transported_pressure => pressure
+      transported_qv => qv
+   end subroutine lcm_attach_thermodynamic_history
 
    !> Allocate process history and diagnostic accumulators during LCM init.
    subroutine lcm_initialize_microphysics_state()
@@ -39,10 +61,12 @@ contains
       nx = grid_state%grid%nx_local
       ny = grid_state%grid%ny_local
       nz = grid_state%grid%nz
-      allocate(previous_temperature(nx,ny,nz), previous_pressure(nx,ny,nz))
+      if (.not. associated(transported_temperature)) then
+         allocate(previous_temperature(nx,ny,nz), previous_pressure(nx,ny,nz))
+         call initialize_cell_mean_history()
+      endif
       allocate(condensation_mass(nx,ny,nz), evaporation_mass(nx,ny,nz), &
                activation_weight(nx,ny,nz), deactivation_weight(nx,ny,nz))
-      call initialize_cell_mean_history()
    end subroutine lcm_initialize_microphysics_state
 
    !> Seed cell-mean history from the host state at initialization.
@@ -59,10 +83,17 @@ contains
       enddo
    end subroutine initialize_cell_mean_history
 
-   !> Return the saved cell-mean temperature and pressure for process forcing.
-   subroutine lcm_get_cell_mean_history(i, j, k, temperature, pressure)
+   !> Return the transported host history or the local standalone fallback.
+   subroutine lcm_get_cell_mean_history(i, j, k, temperature, pressure, qv)
       integer, intent(in) :: i, j, k
-      real(real64), intent(out) :: temperature, pressure
+      real(real64), intent(out) :: temperature, pressure, qv
+
+      if (associated(transported_temperature)) then
+         temperature = transported_temperature(i,j,k)
+         pressure = transported_pressure(i,j,k)
+         qv = transported_qv(i,j,k)
+         return
+      endif
 
       if (.not. allocated(previous_temperature)) then
          error stop 'LCM physical-process history has not been initialized'
@@ -74,12 +105,14 @@ contains
       endif
       temperature = previous_temperature(i,j,k)
       pressure = previous_pressure(i,j,k)
+      qv = field_state%qv(i,j,k)
    end subroutine lcm_get_cell_mean_history
 
    !> Save the current host thermodynamic state for the next process call.
    subroutine lcm_save_cell_mean_history(i, j, k)
       integer, intent(in) :: i, j, k
 
+      if (associated(transported_temperature)) return
       if (.not. allocated(previous_temperature)) then
          error stop 'LCM physical-process history has not been initialized'
       endif

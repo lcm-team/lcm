@@ -136,13 +136,13 @@ contains
       real(real64), intent(in) :: thermal_conductivity, vapor_diffusivity
 
       integer :: n
-      real(real64) :: previous_temperature, previous_pressure
+      real(real64) :: previous_temperature, previous_pressure, previous_qv
       real(real64) :: radius, r0, ventilation, dsd_liq
       real(real64) :: pre_liq, tau, eta_dyn, eta_last, forcing
       real(real64) :: mean_absolute_supersaturation, supersaturation
       real(real64) :: weighted_mass_change
 
-      call lcm_get_cell_mean_history(i, j, k, previous_temperature, previous_pressure)
+      call lcm_get_cell_mean_history(i, j, k, previous_temperature, previous_pressure, previous_qv)
 
       ! Sum the liquid droplet contributions to supersaturation relaxation.
       dsd_liq = 0.0_real64
@@ -163,8 +163,7 @@ contains
                    (qsatw_pre * air_density * cell_volume)
          tau = 1.0_real64 / (pre_liq * dsd_liq)
          eta_dyn = field_state%qv(i,j,k) - qsatw_liquid(temperature, pressure)
-         eta_last = field_state%qv(i,j,k) - &
-                    qsatw_liquid(previous_temperature, previous_pressure)
+         eta_last = previous_qv - qsatw_liquid(previous_temperature, previous_pressure)
          forcing = (eta_dyn - eta_last) / time_step
          mean_absolute_supersaturation = mean_supersaturation( &
             eta_last, forcing, tau, time_step)
