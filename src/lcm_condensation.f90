@@ -75,7 +75,7 @@ contains
       real(real64), intent(in) :: time_step
 
       integer :: count
-      real(real64) :: temperature, pressure, air_density, cell_volume
+      real(real64) :: temperature, pressure, air_density, dry_air_density, cell_volume
       real(real64) :: qsatw_pre, esatw_pre, c_liq_pre, a_liq_pre
       real(real64) :: thermal_conductivity, vapor_diffusivity
       real(real64) :: alpha_factor
@@ -89,6 +89,12 @@ contains
       temperature = cell_tabs_lcm(i, j, k)
       pressure = field_state%pressure(k)
       air_density = field_state%density(k)
+      ! Legacy hosts use the density profile for both purposes. A host supplying
+      ! moist-air density can attach dry-air density separately for mixing ratios.
+      dry_air_density = air_density
+      if (field_state%dry_air_density_is_attached) then
+         dry_air_density = field_state%dry_air_density(i,j,k)
+      endif
       cell_volume = real(grid_state%dV(k), real64)
       call get_growth_coefficients(temperature, pressure, thermal_conductivity, &
                                    vapor_diffusivity)
@@ -111,12 +117,12 @@ contains
 
       if (config_state%switch_lem_micro) then
          call apply_lem_condensation_cell(i, j, k, count, time_step, &
-            temperature, pressure, air_density, cell_volume, qsatw_pre, &
+            temperature, pressure, air_density, dry_air_density, cell_volume, qsatw_pre, &
             c_liq_pre, a_liq_pre, alpha_factor, esatw_pre, &
             thermal_conductivity, vapor_diffusivity)
       else
          call apply_non_lem_condensation_cell(i, j, k, count, time_step, &
-            current_step, temperature, pressure, air_density, cell_volume, &
+            current_step, temperature, pressure, air_density, dry_air_density, cell_volume, &
             qsatw_pre, c_liq_pre, a_liq_pre, alpha_factor, esatw_pre, &
             thermal_conductivity, vapor_diffusivity)
       endif
@@ -126,11 +132,11 @@ contains
 
    !> Apply cell-mean supersaturation depletion and growth for non-LEM mode.
    subroutine apply_non_lem_condensation_cell(i, j, k, count, time_step, &
-      current_step, temperature, pressure, air_density, cell_volume, qsatw_pre, &
+      current_step, temperature, pressure, air_density, dry_air_density, cell_volume, qsatw_pre, &
       c_liq_pre, a_liq_pre, alpha_factor, esatw_pre, thermal_conductivity, &
       vapor_diffusivity)
       integer, intent(in) :: i, j, k, count, current_step
-      real(real64), intent(in) :: time_step, temperature, pressure, air_density
+      real(real64), intent(in) :: time_step, temperature, pressure, air_density, dry_air_density
       real(real64), intent(in) :: cell_volume, qsatw_pre, c_liq_pre, a_liq_pre
       real(real64), intent(in) :: alpha_factor, esatw_pre
       real(real64), intent(in) :: thermal_conductivity, vapor_diffusivity
@@ -160,7 +166,7 @@ contains
 
       if (dsd_liq > 0.0_real64) then
          pre_liq = a_liq_pre * 4.0_real64 * pi * c_liq_pre / &
-                   (qsatw_pre * air_density * cell_volume)
+                   (qsatw_pre * dry_air_density * cell_volume)
          tau = 1.0_real64 / (pre_liq * dsd_liq)
          eta_dyn = field_state%qv(i,j,k) - qsatw_liquid(temperature, pressure)
          eta_last = previous_qv - qsatw_liquid(previous_temperature, previous_pressure)
@@ -187,10 +193,10 @@ contains
 
    !> Apply particle-local supersaturation depletion, growth, and LEM updates.
    subroutine apply_lem_condensation_cell(i, j, k, count, time_step, &
-      temperature, pressure, air_density, cell_volume, qsatw_pre, c_liq_pre, &
+      temperature, pressure, air_density, dry_air_density, cell_volume, qsatw_pre, c_liq_pre, &
       a_liq_pre, alpha_factor, esatw_pre, thermal_conductivity, vapor_diffusivity)
       integer, intent(in) :: i, j, k, count
-      real(real64), intent(in) :: time_step, temperature, pressure, air_density
+      real(real64), intent(in) :: time_step, temperature, pressure, air_density, dry_air_density
       real(real64), intent(in) :: cell_volume, qsatw_pre, c_liq_pre, a_liq_pre
       real(real64), intent(in) :: alpha_factor, esatw_pre
       real(real64), intent(in) :: thermal_conductivity, vapor_diffusivity
@@ -216,7 +222,8 @@ contains
          lem_context%time_step = time_step
          lem_context%pressure = pressure
          lem_context%cell_volume = cell_volume
-         lem_context%air_density = air_density
+         ! LEM uses this density only to normalize vapor changes and relaxation.
+         lem_context%air_density = dry_air_density
          lem_context%qsatw_pre = qsatw_pre
          lem_context%c_liq_pre = c_liq_pre
          lem_context%a_liq_pre = a_liq_pre

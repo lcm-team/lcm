@@ -185,6 +185,8 @@ module lcm_types
       real(real64), pointer :: cloud_liquid(:,:,:) => null()
       real(real64), pointer :: pressure(:) => null()
       real(real64), pointer :: density(:) => null()
+      ! Optional dry-air density for vapor mixing-ratio mass normalization.
+      real(real64), pointer :: dry_air_density(:,:,:) => null()
 
       logical :: u_is_attached = .false.
       logical :: v_is_attached = .false.
@@ -195,6 +197,7 @@ module lcm_types
       logical :: cloud_liquid_is_attached = .false.
       logical :: pressure_is_attached = .false.
       logical :: density_is_attached = .false.
+      logical :: dry_air_density_is_attached = .false.
    end type lcm_field_state_t
 
    type :: lcm_particle_t
