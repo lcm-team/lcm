@@ -5,10 +5,19 @@
 !! to them; tests must keep the host fields alive for the full LCM run.
 module minimal_les_host
    use iso_fortran_env, only: real64
+   use lcm_exchange_directions, only: lcm_exchange_x_phase, &
+                                      lcm_exchange_y_phase
    use lcm_host_interface, only: lcm_attach_field, lcm_attach_fields, &
                                  lcm_config_t, lcm_grid_t, lcm_init_config, &
                                  lcm_init_grid, lcm_initialize, &
                                  lcm_set_config, lcm_set_grid
+   use lcm_parallel_state, only: parallel_state
+   use lcm_particle_boundaries, only: lcm_apply_particle_boundaries
+   use lcm_particle_exchange, only: lcm_exchange_particle_phase
+   use lcm_particle_state, only: lcm_prepare_particle_migration, &
+                                 lcm_prepare_particle_velocities, &
+                                 lcm_refine_particle_velocities, &
+                                 lcm_update_particle_positions
 
    implicit none
 
@@ -35,6 +44,7 @@ module minimal_les_host
    public :: minimal_host_z_center
    public :: minimal_host_z_face
    public :: setup_minimal_les_host
+   public :: advance_minimal_les_transport
 
    integer, parameter :: minimal_host_nx_local = 2
    integer, parameter :: minimal_host_ny_local = 2
@@ -94,6 +104,24 @@ contains
 
       call lcm_initialize()
    end subroutine setup_minimal_les_host
+
+   !> Run the particle transport stages used by integration fixtures,
+   !> without entering sources or microphysics.
+   subroutine advance_minimal_les_transport(time_step)
+      real(real64), intent(in) :: time_step
+
+      call lcm_prepare_particle_velocities()
+      call lcm_refine_particle_velocities(time_step)
+      call lcm_update_particle_positions(time_step, &
+         minimal_host_config%nstep_lcm_init)
+      call lcm_apply_particle_boundaries()
+      call lcm_prepare_particle_migration()
+
+      if (parallel_state%is_set) then
+         call lcm_exchange_particle_phase(lcm_exchange_x_phase)
+         call lcm_exchange_particle_phase(lcm_exchange_y_phase)
+      endif
+   end subroutine advance_minimal_les_transport
 
    subroutine configure_minimal_host_config(case_name, bottom_removal_radius)
       character(len=*), intent(in), optional :: case_name

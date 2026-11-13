@@ -1,10 +1,10 @@
 program test_particle_source
    use iso_fortran_env, only: int64, real64
-   use lcm_host_interface, only: lcm_advance, lcm_attach_field, &
+   use lcm_host_interface, only: lcm_attach_field, &
                                  lcm_attach_fields, lcm_config_t, lcm_grid_t, &
                                  lcm_init_config, lcm_init_grid, lcm_initialize, &
                                  lcm_set_config, lcm_set_grid
-   use lcm_particle_source, only: nin_prof
+   use lcm_particle_source, only: lcm_apply_particle_sources, nin_prof
    use lcm_particle_state, only: cell_particles
 
    implicit none
@@ -35,7 +35,9 @@ program test_particle_source
 
    call configure_model(trim(case_name))
    call lcm_initialize()
-   call lcm_advance(1.0_real64)
+   ! Inspect source-created particles before the next LCM stage can apply
+   ! condensational growth or phase changes to them.
+   call lcm_apply_particle_sources(1.0_real64, config%nstep_lcm_init)
 
    select case (trim(case_name))
    case ("aerosol")

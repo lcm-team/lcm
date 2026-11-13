@@ -2,6 +2,7 @@
 module lcm_advance_mod
    use iso_fortran_env, only: real64
    use lcm_config_state, only: config_is_set, config_state
+   use lcm_condensation, only: lcm_apply_condensation
    use lcm_grid_state, only: grid_state
    use lcm_exchange_directions, only: lcm_exchange_x_phase, &
                                       lcm_exchange_y_phase
@@ -98,7 +99,7 @@ contains
    subroutine apply_lcm_microphysics(time_step)
       real(real64), intent(in) :: time_step
 
-      ! Future particle microphysics step.
+      call lcm_apply_condensation(time_step, current_lcm_step)
    end subroutine apply_lcm_microphysics
 
    subroutine exchange_lcm_particles()

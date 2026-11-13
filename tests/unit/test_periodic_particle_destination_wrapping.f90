@@ -118,6 +118,7 @@ contains
       particle%x = x
       particle%y = y
       particle%z = 5.0_real64
+      particle%weight = 1_int64
       call lcm_add_particle(1, 1, 1, particle)
    end subroutine add_particle
 

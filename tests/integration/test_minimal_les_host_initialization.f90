@@ -1,6 +1,5 @@
 program test_minimal_les_host_initialization
    use iso_fortran_env, only: int64, real64
-   use lcm_host_interface, only: lcm_advance
    use lcm_initialization_state, only: lcm_initial_particle_count_global, &
                                        lcm_initial_particle_count_local
    use lcm_particle_state, only: cell_particles
@@ -9,7 +8,8 @@ program test_minimal_les_host_initialization
                                minimal_host_nx_local, minimal_host_ny_local, &
                                minimal_host_nz, minimal_host_nzl, &
                                minimal_host_u, minimal_host_v, minimal_host_w, &
-                               minimal_host_z_face, setup_minimal_les_host
+                               minimal_host_z_face, setup_minimal_les_host, &
+                               advance_minimal_les_transport
    use minimal_les_host_references, only: pi, reference_aerosol_radius, &
                                           reference_bin_aerosol,        &
                                           reference_in_particle_weight, &
@@ -42,7 +42,7 @@ program test_minimal_les_host_initialization
                     "minimal host global particle count")
    call assert_particle_cells(trim(case_name))
    call store_initial_particle_positions()
-   call lcm_advance(1.0_real64)
+   call advance_minimal_les_transport(1.0_real64)
    call assert_particle_velocities_and_positions(1.0_real64)
 
 contains
