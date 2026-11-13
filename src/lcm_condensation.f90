@@ -376,7 +376,7 @@ contains
                r_euler / (r_euler + r0)
             d2r2dtdr2 = g_pre * ventilation * &
                (alpha_factor * r_euler**3 - &
-                beta_factor * (3.0_real64 * r_euler + 2.0_real64 * r0) - &
+                beta_factor * (3.0_real64 * r_euler + 2.0_real64 * r0) + &
                 r_euler**3 * r0 * supersaturation) / &
                (r_euler**4 * (r_euler + r0)**2)
 
