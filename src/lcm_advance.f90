@@ -14,6 +14,7 @@ module lcm_advance_mod
                                  lcm_refine_particle_velocities, &
                                  lcm_update_particle_positions
    use lcm_particle_source, only: lcm_apply_particle_sources
+   use lcm_output, only: lcm_write_global_3d_fields
 
    implicit none
 
@@ -45,6 +46,7 @@ contains
       call exchange_lcm_particles()
       call lcm_apply_particle_sources(time_step, current_lcm_step)
       call apply_lcm_microphysics(time_step)
+      call output_lcm_fields()
       call prepare_lcm_feedback()
    end subroutine run_lcm_advance_sequence
 
@@ -100,6 +102,16 @@ contains
 
       ! Future particle microphysics step.
    end subroutine apply_lcm_microphysics
+
+   subroutine output_lcm_fields()
+      character(99) :: filename
+
+      if (current_lcm_step == 5) then
+         filename = 'lcm_3d_output_test.nc'
+         call lcm_write_global_3d_fields(filename, current_lcm_step)
+         stop 'reached the end'
+      endif
+   end subroutine output_lcm_fields
 
    subroutine exchange_lcm_particles()
       ! Migration preparation has already completed local moves and populated
