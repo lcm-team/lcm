@@ -17,6 +17,10 @@ program test_condensation_growth_options
    real(real64), parameter :: initial_radius = 0.5e-6_real64
    real(real64), parameter :: aerosol_radius = 0.05e-6_real64
    real(real64), parameter :: test_temperature = 280.0_real64
+   ! Process-response checks at 0.5 s and 0.4--0.8% supersaturation.
+   ! In the 50 x 50 x 100 m test cell, this weight represents 40 droplets/cm3.
+   ! Newton convergence stress cases are outside this fixture.
+   integer(int64), parameter :: default_multiplicity = 10000000000000_int64
    real(real64), parameter :: relative_tolerance = 1.0e-10_real64
    real(real64) :: baseline_mass, no_koehler_mass
    real(real64) :: variable_thermal_mass, variable_diffusivity_mass
@@ -41,7 +45,7 @@ program test_condensation_growth_options
       error stop 'Kohler effects must be enabled by default'
    endif
 
-   baseline_mass = run_growth_case(0.04_real64)
+   baseline_mass = run_growth_case(0.004_real64)
    call assert_true(baseline_mass > initial_particle_mass(), &
                     'supersaturated liquid droplet should grow')
    call assert_true(cell_particles(1,1,1)%particles(1)%qv == &
@@ -53,26 +57,26 @@ program test_condensation_growth_options
 
    minimal_host_config%switch_koehler_micro = .false.
    call lcm_set_config(minimal_host_config)
-   no_koehler_mass = run_growth_case(0.04_real64)
+   no_koehler_mass = run_growth_case(0.004_real64)
    call assert_greater(no_koehler_mass, baseline_mass, &
                        'Kohler curvature and solute should restrain growth here')
 
    minimal_host_config%switch_koehler_micro = .true.
    call lcm_set_config(minimal_host_config)
-   higher_supersaturation_mass = run_growth_case(0.08_real64)
+   higher_supersaturation_mass = run_growth_case(0.008_real64)
    call assert_greater(higher_supersaturation_mass, baseline_mass, &
                        'higher supersaturation should produce more growth')
 
    minimal_host_config%switch_variable_therco = .true.
    call lcm_set_config(minimal_host_config)
-   variable_thermal_mass = run_growth_case(0.04_real64)
+   variable_thermal_mass = run_growth_case(0.004_real64)
    call assert_greater(variable_thermal_mass, baseline_mass, &
                        'higher variable thermal conductivity should increase growth')
 
    minimal_host_config%switch_variable_therco = .false.
    minimal_host_config%switch_variable_diffelq = .true.
    call lcm_set_config(minimal_host_config)
-   variable_diffusivity_mass = run_growth_case(0.04_real64)
+   variable_diffusivity_mass = run_growth_case(0.004_real64)
    call assert_greater(variable_diffusivity_mass, baseline_mass, &
                        'higher variable vapor diffusivity should increase growth')
 
@@ -88,10 +92,10 @@ program test_condensation_growth_options
 
    minimal_host_config%switch_lem_micro = .true.
    call lcm_set_config(minimal_host_config)
-   initial_lem_qv = 1.04_real64 * &
+   initial_lem_qv = 1.004_real64 * &
       qsatw_liquid(test_temperature, minimal_host_pressure(1))
    initial_lem_temperature = test_temperature
-   lem_growth_mass = run_growth_case(0.04_real64, 1000000_int64)
+   lem_growth_mass = run_growth_case(0.004_real64, 1000000_int64)
    call assert_true(lem_growth_mass > initial_particle_mass(1000000_int64), &
                     'LEM supersaturated droplet should grow')
    call assert_true(cell_particles(1,1,1)%particles(1)%qv < initial_lem_qv, &
@@ -116,32 +120,32 @@ contains
       call lcm_set_config(minimal_host_config)
       history_temperature = test_temperature
       history_pressure = minimal_host_pressure(1)
-      history_qv = 1.04_real64 * qsatw_liquid(test_temperature, minimal_host_pressure(1))
+      history_qv = 1.004_real64 * qsatw_liquid(test_temperature, minimal_host_pressure(1))
       call lcm_attach_thermodynamic_history(history_temperature, history_pressure, history_qv)
-      baseline = run_growth_case(0.04_real64)
+      baseline = run_growth_case(0.004_real64)
 
       history_qv(1,1,1) = history_qv(1,1,1) / 1.02_real64
-      call assert_greater(baseline, run_growth_case(0.04_real64), &
+      call assert_greater(baseline, run_growth_case(0.004_real64), &
                           'Lower transported vapor should reduce non-LEM growth')
-      history_qv = 1.04_real64 * qsatw_liquid(test_temperature, minimal_host_pressure(1))
+      history_qv = 1.004_real64 * qsatw_liquid(test_temperature, minimal_host_pressure(1))
       history_pressure(1,1,1) = 0.99_real64 * minimal_host_pressure(1)
-      call assert_greater(baseline, run_growth_case(0.04_real64), &
+      call assert_greater(baseline, run_growth_case(0.004_real64), &
                           'Lower transported pressure should reduce non-LEM growth')
       history_pressure = minimal_host_pressure(1)
       history_temperature(1,1,1) = test_temperature - 0.1_real64
-      call assert_greater(run_growth_case(0.04_real64), baseline, &
+      call assert_greater(run_growth_case(0.004_real64), baseline, &
                           'Lower transported temperature should increase non-LEM growth')
    end subroutine assert_transported_history_response
 
    subroutine assert_density_response(mode)
       character(len=*), intent(in) :: mode
       real(real64) :: initial_density, baseline_growth_mass, denser_growth_mass
-      integer(int64), parameter :: multiplicity = 1000000000_int64
+      integer(int64), parameter :: multiplicity = default_multiplicity
 
       initial_density = minimal_host_density(1)
-      baseline_growth_mass = run_growth_case(0.04_real64, multiplicity)
+      baseline_growth_mass = run_growth_case(0.004_real64, multiplicity)
       minimal_host_density(1) = 2.0_real64 * initial_density
-      denser_growth_mass = run_growth_case(0.04_real64, multiplicity)
+      denser_growth_mass = run_growth_case(0.004_real64, multiplicity)
       minimal_host_density(1) = initial_density
 
       ! These droplets are below the ventilation threshold. More air mass
@@ -166,7 +170,7 @@ contains
       call lcm_reset_particle_cells()
       minimal_host_qv(1,1,1) = (1.0_real64 + supersaturation_ratio) * &
          qsatw_liquid(test_temperature, minimal_host_pressure(1))
-      particle%weight = 1_int64
+      particle%weight = default_multiplicity
       if (present(multiplicity)) particle%weight = multiplicity
       particle%particle_type = liquid_no_in
       particle%mass_water = (4.0_real64 / 3.0_real64) * pi * rho_liq * &
@@ -182,7 +186,7 @@ contains
       particle%w_sedi = 0.0_real64
       call lcm_add_particle(1, 1, 1, particle)
 
-      call lcm_apply_condensation(1.0_real64, minimal_host_config%nstep_lcm_init + 1)
+      call lcm_apply_condensation(0.5_real64, minimal_host_config%nstep_lcm_init + 1)
       mass_after = cell_particles(1,1,1)%particles(1)%mass_water
    end function run_growth_case
 
@@ -190,7 +194,7 @@ contains
       integer(int64), intent(in), optional :: multiplicity
       real(real64) :: weight
 
-      weight = 1.0_real64
+      weight = real(default_multiplicity, real64)
       if (present(multiplicity)) weight = real(multiplicity, real64)
       mass = (4.0_real64 / 3.0_real64) * pi * rho_liq * initial_radius**3
       mass = mass * weight
