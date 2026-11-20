@@ -22,22 +22,33 @@ module lcm_advance_mod
 
    public :: lcm_advance
 
+   abstract interface
+      subroutine lcm_atmosphere_refresh()
+      end subroutine lcm_atmosphere_refresh
+   end interface
+
    integer, save :: current_lcm_step = 0
    logical, save :: current_lcm_step_is_initialized = .false.
 
 contains
 
-   subroutine lcm_advance(time_step)
+   subroutine lcm_advance(time_step, refresh_atmosphere)
       real(real64), intent(in) :: time_step
+
+      ! A host with thermodynamics depending on particle loading refreshes
+      ! attached fields after migration and sources, before condensation.
+      procedure(lcm_atmosphere_refresh), optional :: refresh_atmosphere
 
       call validate_step_state(time_step)
       call initialize_lcm_step_counter()
-      call run_lcm_advance_sequence(time_step)
+      call run_lcm_advance_sequence(time_step, refresh_atmosphere)
       current_lcm_step = current_lcm_step + 1
    end subroutine lcm_advance
 
-   subroutine run_lcm_advance_sequence(time_step)
+   subroutine run_lcm_advance_sequence(time_step, refresh_atmosphere)
       real(real64), intent(in) :: time_step
+
+      procedure(lcm_atmosphere_refresh), optional :: refresh_atmosphere
 
       call prepare_lcm_atmosphere()
       call advance_lcm_particles(time_step)
@@ -45,6 +56,7 @@ contains
       call prepare_lcm_particle_migration()
       call exchange_lcm_particles()
       call lcm_apply_particle_sources(time_step, current_lcm_step)
+      if (present(refresh_atmosphere)) call refresh_atmosphere()
       call apply_lcm_microphysics(time_step)
       call prepare_lcm_feedback()
    end subroutine run_lcm_advance_sequence

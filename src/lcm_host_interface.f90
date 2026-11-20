@@ -9,7 +9,8 @@ module lcm_host_interface
                                        lcm_pass_timer_routines
    use lcm_advance_mod, only: lcm_advance
    use lcm_field_state, only: lcm_attach_field, lcm_attach_fields
-   use lcm_microphysics_state, only: lcm_attach_thermodynamic_history
+   use lcm_microphysics_state, only: lcm_attach_thermodynamic_history, lcm_get_condensation_mass_change
+   use lcm_particle_state, only: lcm_get_liquid_water_mass
 
    implicit none
 
@@ -30,6 +31,8 @@ module lcm_host_interface
    public :: lcm_advance
    public :: lcm_attach_field
    public :: lcm_attach_fields
+   public :: lcm_get_liquid_water_mass
+   public :: lcm_get_condensation_mass_change
    public :: lcm_attach_thermodynamic_history
 
 end module lcm_host_interface

@@ -16,6 +16,7 @@ module lcm_microphysics_state
    public :: lcm_get_cell_mean_history
    public :: lcm_save_cell_mean_history
    public :: lcm_reset_condensation_diagnostics
+   public :: lcm_get_condensation_mass_change
    public :: lcm_add_condensation_diagnostics
 
    real(real64), allocatable :: previous_temperature(:,:,:)
@@ -31,6 +32,15 @@ module lcm_microphysics_state
    real(real64), allocatable :: deactivation_weight(:,:,:)
 
 contains
+
+   !> Net particle liquid change from the last condensation call, kg/cell.
+   !! Evaporation is stored with a negative sign. Transport is excluded.
+   subroutine lcm_get_condensation_mass_change(mass_change)
+      real(real64), intent(out) :: mass_change(:,:,:)
+      if (.not. allocated(condensation_mass)) error stop 'LCM microphysics is not initialized'
+      if (any(shape(mass_change) /= shape(condensation_mass))) error stop 'LCM condensation mass shape mismatch'
+      mass_change = condensation_mass + evaporation_mass
+   end subroutine lcm_get_condensation_mass_change
 
    !> Attach read-only host tracers containing the transported previous state.
    !! Temperature is in K, pressure in Pa, and vapor in the same units as qv.
@@ -67,6 +77,7 @@ contains
       endif
       allocate(condensation_mass(nx,ny,nz), evaporation_mass(nx,ny,nz), &
                activation_weight(nx,ny,nz), deactivation_weight(nx,ny,nz))
+      call lcm_reset_condensation_diagnostics()
    end subroutine lcm_initialize_microphysics_state
 
    !> Seed cell-mean history from the host state at initialization.

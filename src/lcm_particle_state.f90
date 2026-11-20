@@ -47,6 +47,7 @@ module lcm_particle_state
 
    private
 
+   public :: lcm_get_liquid_water_mass
    public :: cell_particles
    public :: particle_aerosol_radius
    public :: particle_bfactor
@@ -97,6 +98,27 @@ module lcm_particle_state
    integer, parameter :: n_inv_cdf = 50000000
 
 contains
+
+   !> Liquid water represented by all superdroplets, kg per grid cell.
+   !! Particle mass_water already includes multiplicity.
+   subroutine lcm_get_liquid_water_mass(mass)
+      real(real64), intent(out) :: mass(:,:,:)
+      integer :: i, j, k, n
+      if (.not. allocated(cell_particles)) error stop 'LCM particles are not initialized'
+      if (any(shape(mass) /= shape(cell_particles))) error stop 'LCM liquid mass shape mismatch'
+      mass = 0.0_real64
+      do k=1,size(mass,3)
+         do j=1,size(mass,2)
+            do i=1,size(mass,1)
+               do n=1,cell_particles(i,j,k)%count
+                  if (cell_particles(i,j,k)%particles(n)%particle_type == liquid_no_in .or. &
+                      cell_particles(i,j,k)%particles(n)%particle_type == liquid_with_in) &
+                     mass(i,j,k)=mass(i,j,k)+cell_particles(i,j,k)%particles(n)%mass_water
+               enddo
+            enddo
+         enddo
+      enddo
+   end subroutine lcm_get_liquid_water_mass
 
 
    subroutine lcm_allocate_particle_cells(initial_capacity_per_cell, &
