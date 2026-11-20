@@ -102,7 +102,7 @@ contains
       qsatw_pre = qsatw_liquid(temperature, pressure)
       esatw_pre = esatw_liquid(temperature)
       c_liq_pre = 1.0_real64 / &
-         (rv * temperature / (100.0_real64 * esatw_pre * vapor_diffusivity) + &
+         (rv * temperature / (esatw_pre * vapor_diffusivity) + &
           (latent_heat_condensation / (rv * temperature) - 1.0_real64) * &
           latent_heat_condensation / (thermal_conductivity * temperature))
       a_liq_pre = 1.0_real64 + &
@@ -410,7 +410,7 @@ contains
       r0 = vapor_diffusivity / alpha_mordy * &
          sqrt(2.0_real64 * pi / (rv * temperature)) / &
          (1.0_real64 + vapor_diffusivity * &
-          latent_heat_condensation**2 * 100.0_real64 * esatw / &
+          latent_heat_condensation**2 * esatw / &
           (thermal_conductivity * rv**2 * temperature**3))
    end function growth_length_scale
 
