@@ -9,6 +9,10 @@ module lcm_types
    public :: lcm_config_t
    public :: lcm_field_state_t
    public :: lcm_particle_t
+   public :: liquid_no_in
+   public :: liquid_with_in
+   public :: ice_no_in
+   public :: ice_with_in
    public :: lcm_particle_mpi_message_t
    public :: lcm_particle_cell_t
    public :: lcm_init_grid
@@ -17,6 +21,12 @@ module lcm_types
    public :: timer_toc_ifc
    public :: lcm_timer_tic
    public :: lcm_timer_toc
+
+   ! SAM-LCM iTYPE encoding: sign is phase, magnitude records IN membership.
+   integer, parameter :: liquid_no_in = 1
+   integer, parameter :: liquid_with_in = 2
+   integer, parameter :: ice_no_in = -1
+   integer, parameter :: ice_with_in = -2
 
    type :: lcm_grid_t
       ! Physical structured-grid geometry only. MPI rank topology is derived
@@ -96,10 +106,10 @@ module lcm_types
       logical :: switch_linear_sampling_collection = .true.
       logical :: switch_breakup = .true.
       logical :: switch_analytical_micro = .false.
-      logical :: switch_radiation_micro = .false.
       logical :: switch_lem_micro = .true.
       logical :: switch_koehler_micro = .true.
-      logical :: switch_ffc_micro = .false.
+      logical :: switch_variable_therco = .false.
+      logical :: switch_variable_diffelq = .false.
       logical :: switch_steady_pichamber = .false.
       logical :: switch_cloud_tracking = .false.
       logical :: switch_phase_sources = .true.
@@ -175,6 +185,8 @@ module lcm_types
       real(real64), pointer :: cloud_liquid(:,:,:) => null()
       real(real64), pointer :: pressure(:) => null()
       real(real64), pointer :: density(:) => null()
+      ! Optional dry-air density for vapor mixing-ratio mass normalization.
+      real(real64), pointer :: dry_air_density(:,:,:) => null()
 
       logical :: u_is_attached = .false.
       logical :: v_is_attached = .false.
@@ -185,13 +197,14 @@ module lcm_types
       logical :: cloud_liquid_is_attached = .false.
       logical :: pressure_is_attached = .false.
       logical :: density_is_attached = .false.
+      logical :: dry_air_density_is_attached = .false.
    end type lcm_field_state_t
 
    type :: lcm_particle_t
       ! SAM-LCM ivar(iA), ivar(iID), and ivar(iTYPE).
       integer(int64) :: weight = 0_int64
       integer(int64) :: id = 0_int64
-      integer :: particle_type = 0
+      integer :: particle_type = liquid_no_in
 
       ! SAM-LCM motion var(iX:iWsgs). Cell ownership remains the primary
       ! location, but these fields preserve the current velocity-advection path.

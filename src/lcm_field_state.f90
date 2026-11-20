@@ -16,8 +16,12 @@ module lcm_field_state
 
 contains
 
+   !> Vapor qv is kg vapor / kg dry air. Optional dry_air_density supplies
+   !! the matching mass basis for condensation; density remains the air profile
+   !! used by particle initialization and ventilation. Without the optional
+   !! field, condensation retains the density profile as its mass basis.
    subroutine lcm_attach_fields(u, v, w, static_energy, temperature, qv, &
-                                cloud_liquid, pressure, density)
+                                cloud_liquid, pressure, density, dry_air_density)
       real(real64), intent(in), target, optional :: u(:,:,:)
       real(real64), intent(in), target, optional :: v(:,:,:)
       real(real64), intent(in), target, optional :: w(:,:,:)
@@ -27,6 +31,7 @@ contains
       real(real64), intent(in), target, optional :: cloud_liquid(:,:,:)
       real(real64), intent(in), target, optional :: pressure(:)
       real(real64), intent(in), target, optional :: density(:)
+      real(real64), intent(in), target, optional :: dry_air_density(:,:,:)
       logical :: has_field
 
       if (.not. grid_state%is_set) then
@@ -36,7 +41,7 @@ contains
       has_field = present(u) .or. present(v) .or. present(w) .or. &
                   present(static_energy) .or. present(temperature) .or. &
                   present(qv) .or. present(cloud_liquid) .or. &
-                  present(pressure) .or. present(density)
+                  present(pressure) .or. present(density) .or. present(dry_air_density)
 
       if (.not. has_field) then
          error stop "LCM attach fields requires at least one field"
@@ -84,6 +89,11 @@ contains
          call attach_profile_field(density, field_state%density, &
                                    field_state%density_is_attached, "density")
       endif
+      if (present(dry_air_density)) then
+         call attach_cell_center_field("dry_air_density", dry_air_density, &
+                                       field_state%dry_air_density, &
+                                       field_state%dry_air_density_is_attached)
+      endif
    end subroutine lcm_attach_fields
 
    subroutine lcm_attach_field(name, field)
@@ -122,6 +132,10 @@ contains
          call attach_cell_center_field("cloud_liquid", field, &
                                        field_state%cloud_liquid, &
                                        field_state%cloud_liquid_is_attached)
+      case ("dry_air_density")
+         call attach_cell_center_field("dry_air_density", field, &
+                                       field_state%dry_air_density, &
+                                       field_state%dry_air_density_is_attached)
       case default
          error stop "LCM cannot attach unknown field: " // trim(name)
       end select

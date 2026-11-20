@@ -7,6 +7,7 @@ module lcm_initialization_state
    use iso_fortran_env, only: int64
    use lcm_config_state, only: config_is_set, config_state
    use lcm_field_state, only: field_state
+   use lcm_microphysics_state, only: lcm_initialize_microphysics_state
    use lcm_grid_state, only: grid_state
    use lcm_particle_state, only: lcm_allocate_particle_cells, &
                                  lcm_initialize_computational_particles
@@ -54,6 +55,7 @@ contains
          call lcm_configure_runtime()
       endif
       call validate_initialization_fields()
+      call lcm_initialize_microphysics_state()
 
       if (config_state%start_from_restart) then
          call initialize_lcm_from_restart()
