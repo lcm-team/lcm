@@ -67,7 +67,7 @@ contains
       do phase_direction = 1, lcm_exchange_directions_per_phase
          call MPI_IRECV(receive_counts(phase_direction), 1, MPI_INTEGER, &
                         source_ranks(phase_direction), directions(phase_direction), &
-                        parallel_state%parallel%communicator, &
+                        parallel_state%global%communicator, &
                         requests(phase_direction), ierr)
          call require_mpi_success(ierr, 'post a particle-count receive')
       enddo
@@ -75,7 +75,7 @@ contains
       do phase_direction = 1, lcm_exchange_directions_per_phase
          call MPI_ISEND(send_counts(phase_direction), 1, MPI_INTEGER, &
                         destination_ranks(phase_direction), directions(phase_direction), &
-                        parallel_state%parallel%communicator, &
+                        parallel_state%global%communicator, &
                         requests(lcm_exchange_directions_per_phase + phase_direction), &
                         ierr)
          call require_mpi_success(ierr, 'post a particle-count send')

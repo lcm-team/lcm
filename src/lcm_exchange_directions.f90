@@ -82,13 +82,13 @@ contains
 
       select case (direction)
       case (lcm_exchange_east)
-         rank = parallel_state%parallel%east_rank
+         rank = parallel_state%global%east_rank
       case (lcm_exchange_west)
-         rank = parallel_state%parallel%west_rank
+         rank = parallel_state%global%west_rank
       case (lcm_exchange_south)
-         rank = parallel_state%parallel%south_rank
+         rank = parallel_state%global%south_rank
       case (lcm_exchange_north)
-         rank = parallel_state%parallel%north_rank
+         rank = parallel_state%global%north_rank
       case default
          error stop 'LCM exchange direction is invalid'
       end select
