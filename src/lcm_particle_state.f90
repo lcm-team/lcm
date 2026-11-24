@@ -255,12 +255,12 @@ contains
 
       call require_grid_set()
 
-      n_subdomains = int(parallel_state%parallel%dimensions(1), int64) * &
-                     int(parallel_state%parallel%dimensions(2), int64)
+      n_subdomains = int(parallel_state%global%dimensions(1), int64) * &
+                     int(parallel_state%global%dimensions(2), int64)
       subdomain_id = &
-         int(parallel_state%parallel%coordinates(2), int64) * &
-         int(parallel_state%parallel%dimensions(1), int64) + &
-         int(parallel_state%parallel%coordinates(1), int64)
+         int(parallel_state%global%coordinates(2), int64) * &
+         int(parallel_state%global%dimensions(1), int64) + &
+         int(parallel_state%global%coordinates(1), int64)
 
       n_step_id = huge(1_int64) / n_subdomains
       n_id = n_step_id * subdomain_id
@@ -911,8 +911,8 @@ contains
 
       tracked_particles_per_subdomain = &
          max(1, config_state%n_track_particles / &
-                parallel_state%parallel%dimensions(1) / &
-                parallel_state%parallel%dimensions(2))
+                parallel_state%global%dimensions(1) / &
+                parallel_state%global%dimensions(2))
       tracking_period = initial_particle_count_for_tracking() / &
                         tracked_particles_per_subdomain
       marker_divisor = initial_particle_count_for_tracking() / &
@@ -1296,9 +1296,9 @@ contains
    end function particle_random_seed_id
 
    integer function particle_subdomain_id() result(subdomain_id)
-      subdomain_id = parallel_state%parallel%coordinates(2) * &
-                     parallel_state%parallel%dimensions(1) + &
-                     parallel_state%parallel%coordinates(1)
+      subdomain_id = parallel_state%global%coordinates(2) * &
+                     parallel_state%global%dimensions(1) + &
+                     parallel_state%global%coordinates(1)
    end function particle_subdomain_id
 
    subroutine set_equal_mode_weight(i, j, k, n, i_mode, np_mode)
@@ -2000,7 +2000,7 @@ contains
 
       select case (phase)
       case (lcm_exchange_x_phase)
-         if (parallel_state%parallel%periodicity(1) .and. &
+         if (parallel_state%global%periodicity(1) .and. &
              (global_i < 1 .or. global_i > grid_state%grid%nx_global)) then
             x_width = real(grid_state%grid%nx_global, real64) * grid_state%grid%dx
             global_i = modulo(global_i - 1, grid_state%grid%nx_global) + 1
@@ -2008,7 +2008,7 @@ contains
          endif
       case (lcm_exchange_y_phase)
          if (grid_state%grid%y_dimension == 1 .and. &
-             parallel_state%parallel%periodicity(2) .and. &
+             parallel_state%global%periodicity(2) .and. &
              (global_j < 1 .or. global_j > grid_state%grid%ny_global)) then
             y_width = real(grid_state%grid%ny_global, real64) * grid_state%grid%dy
             global_j = modulo(global_j - 1, grid_state%grid%ny_global) + 1

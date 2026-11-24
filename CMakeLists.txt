@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(lcm LANGUAGES Fortran)
+project(lcm LANGUAGES C Fortran)
 
 option(LCM_BUILD_COMPAT_STUBS "Build LCM with temporary SAM compatibility stubs" ON)
 option(LCM_BUILD_ALL_SAM_SOURCES "Attempt to build all SAM-derived LCM source files" OFF)
+option(LCM_ADD_TESTS "Add various automatic tests" ON)
 option(LCM_BUILD_EXPERIMENTAL_BENCHMARKS
   "Build opt-in experimental LCM performance benchmarks"
   OFF
@@ -18,10 +19,13 @@ add_test(
           -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/cmake/check_mpi_interface_isolation.cmake
 )
 
-find_package(MPI REQUIRED COMPONENTS Fortran)
-
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}")
 set(CMAKE_Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/mod")
 set(LCM_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
+
+find_package(MPI REQUIRED COMPONENTS Fortran)
+
+find_package(NetCDF REQUIRED COMPONENTS Fortran)
 
 add_library(lcm_sam_compat STATIC)
 
@@ -63,6 +67,8 @@ set(LCM_CORE_SOURCES
   "${LCM_SOURCE_DIR}/lcm_initialization_state.f90"
   "${LCM_SOURCE_DIR}/lcm_advance.f90"
   "${LCM_SOURCE_DIR}/lcm_host_interface.f90"
+  "${LCM_SOURCE_DIR}/lcm_output.f90"
+  "${LCM_SOURCE_DIR}/lcm_test_patterns.f90"
   "${LCM_SOURCE_DIR}/micro_task_util_MPI.f90"
 )
 
@@ -105,6 +111,7 @@ target_link_libraries(lcm
     MPI::MPI_Fortran
   PRIVATE
     lcm_sam_compat
+    NetCDF::NetCDF_Fortran
 )
 
 target_include_directories(lcm
@@ -121,6 +128,7 @@ if(LCM_BUILD_EXPERIMENTAL_BENCHMARKS)
   add_subdirectory(benchmarks/experimental/particle_exchange)
 endif()
 
+if(LCM_ADD_TESTS)
 add_executable(test_initial_particle_population
   tests/integration/test_initial_particle_population.f90
 )
@@ -789,3 +797,4 @@ add_test(
   COMMAND test_particle_source
           moving_in
 )
+endif()

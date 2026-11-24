@@ -1,6 +1,8 @@
 !> Public advance facade for host-driven LCM advancement.
 module lcm_advance_mod
    use iso_fortran_env, only: real64
+   use mpi_f08, only: MPI_Wtime, MPI_Barrier
+
    use lcm_config_state, only: config_is_set, config_state
    use lcm_grid_state, only: grid_state
    use lcm_exchange_directions, only: lcm_exchange_x_phase, &
@@ -14,6 +16,8 @@ module lcm_advance_mod
                                  lcm_refine_particle_velocities, &
                                  lcm_update_particle_positions
    use lcm_particle_source, only: lcm_apply_particle_sources
+   use lcm_output, only: lcm_write_global_3d_fields
+   use lcm_test_patterns, only: lcm_set_qv_test_pattern
 
    implicit none
 
@@ -45,6 +49,7 @@ contains
       call exchange_lcm_particles()
       call lcm_apply_particle_sources(time_step, current_lcm_step)
       call apply_lcm_microphysics(time_step)
+      call output_lcm_fields(time_step)
       call prepare_lcm_feedback()
    end subroutine run_lcm_advance_sequence
 
@@ -100,6 +105,29 @@ contains
 
       ! Future particle microphysics step.
    end subroutine apply_lcm_microphysics
+
+   subroutine output_lcm_fields(time_step)
+      real(real64), intent(in) :: time_step
+      real(real64)             :: start_time, end_time
+
+      !> when lcm_step 5 reached, set test pattern and output global fields
+      if (current_lcm_step == 5) then
+         call lcm_set_qv_test_pattern('smiley')
+
+         call MPI_Barrier(parallel_state%global%communicator)
+         start_time = MPI_Wtime()
+
+         call lcm_write_global_3d_fields(current_lcm_step, time_step)
+
+         call MPI_Barrier(parallel_state%global%communicator)
+         end_time = MPI_Wtime()
+         if (parallel_state%global%rank == 0) then
+            print *, 'finished writing global 3d fields in', end_time - start_time, 's'
+         endif
+
+         stop 'reached the end of writing test'
+      endif
+   end subroutine output_lcm_fields
 
    subroutine exchange_lcm_particles()
       ! Migration preparation has already completed local moves and populated

@@ -69,7 +69,7 @@ contains
             call MPI_IRECV(messages, receive_count, &
                            lcm_get_particle_mpi_datatype(), source_rank, &
                            particle_payload_tag_base + direction, &
-                           parallel_state%parallel%communicator, &
+                           parallel_state%global%communicator, &
                            requests(request_count), ierr)
             call require_mpi_success(ierr, 'post a particle-payload receive')
          endif
@@ -89,7 +89,7 @@ contains
             call MPI_ISEND(messages, send_count, &
                            lcm_get_particle_mpi_datatype(), destination_rank, &
                            particle_payload_tag_base + direction, &
-                           parallel_state%parallel%communicator, &
+                           parallel_state%global%communicator, &
                            requests(request_count), ierr)
             call require_mpi_success(ierr, 'post a particle-payload send')
          endif
