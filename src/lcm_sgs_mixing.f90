@@ -56,7 +56,10 @@ contains
  subroutine mix_cell(i,j,k,dt)
   integer,intent(in)::i,j,k
   real(real64),intent(in)::dt
-  integer::n,m,l,Np,ii,jj,kk,gi,gj,perm(27),cube(-1:1,-1:1,-1:1)
+  integer::n,m,l,Np,ii,jj,kk,gi,gj,cube(-1:1,-1:1,-1:1)
+  ! SAM retains this permutation between cells and timesteps before reshuffling.
+  integer,save::origin_permutation(27)=[1,2,3,4,5,6,7,8,9,10,11,12,13,14, &
+    15,16,17,18,19,20,21,22,23,24,25,26,27]
   integer::nsub,nrearr,s,t,tmp,keytmp,idtmp,stream
   integer,allocatable::idx(:),keys(:)
   real(real64),allocatable::phi(:,:),nextphi(:,:)
@@ -83,11 +86,13 @@ contains
     cell_particles(i,j,k)%particles(n)%qv=cell_particles(i,j,k)%particles(n)%qv+vapor_tendency(i,j,k)*dt
    enddo
    stream=parallel_state%parallel%rank+1
-   perm=[(n,n=1,27)]
    do n=27,2,-1
-    m=min(n,max(1,int(lcm_random_uniform(stream)*n)+1));tmp=perm(n);perm(n)=perm(m);perm(m)=tmp
+    m=min(n,max(1,int(lcm_random_uniform(stream)*n)+1))
+    tmp=origin_permutation(n)
+    origin_permutation(n)=origin_permutation(m)
+    origin_permutation(m)=tmp
    enddo
-   cube=reshape(perm,shape(cube))
+   cube=reshape(origin_permutation,shape(cube))
    do n=1,Np
     ii=cell_particles(i,j,k)%particles(n)%last_i-gi
     jj=cell_particles(i,j,k)%particles(n)%last_j-gj
@@ -111,7 +116,9 @@ contains
     enddo
     keys(m+1)=keytmp;idx(m+1)=idtmp;phi(:,m+1)=phi_tmp
    enddo
-   dz=grid_state%grid%dz(k);ds=dz/real(Np,real64);eta=6*ds
+   ! Preserve SAM's first-layer LEM line length, including on stretched grids.
+   ! Carrier-air mass above still uses this cell's actual volume, as in SAM.
+   dz=grid_state%grid%dz(1);ds=dz/real(Np,real64);eta=6*ds
    Lt=max(min(mixing_length(i,j,k),dz),.001_real64)
    eddy_D=max(diffusivity(i,j,k),0.0_real64)
    molecular_D=max(eddy_D*(eta/Lt)**(4.0_real64/3.0_real64),molecular_viscosity_air/rho)
