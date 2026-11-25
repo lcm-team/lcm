@@ -19,6 +19,7 @@ module minimal_les_host
                                  lcm_refine_particle_velocities, &
                                  lcm_update_particle_positions
 
+   use lcm_sgs_mixing,only:lcm_attach_lem_environment
    implicit none
 
    private
@@ -54,6 +55,7 @@ module minimal_les_host
    real(real64), parameter :: minimal_host_dx = 50.0_real64
    real(real64), parameter :: minimal_host_dy = 50.0_real64
 
+   real(real64),target :: mix_D(2,2,2),mix_L(2,2,2),mix_qt(2,2,2),mix_hl(2,2,2),mix_Ts(2,2,2),mix_qs(2,2,2)
    type(lcm_config_t), save :: minimal_host_config
    type(lcm_grid_t), save :: minimal_host_grid
 
@@ -92,6 +94,8 @@ contains
       endif
       call configure_minimal_host_grid(internal_subdomain)
       call configure_minimal_host_fields()
+      mix_D=0;mix_L=1;mix_qt=minimal_host_qv;mix_hl=minimal_host_static_energy;mix_Ts=0;mix_qs=0
+      call lcm_attach_lem_environment(mix_D,mix_L,mix_qt,mix_hl,mix_Ts,mix_qs)
 
       call lcm_attach_field("u", minimal_host_u)
       call lcm_attach_field("v", minimal_host_v)

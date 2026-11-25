@@ -11,6 +11,7 @@ module lcm_host_interface
    use lcm_field_state, only: lcm_attach_field, lcm_attach_fields
    use lcm_microphysics_state, only: lcm_attach_thermodynamic_history
 
+   use lcm_sgs_mixing, only: lcm_attach_lem_environment
    implicit none
 
    private
@@ -27,6 +28,7 @@ module lcm_host_interface
    public :: lcm_configure_runtime
    public :: lcm_initialize
    public :: lcm_pass_timer_routines
+   public :: lcm_attach_lem_environment
    public :: lcm_advance
    public :: lcm_attach_field
    public :: lcm_attach_fields

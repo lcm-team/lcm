@@ -16,6 +16,7 @@ module lcm_advance_mod
                                  lcm_update_particle_positions
    use lcm_particle_source, only: lcm_apply_particle_sources
 
+   use lcm_sgs_mixing, only: lcm_apply_sgs_mixing,lcm_validate_lem_environment
    implicit none
 
    private
@@ -31,6 +32,8 @@ contains
       real(real64), intent(in) :: time_step
 
       call validate_step_state(time_step)
+      if(config_state%switch_lem_micro.and.config_state%switch_ice)error stop 'LEM SGS supports warm liquid only'
+      if(config_state%switch_lem_micro)call lcm_validate_lem_environment()
       call initialize_lcm_step_counter()
       call run_lcm_advance_sequence(time_step)
       current_lcm_step = current_lcm_step + 1
@@ -45,6 +48,7 @@ contains
       call prepare_lcm_particle_migration()
       call exchange_lcm_particles()
       call lcm_apply_particle_sources(time_step, current_lcm_step)
+      if(config_state%switch_lem_micro)call lcm_apply_sgs_mixing(time_step)
       call apply_lcm_microphysics(time_step)
       call prepare_lcm_feedback()
    end subroutine run_lcm_advance_sequence
