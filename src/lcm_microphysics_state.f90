@@ -79,8 +79,8 @@ contains
       do k = 1, size(previous_temperature,3)
          do j = 1, size(previous_temperature,2)
             do i = 1, size(previous_temperature,1)
-               previous_temperature(i,j,k) = field_state%temperature(i,j,k)
-               previous_pressure(i,j,k) = field_state%pressure(k,1,1)
+               previous_temperature(i,j,k) = field_state%temperature%values(i,j,k)
+               previous_pressure(i,j,k) = field_state%pressure%values(k,1,1)
             enddo
          enddo
       enddo
@@ -108,7 +108,7 @@ contains
       endif
       temperature = previous_temperature(i,j,k)
       pressure = previous_pressure(i,j,k)
-      qv = field_state%qv(i,j,k)
+      qv = field_state%qv%values(i,j,k)
    end subroutine lcm_get_cell_mean_history
 
    !> Save the current host thermodynamic state for the next process call.
@@ -124,8 +124,8 @@ contains
           k < 1 .or. k > size(previous_temperature,3)) then
          error stop 'LCM physical-process history index is outside the local grid'
       endif
-      previous_temperature(i,j,k) = field_state%temperature(i,j,k)
-      previous_pressure(i,j,k) = field_state%pressure(k,1,1)
+      previous_temperature(i,j,k) = field_state%temperature%values(i,j,k)
+      previous_pressure(i,j,k) = field_state%pressure%values(k,1,1)
    end subroutine lcm_save_cell_mean_history
 
 

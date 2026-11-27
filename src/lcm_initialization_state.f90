@@ -98,16 +98,16 @@ contains
    end subroutine validate_runtime_configuration_inputs
 
    subroutine validate_initialization_fields()
-      call require_supplied_field(field_state%u_is_set, "u")
-      call require_supplied_field(field_state%v_is_set, "v")
-      call require_supplied_field(field_state%w_is_set, "w")
-      call require_supplied_field(field_state%static_energy_is_set, &
+      call require_supplied_field(allocated(field_state%u%values), "u")
+      call require_supplied_field(allocated(field_state%v%values), "v")
+      call require_supplied_field(allocated(field_state%w%values), "w")
+      call require_supplied_field(allocated(field_state%static_energy%values), &
                                   "static_energy")
-      call require_supplied_field(field_state%temperature_is_set, &
+      call require_supplied_field(allocated(field_state%temperature%values), &
                                   "temperature")
-      call require_supplied_field(field_state%qv_is_set, "qv")
-      call require_supplied_field(field_state%pressure_is_set, "pressure")
-      call require_supplied_field(field_state%density_is_set, "density")
+      call require_supplied_field(allocated(field_state%qv%values), "qv")
+      call require_supplied_field(allocated(field_state%pressure%values), "pressure")
+      call require_supplied_field(allocated(field_state%density%values), "density")
    end subroutine validate_initialization_fields
 
    subroutine require_supplied_field(is_supplied, field_name)

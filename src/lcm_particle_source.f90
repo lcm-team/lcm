@@ -511,7 +511,7 @@ contains
                        time_step / p_source, int64)
       else if (trim(config_state%unit_source) == "1/kg/s") then
          weight = nint(source_strength * real(grid_state%dV(k), real64) * &
-                       field_state%density(k,1,1) * time_step / p_source, int64)
+                       field_state%density%values(k,1,1) * time_step / p_source, int64)
       else
          error stop "LCM unknown particle source unit"
       endif
@@ -573,8 +573,8 @@ contains
 
       real(real64) :: qsat
 
-      qsat = qsatw_liquid(cell_tabs_lcm(i, j, k), field_state%pressure(k,1,1))
-      ss_gb = (field_state%qv(i,j,k) - qsat) / qsat
+      qsat = qsatw_liquid(cell_tabs_lcm(i, j, k), field_state%pressure%values(k,1,1))
+      ss_gb = (field_state%qv%values(i,j,k) - qsat) / qsat
       ss_gb = min(ss_gb, -0.01_real64)
    end function source_cell_supersaturation
 
@@ -653,10 +653,10 @@ contains
       particle%aerosol_portions(1) = 1.0_real64
       particle%temperature = cell_absolute_temperature(i, j, k, &
                                                        cell_tabs_lcm(i, j, k))
-      particle%qv = field_state%qv(i,j,k)
-      particle%eta = field_state%qv(i,j,k) - &
+      particle%qv = field_state%qv%values(i,j,k)
+      particle%eta = field_state%qv%values(i,j,k) - &
                      qsatw_liquid(cell_tabs_lcm(i, j, k), &
-                                  field_state%pressure(k,1,1))
+                                  field_state%pressure%values(k,1,1))
       particle%particle_type = liquid_no_in
       particle%in_surface_area = 0.0_real64
       particle%freezing_temperature = 233.15_real64

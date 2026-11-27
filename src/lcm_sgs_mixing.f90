@@ -77,15 +77,15 @@ contains
   ! Cells are not TARGETs; use direct cell access to keep storage ownership unchanged.
   Np=cell_particles(i,j,k)%count
   if(Np>=100000)error stop 'SAM LEM ordering supports fewer than 100000 particles per cell'
-  rho=field_state%density(k,1,1)
-  if(field_state%dry_air_density_is_set)rho=field_state%dry_air_density(i,j,k)
+  rho=field_state%density%values(k,1,1)
+  if(allocated(field_state%dry_air_density%values))rho=field_state%dry_air_density%values(i,j,k)
   V=real(grid_state%dV(k),real64)
   if(.not.ieee_is_finite(rho).or..not.ieee_is_finite(V).or..not.ieee_is_finite(dt).or. &
      rho<=0.or.V<=0.or.dt<=0)error stop 'Invalid LEM mixing geometry or timestep'
   carrier=rho*V/real(Np,real64)
   rl_mean=sum(cell_particles(i,j,k)%particles(1:Np)%mass_water)/(rho*V)
   call lcm_get_cell_mean_history(i,j,k,tprev,pprev,qprev)
-  eta_target=field_state%qv(i,j,k)-qsatw_liquid(tprev,pprev)
+  eta_target=field_state%qv%values(i,j,k)-qsatw_liquid(tprev,pprev)
   gi=grid_state%grid%global_i_start+i-1;gj=grid_state%grid%global_j_start+j-1
   if(Np>10)then
    allocate(phi(3,Np),nextphi(3,Np),idx(Np),keys(Np))

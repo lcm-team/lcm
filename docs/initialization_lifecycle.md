@@ -49,7 +49,7 @@ All atmospheric input arrays in LCM use rank-3 storage. Volume fields use
 `(nx,ny,nz)`, with the extra face retained on each staggered velocity axis.
 Vertical profiles (`pressure`, `density`) use `(nz,1,1)`: the first index is
 height and the other two indices are singleton storage dimensions. LCM reads
-these as `field_state%pressure(k,1,1)` and `field_state%density(k,1,1)`.
+these as `field_state%pressure%values(k,1,1)` and `field_state%density%values(k,1,1)`.
 The public setter accepts only 3D arrays. The host explicitly reshapes any
 1D profile before supplying it:
 
@@ -61,10 +61,26 @@ call lcm_set_field("pressure", reshape(pressure, [nz,1,1]))
 A zero-sized second or third dimension would contain no values and is rejected.
 Output dimensions must describe the physical field, rather than its storage
 rank: pressure and density remain vertical profiles, with only `z` (and `time`
-when recorded over time). A writer should use `pressure(:,1,1)` for that profile;
+when recorded over time). A writer should use `variable%values(:,1,1)` for that profile;
 it must not interpret the singleton storage axes as horizontal coordinates.
-The planned metadata structure must retain this distinction. This change does
-not modify any output-file schema or implement the writer from PR #88.
+The `lcm_variable_t` structure stores `values`, `var_name`, `long_name`, `units`
+and `dimensions`. `lcm_fields_t` groups these variables. For example:
+
+```fortran
+field_state%temperature%values
+field_state%temperature%units
+field_state%pressure%values(:,1,1)
+field_state%pressure%dimensions ! ["z", "", ""] (padded character strings)
+```
+
+Metadata is initialized with the container; `lcm_set_field` copies only the values.
+An unallocated `values` array means the input has not been supplied. There is no
+separate datatype or readiness flag. Writers take dimension names from the
+nonempty entries of `dimensions` and lengths from the matching axes of `values`.
+Velocity face-coordinate names are `x_face`, `y_face` and `z_face`; volume fields
+use `x`, `y`, `z`. A future horizontal surface variable can use `x`, `y`, an empty
+third name, and `(nx,ny,1)` storage, using the same `lcm_variable_t`.
+This change does not modify output files or implement the writer from PR #88.
 
 `lcm_configure_runtime` only validates config and grid state.
 `lcm_initialize` validates supplied atmospheric fields, allocates LCM-owned
