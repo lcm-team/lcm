@@ -17,6 +17,7 @@ program test_lcm_advance_particle_exchange_mpi
    use lcm_particle_location, only: lcm_locate_particle_cell
    use lcm_particle_state, only: cell_particles
 
+   use lcm_sgs_mixing,only:lcm_attach_lem_environment
    implicit none
 
    integer, parameter :: nx_local = 2
@@ -31,6 +32,7 @@ program test_lcm_advance_particle_exchange_mpi
    real(real64), parameter :: subdomain_x_width = real(nx_local, real64) * dx
    real(real64), parameter :: subdomain_y_width = real(ny_local, real64) * dy
 
+   real(real64),target :: mix_D(2,2,1),mix_L(2,2,1),mix_qt(2,2,1),mix_hl(2,2,1),mix_Ts(2,2,1),mix_qs(2,2,1)
    type(MPI_Comm) :: communicator
    type(lcm_config_t) :: config
    integer :: coordinates(2)
@@ -137,6 +139,8 @@ contains
       call lcm_attach_fields(static_energy=static_energy, &
                              temperature=temperature, qv=qv, &
                              pressure=pressure, density=density)
+      mix_D=0;mix_L=1;mix_qt=qv;mix_hl=static_energy;mix_Ts=0;mix_qs=0
+      call lcm_attach_lem_environment(mix_D,mix_L,mix_qt,mix_hl,mix_Ts,mix_qs)
    end subroutine attach_host_fields
 
    subroutine assert_global_particle_conservation()
