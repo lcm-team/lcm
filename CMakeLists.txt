@@ -63,7 +63,7 @@ set(LCM_CORE_SOURCES
   "${LCM_SOURCE_DIR}/lcm_config_state.f90"
   "${LCM_SOURCE_DIR}/lcm_lem.f90"
   "${LCM_SOURCE_DIR}/lcm_sgs_mixing.f90"
-  "${LCM_SOURCE_DIR}/lcm_condensation.f90"
+  "${LCM_SOURCE_DIR}/lcm_diffusional_growth.f90"
   "${LCM_SOURCE_DIR}/lcm_initialization_state.f90"
   "${LCM_SOURCE_DIR}/lcm_advance.f90"
   "${LCM_SOURCE_DIR}/lcm_host_interface.f90"

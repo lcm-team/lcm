@@ -1,6 +1,6 @@
 program test_condensation_growth_options
    use iso_fortran_env, only: int64, real64
-   use lcm_condensation, only: lcm_apply_condensation
+   use lcm_diffusional_growth, only: lcm_apply_diffusional_growth
    use lcm_host_interface, only: lcm_attach_thermodynamic_history
    use lcm_config_state, only: config_state, lcm_set_config
    use lcm_parameters, only: pi, rho_liq, gravity, specific_heat_dry_air
@@ -186,7 +186,7 @@ contains
       particle%w_sedi = 0.0_real64
       call lcm_add_particle(1, 1, 1, particle)
 
-      call lcm_apply_condensation(0.5_real64, minimal_host_config%nstep_lcm_init + 1)
+      call lcm_apply_diffusional_growth(0.5_real64, minimal_host_config%nstep_lcm_init + 1)
       mass_after = cell_particles(1,1,1)%particles(1)%mass_water
    end function run_growth_case
 

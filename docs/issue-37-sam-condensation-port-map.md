@@ -1,6 +1,6 @@
 # Issue 37: SAM-LCM condensation port map
 
-This is the source-to-source checklist for the new standalone `lcm_condensation`
+This is the source-to-source checklist for the new standalone `lcm_diffusional_growth`
 module. `src/micro_cond.f90` is the scientific source of truth. The port must
 retain the SAM equations, conditions, and process order for every supported
 branch. This map is a guard against silently dropping a branch or adding a
@@ -110,7 +110,7 @@ the SAM branch or synthesize replacement physics.
 - Source map: all process branches and directly referenced helpers are listed.
   The full transitive dependency and interface trace remains to be completed
   before claiming implementation parity.
-- `src/lcm_condensation.f90`: first code slice implements the SAM liquid
+- `src/lcm_diffusional_growth.f90`: first code slice implements the SAM liquid
   condensational growth/evaporation path, including both LEM and non-LEM
   supersaturation calculations, analytical and Euler radius updates, liquid
   ventilation, switchable Köhler terms (default on), variable transport coefficients,

@@ -4,7 +4,7 @@
 !! equations. Ice growth and phase transitions remain explicit blockers until
 !! their complete SAM branches and dependencies are ported; they are never
 !! silently skipped when enabled or when ice particles are present.
-module lcm_condensation
+module lcm_diffusional_growth
    use iso_fortran_env, only: real64
    use lcm_types, only: lcm_particle_cell_t, lcm_particle_t, &
                         liquid_no_in, &
@@ -32,7 +32,7 @@ module lcm_condensation
    implicit none
    private
 
-   public :: lcm_apply_condensation
+   public :: lcm_apply_diffusional_growth
 
 contains
 
@@ -41,7 +41,7 @@ contains
    !! `current_step` is SAM's `nstep` counterpart and is used only for its
    !! configured initial supersaturation cap. The host fields are inputs and
    !! remain unchanged.
-   subroutine lcm_apply_condensation(time_step, current_step)
+   subroutine lcm_apply_diffusional_growth(time_step, current_step)
       real(real64), intent(in) :: time_step
       integer, intent(in) :: current_step
 
@@ -68,7 +68,7 @@ contains
             enddo
          enddo
       enddo
-   end subroutine lcm_apply_condensation
+   end subroutine lcm_apply_diffusional_growth
 
    subroutine micro_condensation_cell(i, j, k, time_step, current_step)
       integer, intent(in) :: i, j, k, current_step
@@ -471,4 +471,4 @@ contains
       endif
    end subroutine require_liquid_particle
 
-end module lcm_condensation
+end module lcm_diffusional_growth

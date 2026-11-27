@@ -163,7 +163,7 @@ The inventory tasks are complete. Dependency classification is recorded below; i
 
 ## Candidate ownership map for `lcm_particle_t` (Issue 37 design task)
 
-This map compares the SAM fields touched by condensation with the existing standalone types in `src/lcm_types.f90`. It is a design reference for a future `lcm_condensation` module; it does not implement the port or change the legacy modules.
+This map compares the SAM fields touched by condensation with the existing standalone types in `src/lcm_types.f90`. It is a design reference for a future `lcm_diffusional_growth` module; it does not implement the port or change the legacy modules.
 
 ### Per-particle state
 
@@ -197,14 +197,14 @@ The existing standalone type already has named fields for these dependencies. Fo
 | `dtn_LCM` | `time_step` argument passed through `lcm_advance` to `apply_lcm_microphysics`. | This is call/timestep context, not particle state. |
 | `switch_*`, thresholds, aerosol/ice-mode parameters, habit and shattering selection | LCM configuration (`lcm_config_state` / `lcm_config_t`) or immutable physical parameters (`lcm_parameters`). | These configure the process or define constants; they are not properties of a single particle. |
 | `micro_field` slots, profile accumulators | LCM-owned process diagnostics, with reset and reduction lifecycle defined outside the particle. | They aggregate over a cell or vertical profile and should not be stored on every particle. Host feedback accumulators are deferred with two-way coupling. |
-| `radius`, ventilation factors, supersaturation arrays, temporary growth increments | Local scratch/derived values in `lcm_condensation` or helpers. | They are recomputable from particle, atmospheric, and configuration state for the current call; persistent storage is not justified by this inventory. |
+| `radius`, ventilation factors, supersaturation arrays, temporary growth increments | Local scratch/derived values in `lcm_diffusional_growth` or helpers. | They are recomputable from particle, atmospheric, and configuration state for the current call; persistent storage is not justified by this inventory. |
 | `rho_liq`, `rho_ice`, surface tension, gas constants, latent heats, Avogadro/Boltzmann/Planck constants | Shared physical parameter module (`lcm_parameters`) or process-specific parameter module. | They are model constants shared by many particles. |
 | `iID` | Particle identity metadata (`lcm_particle_t%id`), though condensation does not directly use it. | It is identity, not a material property or a condensation input. |
 
 ### Existing standalone interfaces relevant to the map
 
 - `lcm_particle_t` already contains particle identity, particle-carried thermodynamic state, water/aerosol mass, ice shape and nucleation properties, composition, motion, and age. The current type intentionally has a broader scope than physical properties alone.
-- `lcm_field_state_t` provides attached host pointers for temperature, static energy, `qv`, pressure, and density (plus velocity and cloud liquid). The current `lcm_condensation` design should read required inputs through this state; host feedback is deferred.
+- `lcm_field_state_t` provides attached host pointers for temperature, static energy, `qv`, pressure, and density (plus velocity and cloud liquid). The current `lcm_diffusional_growth` design should read required inputs through this state; host feedback is deferred.
 - `lcm_grid_state` owns cell geometry including `dV`; `cell_particles(i,j,k)` owns cell membership and particle iteration.
 - `lcm_config_state` holds the relevant process switches and mode parameters. `lcm_parameters` holds shared thermodynamic constants.
 - No standalone microphysics diagnostic state type was found in the inspected `src` modules. The process-diagnostic ownership/reset/reduction interface still needs design before implementation.
@@ -213,7 +213,7 @@ The existing standalone type already has named fields for these dependencies. Fo
 
 The code inspection resolves the particle-state mapping needed before implementing condensation:
 
-| Concept | SAM-LCM representation | Existing standalone representation | Design decision for `lcm_condensation` |
+| Concept | SAM-LCM representation | Existing standalone representation | Design decision for `lcm_diffusional_growth` |
 |---|---|---|---|
 | Current phase | Sign of `ivar(iTYPE)`: positive is liquid, negative is ice. Freezing/melting changes the sign. | `%particle_type` encodes liquid with positive values and ice with negative values. | Follow the SAM phase encoding in `%particle_type`; use named constants rather than bare signed integers. |
 | IN membership | Magnitude of `iTYPE` is `1` without IN and `2` with IN; detailed mode state is also stored in mode-specific aerosol/IN fields. | `%particle_type` magnitude records with/without IN; `%in_surface_area(4)` stores four IN-mode surface areas and `%aerosol_portions(4)` stores aerosol mode fractions. | Preserve the SAM combined state encoding and existing detailed mode state. Do not add a separate boolean or phase field. |
@@ -235,11 +235,11 @@ The combined `%particle_type` uses named values for SAM's four legal states: `li
 | Complete sublimation: ice mass per represented particle at/below the tiny-mass threshold (`micro_cond.f90`, around line 683). | Sets `iTYPE = ABS(iTYPE)`, resets monomer/rimed-mass state, then recalculates multiplicity. If the resulting type is `2`, weight is restored from the dominant IN mode; otherwise it is restored from the dominant aerosol portion. The configured `1/kg` unit applies an air-density scale. | Map `-1 → +1` or `-2 → +2` first, then preserve the matching legacy weight-restoration branch, unit conversion, LEM temperature update, and sublimation diagnostics. Do not treat this as melting: it also changes multiplicity. |
 | Particle initialization and source creation (context for valid starting values) | Aerosol initialization uses `iTYPE=1` without IN and `iTYPE=2` with IN; both are liquid. | Initialize as `liquid_no_in` or `liquid_with_in`. The ice constants are reached through freezing, not by merely adding IN material. |
 
-Agreed SAM-compatible contract: `%particle_type` uses the four named states declared in `lcm_types`; its default and current creation paths represent liquid with or without IN. Freezing and melting switch between matching named states, while complete sublimation additionally restores multiplicity. The constants and initial state values are implemented; the process transitions remain for the `lcm_condensation` implementation. The existing MPI integer field already transports `%particle_type`, so no MPI schema change is needed.
+Agreed SAM-compatible contract: `%particle_type` uses the four named states declared in `lcm_types`; its default and current creation paths represent liquid with or without IN. Freezing and melting switch between matching named states, while complete sublimation additionally restores multiplicity. The constants and initial state values are implemented; the process transitions remain for the `lcm_diffusional_growth` implementation. The existing MPI integer field already transports `%particle_type`, so no MPI schema change is needed.
 
 Scope note: this table is for the `micro_condensation` counterpart only. SAM collision and boundary routines also read or change `iTYPE`; those process ports should preserve the same state encoding when their respective issues are addressed, but are not part of this transition map.
 
-### Decisions to carry into `lcm_condensation` design
+### Decisions to carry into `lcm_diffusional_growth` design
 
 1. Follow SAM's combined phase/IN state in `%particle_type` using named constants for the four legal values; preserve detailed IN identity and mode in `%in_surface_area(4)` and related composition fields.
 2. Keep LEM particle-local thermodynamic/history fields (`temperature`, `qv`, `eta`) distinct from non-LEM cell-mean host fields.
@@ -247,7 +247,7 @@ Scope note: this table is for the `micro_condensation` counterpart only. SAM col
 4. Keep location, velocity, timestep, grid geometry, configuration, constants, and aggregate diagnostics out of the particle's physical-property set, even where the existing `lcm_particle_t` currently carries motion alongside microphysical state.
 5. Preserve the existing fields already present in `lcm_particle_t` unless later source tracing demonstrates a required state is missing; this task is classification, not a schema edit.
 
-This completes the particle-property ownership map. It is a proposed design map for review and does not implement `lcm_condensation` or modify any Fortran module.
+This completes the particle-property ownership map. It is a proposed design map for review and does not implement `lcm_diffusional_growth` or modify any Fortran module.
 
 ## Motion and location ownership map (Issue 37 follow-on task)
 
@@ -264,7 +264,7 @@ This section records the motion/location dependencies used by `micro_condensatio
 
 ### One-way coupling scope for the current sprint
 
-- `lcm_condensation` may read host `temperature` or `static_energy`, `qv`, `pressure`, and `density` through the attached field state; the specific thermodynamic reconstruction must match the existing standalone field conventions.
+- `lcm_diffusional_growth` may read host `temperature` or `static_energy`, `qv`, `pressure`, and `density` through the attached field state; the specific thermodynamic reconstruction must match the existing standalone field conventions.
 - Host fields remain inputs. Condensation changes each LCM particle's mass/phase and any retained LEM particle-local thermodynamic state, and accumulates LCM-owned diagnostics.
 - The current one-way implementation must not subtract condensate from host `qv` or add latent heating to host static energy/temperature. Those two-way feedback rules, including conservation and diagnostic refresh, are deferred to a later sprint.
 - `w_sedi` is consumed by ventilation as an existing motion input; condensation should not take ownership of its calculation.
@@ -319,27 +319,27 @@ They are horizontal/profile summaries of overlapping process information, not in
 - Preserve process identity and sign information (condensation versus evaporation, deposition versus sublimation, and nucleation mechanism) so later output can report useful rates without losing the raw mass/count changes.
 - Two-way host feedback remains deferred and must not be inferred from these diagnostics.
 
-No standalone diagnostics module exists in the inspected source today. This classification informs a later `lcm_condensation`/diagnostics interface design; it does not implement one.
+No standalone diagnostics module exists in the inspected source today. This classification informs a later `lcm_diffusional_growth`/diagnostics interface design; it does not implement one.
 
-## Proposed one-way `lcm_condensation` interface
+## Proposed one-way `lcm_diffusional_growth` interface
 
-This is the proposed contract for the first standalone implementation. It uses a new module (`src/lcm_condensation.f90`) and treats `src/micro_cond.f90` only as the SAM-LCM scientific reference. It does not require edits to the legacy routine.
+This is the proposed contract for the first standalone implementation. It uses a new module (`src/lcm_diffusional_growth.f90`) and treats `src/micro_cond.f90` only as the SAM-LCM scientific reference. It does not require edits to the legacy routine.
 
 ### Public entry point and ownership
 
 ```fortran
-module lcm_condensation
+module lcm_diffusional_growth
    implicit none
    private
-   public :: lcm_apply_condensation
+   public :: lcm_apply_diffusional_growth
 contains
-   subroutine lcm_apply_condensation(time_step)
+   subroutine lcm_apply_diffusional_growth(time_step)
       ! Apply local condensation and phase changes to LCM-owned particles.
-   end subroutine lcm_apply_condensation
-end module lcm_condensation
+   end subroutine lcm_apply_diffusional_growth
+end module lcm_diffusional_growth
 ```
 
-The public routine should take `time_step` explicitly. It should iterate local cells and dispatch to a private per-cell routine. To match the current repository pattern, it can access initialized `cell_particles`, `grid_state`, `field_state`, and `config_state` through their owning modules; it should not expose raw SAM arrays or `n_start`/`n_end` through the interface. The private per-cell routine should receive cell indices and the timestep explicitly, and mutate only its cell's particle state and LCM diagnostic state. `apply_lcm_microphysics(time_step)` in `lcm_advance_mod` remains the orchestration point and calls `lcm_apply_condensation(time_step)` once after particle movement, boundary handling, migration/exchange, and source handling.
+The public routine should take `time_step` explicitly. It should iterate local cells and dispatch to a private per-cell routine. To match the current repository pattern, it can access initialized `cell_particles`, `grid_state`, `field_state`, and `config_state` through their owning modules; it should not expose raw SAM arrays or `n_start`/`n_end` through the interface. The private per-cell routine should receive cell indices and the timestep explicitly, and mutate only its cell's particle state and LCM diagnostic state. `apply_lcm_microphysics(time_step)` in `lcm_advance_mod` remains the orchestration point and calls `lcm_apply_diffusional_growth(time_step)` once after particle movement, boundary handling, migration/exchange, and source handling.
 
 ### Inputs, state changes, and outputs
 

@@ -1,7 +1,7 @@
 !> LEM-specific supersaturation and particle feedback for diffusional growth.
 !!
 !! The coordinator and shared droplet-growth solver remain in
-!! lcm_condensation. This module owns the LEM policy on each side of that
+!! lcm_diffusional_growth. This module owns the LEM policy on each side of that
 !! shared solver: it computes particle supersaturation, then applies the
 !! solver's weighted mass change to particle vapor, temperature, and eta.
 module lcm_lem
