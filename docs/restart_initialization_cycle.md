@@ -73,7 +73,7 @@ Restart initialization should eventually:
   insert particles into the correct cell containers
 - restore particle IDs, particle counts, and any diagnostic/restart metadata
 - restore local cell ownership, equivalent in role to `micro_sort_by_grid_box`
-- ensure atmospheric field pointers are attached and ready, equivalent in role
+- ensure atmospheric fields are copied into LCM storage and ready, equivalent in role
   to the `micro_coupling` dependency after SAM-LCM restart read
 - set `lcm_initialization_mode = "restart"`
 

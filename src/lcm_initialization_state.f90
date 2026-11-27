@@ -98,27 +98,27 @@ contains
    end subroutine validate_runtime_configuration_inputs
 
    subroutine validate_initialization_fields()
-      call require_attached_field(field_state%u_is_attached, "u")
-      call require_attached_field(field_state%v_is_attached, "v")
-      call require_attached_field(field_state%w_is_attached, "w")
-      call require_attached_field(field_state%static_energy_is_attached, &
+      call require_supplied_field(field_state%u_is_set, "u")
+      call require_supplied_field(field_state%v_is_set, "v")
+      call require_supplied_field(field_state%w_is_set, "w")
+      call require_supplied_field(field_state%static_energy_is_set, &
                                   "static_energy")
-      call require_attached_field(field_state%temperature_is_attached, &
+      call require_supplied_field(field_state%temperature_is_set, &
                                   "temperature")
-      call require_attached_field(field_state%qv_is_attached, "qv")
-      call require_attached_field(field_state%pressure_is_attached, "pressure")
-      call require_attached_field(field_state%density_is_attached, "density")
+      call require_supplied_field(field_state%qv_is_set, "qv")
+      call require_supplied_field(field_state%pressure_is_set, "pressure")
+      call require_supplied_field(field_state%density_is_set, "density")
    end subroutine validate_initialization_fields
 
-   subroutine require_attached_field(is_attached, field_name)
-      logical, intent(in) :: is_attached
+   subroutine require_supplied_field(is_supplied, field_name)
+      logical, intent(in) :: is_supplied
       character(len=*), intent(in) :: field_name
 
-      if (.not. is_attached) then
+      if (.not. is_supplied) then
          error stop "LCM required field " // field_name // &
-                    " must be attached before lcm_initialize"
+                    " must be supplied before lcm_initialize"
       endif
-   end subroutine require_attached_field
+   end subroutine require_supplied_field
 
    subroutine initialize_particle_count_state()
       integer :: initialization_levels

@@ -1,13 +1,12 @@
 !> Minimal host-model fixture for exercising the public LCM host interface.
 !!
 !! The arrays in this module represent host-owned LES fields. They are module
-!! variables with the TARGET attribute because LCM stores pointers
-!! to them; tests must keep the host fields alive for the full LCM run.
+!! variables copied into LCM before initialization and transport.
 module minimal_les_host
    use iso_fortran_env, only: real64
    use lcm_exchange_directions, only: lcm_exchange_x_phase, &
                                       lcm_exchange_y_phase
-   use lcm_host_interface, only: lcm_attach_field, lcm_attach_fields, &
+   use lcm_host_interface, only: lcm_set_field, lcm_set_fields, &
                                  lcm_config_t, lcm_grid_t, lcm_init_config, &
                                  lcm_init_grid, lcm_initialize, &
                                  lcm_set_config, lcm_set_grid
@@ -19,7 +18,7 @@ module minimal_les_host
                                  lcm_refine_particle_velocities, &
                                  lcm_update_particle_positions
 
-   use lcm_sgs_mixing,only:lcm_attach_lem_environment
+   use lcm_sgs_mixing,only:lcm_set_lem_environment
    implicit none
 
    private
@@ -45,6 +44,7 @@ module minimal_les_host
    public :: minimal_host_z_center
    public :: minimal_host_z_face
    public :: setup_minimal_les_host
+   public :: supply_minimal_host_fields
    public :: advance_minimal_les_transport
 
    integer, parameter :: minimal_host_nx_local = 2
@@ -55,24 +55,24 @@ module minimal_les_host
    real(real64), parameter :: minimal_host_dx = 50.0_real64
    real(real64), parameter :: minimal_host_dy = 50.0_real64
 
-   real(real64),target :: mix_D(2,2,2),mix_L(2,2,2),mix_qt(2,2,2),mix_hl(2,2,2),mix_Ts(2,2,2),mix_qs(2,2,2)
+   real(real64) :: mix_D(2,2,2),mix_L(2,2,2),mix_qt(2,2,2),mix_hl(2,2,2),mix_Ts(2,2,2),mix_qs(2,2,2)
    type(lcm_config_t), save :: minimal_host_config
    type(lcm_grid_t), save :: minimal_host_grid
 
-   real(real64), target, save :: minimal_host_u( &
+   real(real64), save :: minimal_host_u( &
       minimal_host_nx_local + 1, minimal_host_ny_local, minimal_host_nz)
-   real(real64), target, save :: minimal_host_v( &
+   real(real64), save :: minimal_host_v( &
       minimal_host_nx_local, minimal_host_ny_local + 1, minimal_host_nz)
-   real(real64), target, save :: minimal_host_w( &
+   real(real64), save :: minimal_host_w( &
       minimal_host_nx_local, minimal_host_ny_local, minimal_host_nz + 1)
-   real(real64), target, save :: minimal_host_static_energy( &
+   real(real64), save :: minimal_host_static_energy( &
       minimal_host_nx_local, minimal_host_ny_local, minimal_host_nz)
-   real(real64), target, save :: minimal_host_temperature( &
+   real(real64), save :: minimal_host_temperature( &
       minimal_host_nx_local, minimal_host_ny_local, minimal_host_nz)
-   real(real64), target, save :: minimal_host_qv( &
+   real(real64), save :: minimal_host_qv( &
       minimal_host_nx_local, minimal_host_ny_local, minimal_host_nz)
-   real(real64), target, save :: minimal_host_pressure(minimal_host_nz)
-   real(real64), target, save :: minimal_host_density(minimal_host_nz)
+   real(real64), save :: minimal_host_pressure(minimal_host_nz)
+   real(real64), save :: minimal_host_density(minimal_host_nz)
 
    real(real64), save :: minimal_host_dz(minimal_host_nz)
    real(real64), save :: minimal_host_z_center(minimal_host_nz)
@@ -95,25 +95,30 @@ contains
       call configure_minimal_host_grid(internal_subdomain)
       call configure_minimal_host_fields()
       mix_D=0;mix_L=1;mix_qt=minimal_host_qv;mix_hl=minimal_host_static_energy;mix_Ts=0;mix_qs=0
-      call lcm_attach_lem_environment(mix_D,mix_L,mix_qt,mix_hl,mix_Ts,mix_qs)
+      call lcm_set_lem_environment(mix_D,mix_L,mix_qt,mix_hl,mix_Ts,mix_qs)
 
-      call lcm_attach_field("u", minimal_host_u)
-      call lcm_attach_field("v", minimal_host_v)
-      call lcm_attach_field("w", minimal_host_w)
-      call lcm_attach_fields(static_energy=minimal_host_static_energy, &
+      call supply_minimal_host_fields()
+
+      call lcm_initialize()
+   end subroutine setup_minimal_les_host
+
+   subroutine supply_minimal_host_fields()
+      call lcm_set_field("u", minimal_host_u)
+      call lcm_set_field("v", minimal_host_v)
+      call lcm_set_field("w", minimal_host_w)
+      call lcm_set_fields(static_energy=minimal_host_static_energy, &
                              temperature=minimal_host_temperature, &
                              qv=minimal_host_qv,                  &
                              pressure=minimal_host_pressure,      &
                              density=minimal_host_density)
-
-      call lcm_initialize()
-   end subroutine setup_minimal_les_host
+   end subroutine supply_minimal_host_fields
 
    !> Run the particle transport stages used by integration fixtures,
    !> without entering sources or microphysics.
    subroutine advance_minimal_les_transport(time_step)
       real(real64), intent(in) :: time_step
 
+      call supply_minimal_host_fields()
       call lcm_prepare_particle_velocities()
       call lcm_refine_particle_velocities(time_step)
       call lcm_update_particle_positions(time_step, &

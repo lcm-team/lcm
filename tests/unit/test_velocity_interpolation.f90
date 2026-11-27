@@ -1,6 +1,6 @@
 program test_velocity_interpolation
    use iso_fortran_env, only: real64
-   use lcm_field_state, only: lcm_attach_field
+   use lcm_field_state, only: lcm_set_field
    use lcm_grid_state, only: lcm_set_grid
    use lcm_types, only: lcm_grid_t, lcm_init_grid
    use lcm_velocity_interpolation, only: lcm_interpolate_particle_velocity
@@ -8,20 +8,23 @@ program test_velocity_interpolation
    implicit none
 
    type(lcm_grid_t) :: grid
-   real(real64), target :: u(3,2,2)
-   real(real64), target :: v(2,3,2)
-   real(real64), target :: w(2,2,3)
+   real(real64) :: u(3,2,2)
+   real(real64) :: v(2,3,2)
+   real(real64) :: w(2,2,3)
 
    call configure_grid()
    call set_uniform_velocity_fields()
-   call lcm_attach_field("u", u)
-   call lcm_attach_field("v", v)
-   call lcm_attach_field("w", w)
+   call lcm_set_field("u", u)
+   call lcm_set_field("v", v)
+   call lcm_set_field("w", w)
 
    call assert_velocity(2.5_real64, 5.0_real64, 50.0_real64, &
                         10.0_real64, 20.0_real64, 30.0_real64, &
                         "uniform first cell")
    call set_linear_velocity_fields()
+   call lcm_set_field("u", u)
+   call lcm_set_field("v", v)
+   call lcm_set_field("w", w)
    call assert_velocity(15.0_real64, 25.0_real64, 150.0_real64, &
                         115.0_real64, 262.5_real64, 450.0_real64, &
                         "linear interpolation")

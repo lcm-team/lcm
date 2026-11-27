@@ -1,7 +1,8 @@
 program test_condensation_growth_options
    use iso_fortran_env, only: int64, real64
    use lcm_diffusional_growth, only: lcm_apply_diffusional_growth
-   use lcm_host_interface, only: lcm_attach_thermodynamic_history
+   use lcm_host_interface, only: lcm_set_thermodynamic_history
+   use lcm_microphysics_state, only: lcm_get_cell_mean_history
    use lcm_config_state, only: config_state, lcm_set_config
    use lcm_parameters, only: pi, rho_liq, gravity, specific_heat_dry_air
    use lcm_particle_state, only: cell_particles, lcm_add_particle, &
@@ -10,7 +11,8 @@ program test_condensation_growth_options
    use minimal_les_host, only: minimal_host_config, minimal_host_static_energy, &
                                minimal_host_qv, minimal_host_pressure, minimal_host_density, &
                                minimal_host_z_center, setup_minimal_les_host, &
-                               minimal_host_nx_local, minimal_host_ny_local, minimal_host_nz
+                               minimal_host_nx_local, minimal_host_ny_local, minimal_host_nz, &
+                               supply_minimal_host_fields
 
    implicit none
 
@@ -22,14 +24,15 @@ program test_condensation_growth_options
    ! Newton convergence stress cases are outside this fixture.
    integer(int64), parameter :: default_multiplicity = 10000000000000_int64
    real(real64), parameter :: relative_tolerance = 1.0e-10_real64
+   logical :: use_transported_history = .false.
    real(real64) :: baseline_mass, no_koehler_mass
    real(real64) :: variable_thermal_mass, variable_diffusivity_mass
    real(real64) :: higher_supersaturation_mass, evaporation_mass
    real(real64) :: evaporation_radius, lem_growth_mass
    real(real64) :: initial_lem_qv, initial_lem_temperature
-   real(real64), target :: history_temperature(minimal_host_nx_local, minimal_host_ny_local, minimal_host_nz)
-   real(real64), target :: history_pressure(minimal_host_nx_local, minimal_host_ny_local, minimal_host_nz)
-   real(real64), target :: history_qv(minimal_host_nx_local, minimal_host_ny_local, minimal_host_nz)
+   real(real64) :: history_temperature(minimal_host_nx_local, minimal_host_ny_local, minimal_host_nz)
+   real(real64) :: history_pressure(minimal_host_nx_local, minimal_host_ny_local, minimal_host_nz)
+   real(real64) :: history_qv(minimal_host_nx_local, minimal_host_ny_local, minimal_host_nz)
 
    call setup_minimal_les_host()
    call prepare_supersaturated_cell()
@@ -114,17 +117,21 @@ program test_condensation_growth_options
 contains
 
    subroutine assert_transported_history_response()
-      real(real64) :: baseline
+      real(real64) :: baseline, saved_temperature, saved_pressure, saved_qv
 
       minimal_host_config%switch_lem_micro = .false.
       call lcm_set_config(minimal_host_config)
       history_temperature = test_temperature
       history_pressure = minimal_host_pressure(1)
       history_qv = 1.004_real64 * qsatw_liquid(test_temperature, minimal_host_pressure(1))
-      call lcm_attach_thermodynamic_history(history_temperature, history_pressure, history_qv)
+      use_transported_history = .true.
+      call lcm_set_thermodynamic_history(history_temperature, history_pressure, history_qv)
       baseline = run_growth_case(0.004_real64)
 
       history_qv(1,1,1) = history_qv(1,1,1) / 1.02_real64
+      call lcm_get_cell_mean_history(1,1,1,saved_temperature,saved_pressure,saved_qv)
+      call assert_true(saved_qv == 1.004_real64 * qsatw_liquid(test_temperature, minimal_host_pressure(1)), &
+                       'History remains unchanged until explicitly supplied again')
       call assert_greater(baseline, run_growth_case(0.004_real64), &
                           'Lower transported vapor should reduce non-LEM growth')
       history_qv = 1.004_real64 * qsatw_liquid(test_temperature, minimal_host_pressure(1))
@@ -186,6 +193,8 @@ contains
       particle%w_sedi = 0.0_real64
       call lcm_add_particle(1, 1, 1, particle)
 
+      call supply_minimal_host_fields()
+      if (use_transported_history) call lcm_set_thermodynamic_history(history_temperature, history_pressure, history_qv)
       call lcm_apply_diffusional_growth(0.5_real64, minimal_host_config%nstep_lcm_init + 1)
       mass_after = cell_particles(1,1,1)%particles(1)%mass_water
    end function run_growth_case

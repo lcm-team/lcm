@@ -1,4 +1,4 @@
-!> SAM-LCM-compatible interpolation from attached host velocity fields.
+!> SAM-LCM-compatible interpolation from LCM-owned velocity fields.
 module lcm_velocity_interpolation
    use iso_fortran_env, only: real64
    use lcm_field_state, only: field_state
@@ -32,7 +32,7 @@ contains
       real(real64) :: beta
       real(real64) :: gamma
 
-      call require_velocity_fields_attached()
+      call require_velocity_fields_supplied()
 
       call lcm_locate_particle_cell(x, y, z, i, j, k, is_local)
       if (.not. is_local) then
@@ -77,19 +77,19 @@ contains
       clamped = max(min(value, 1.0_real64), 0.0_real64)
    end function clamp_unit_interval
 
-   subroutine require_velocity_fields_attached()
+   subroutine require_velocity_fields_supplied()
       if (.not. grid_state%is_set) then
          error stop "LCM grid must be initialized before interpolating velocity"
       endif
-      if (.not. field_state%u_is_attached) then
-         error stop "LCM u field must be attached before interpolating velocity"
+      if (.not. field_state%u_is_set) then
+         error stop "LCM u field must be supplied before interpolating velocity"
       endif
-      if (.not. field_state%v_is_attached) then
-         error stop "LCM v field must be attached before interpolating velocity"
+      if (.not. field_state%v_is_set) then
+         error stop "LCM v field must be supplied before interpolating velocity"
       endif
-      if (.not. field_state%w_is_attached) then
-         error stop "LCM w field must be attached before interpolating velocity"
+      if (.not. field_state%w_is_set) then
+         error stop "LCM w field must be supplied before interpolating velocity"
       endif
-   end subroutine require_velocity_fields_attached
+   end subroutine require_velocity_fields_supplied
 
 end module lcm_velocity_interpolation

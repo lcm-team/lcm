@@ -617,23 +617,23 @@ add_test(
   COMMAND test_minimal_les_host_outgoing_particles
 )
 
-add_executable(test_field_attachment
-  tests/unit/test_field_attachment.f90
+add_executable(test_field_copy
+  tests/unit/test_field_copy.f90
 )
 
-target_link_libraries(test_field_attachment
+target_link_libraries(test_field_copy
   PRIVATE
     lcm
 )
 
-set_target_properties(test_field_attachment
+set_target_properties(test_field_copy
   PROPERTIES
     Fortran_MODULE_DIRECTORY "${CMAKE_Fortran_MODULE_DIRECTORY}"
 )
 
 add_test(
-  NAME field_attachment
-  COMMAND test_field_attachment
+  NAME field_copy
+  COMMAND test_field_copy
 )
 
 add_executable(test_velocity_interpolation

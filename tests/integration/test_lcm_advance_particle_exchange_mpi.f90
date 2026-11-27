@@ -5,8 +5,8 @@ program test_lcm_advance_particle_exchange_mpi
                       MPI_COMM_FREE, MPI_COMM_RANK, MPI_COMM_SIZE, &
                       MPI_COMM_WORLD, MPI_INTEGER, MPI_INTEGER8, &
                       MPI_SUM, MPI_Comm, MPI_FINALIZE, MPI_INIT
-   use lcm_host_interface, only: lcm_advance, lcm_attach_field, &
-                                 lcm_attach_fields, lcm_config_t, &
+   use lcm_host_interface, only: lcm_advance, lcm_set_field, &
+                                 lcm_set_fields, lcm_config_t, &
                                  lcm_grid_t, lcm_init_config, &
                                  lcm_init_grid, lcm_init_parallel, &
                                  lcm_initialize, lcm_parallel_t, &
@@ -17,7 +17,7 @@ program test_lcm_advance_particle_exchange_mpi
    use lcm_particle_location, only: lcm_locate_particle_cell
    use lcm_particle_state, only: cell_particles
 
-   use lcm_sgs_mixing,only:lcm_attach_lem_environment
+   use lcm_sgs_mixing,only:lcm_set_lem_environment
    implicit none
 
    integer, parameter :: nx_local = 2
@@ -32,7 +32,7 @@ program test_lcm_advance_particle_exchange_mpi
    real(real64), parameter :: subdomain_x_width = real(nx_local, real64) * dx
    real(real64), parameter :: subdomain_y_width = real(ny_local, real64) * dy
 
-   real(real64),target :: mix_D(2,2,1),mix_L(2,2,1),mix_qt(2,2,1),mix_hl(2,2,1),mix_Ts(2,2,1),mix_qs(2,2,1)
+   real(real64) :: mix_D(2,2,1),mix_L(2,2,1),mix_qt(2,2,1),mix_hl(2,2,1),mix_Ts(2,2,1),mix_qs(2,2,1)
    type(MPI_Comm) :: communicator
    type(lcm_config_t) :: config
    integer :: coordinates(2)
@@ -45,14 +45,14 @@ program test_lcm_advance_particle_exchange_mpi
    type(lcm_parallel_t) :: parallel
    logical :: periodicity(2)
    integer :: rank
-   real(real64), target :: density(nz)
-   real(real64), target :: pressure(nz)
-   real(real64), target :: qv(nx_local, ny_local, nz)
-   real(real64), target :: static_energy(nx_local, ny_local, nz)
-   real(real64), target :: temperature(nx_local, ny_local, nz)
-   real(real64), target :: u(nx_local + 1, ny_local, nz)
-   real(real64), target :: v(nx_local, ny_local + 1, nz)
-   real(real64), target :: w(nx_local, ny_local, nz + 1)
+   real(real64) :: density(nz)
+   real(real64) :: pressure(nz)
+   real(real64) :: qv(nx_local, ny_local, nz)
+   real(real64) :: static_energy(nx_local, ny_local, nz)
+   real(real64) :: temperature(nx_local, ny_local, nz)
+   real(real64) :: u(nx_local + 1, ny_local, nz)
+   real(real64) :: v(nx_local, ny_local + 1, nz)
+   real(real64) :: w(nx_local, ny_local, nz + 1)
    real(real64) :: z_center(nz)
    real(real64) :: z_face(nz + 1)
 
@@ -133,14 +133,14 @@ contains
       pressure = 100000.0_real64
       density = 1.2_real64
 
-      call lcm_attach_field('u', u)
-      call lcm_attach_field('v', v)
-      call lcm_attach_field('w', w)
-      call lcm_attach_fields(static_energy=static_energy, &
+      call lcm_set_field('u', u)
+      call lcm_set_field('v', v)
+      call lcm_set_field('w', w)
+      call lcm_set_fields(static_energy=static_energy, &
                              temperature=temperature, qv=qv, &
                              pressure=pressure, density=density)
       mix_D=0;mix_L=1;mix_qt=qv;mix_hl=static_energy;mix_Ts=0;mix_qs=0
-      call lcm_attach_lem_environment(mix_D,mix_L,mix_qt,mix_hl,mix_Ts,mix_qs)
+      call lcm_set_lem_environment(mix_D,mix_L,mix_qt,mix_hl,mix_Ts,mix_qs)
    end subroutine attach_host_fields
 
    subroutine assert_global_particle_conservation()

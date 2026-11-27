@@ -8,8 +8,10 @@ The simplest host call order is:
 ```fortran
 call lcm_set_config(...)
 call lcm_set_grid(...)
-call lcm_attach_fields(...)
+call lcm_set_fields(...)
 call lcm_initialize()
+! Before every advance, copy the current host fields again.
+call lcm_set_fields(...)
 call lcm_advance(dt)
 ```
 
@@ -23,13 +25,24 @@ call lcm_set_grid(...)
 call lcm_configure_runtime()
 
 ! later, after the host has computed/provided atmospheric fields
-call lcm_attach_fields(...)
+call lcm_set_fields(...)
 call lcm_initialize()
+! Before every advance, copy the current host fields again.
+call lcm_set_fields(...)
 call lcm_advance(dt)
 ```
 
+The `lcm_set_field` and `lcm_set_fields` calls copy values; LCM does not retain
+host pointers. Host arrays need no `TARGET` attribute and may be temporary or
+noncontiguous sections. Supplying only some fields leaves the others unchanged.
+If used, call `lcm_set_thermodynamic_history` with the transported history and
+`lcm_set_lem_environment` with the current SGS inputs before each advance too.
+These setters replace the former `lcm_attach_*` APIs; existing host adapters
+must replace attachment at initialization and explicitly send updates each step.
+Units, velocity staggering and the local-domain shapes are unchanged.
+
 `lcm_configure_runtime` only validates config and grid state.
-`lcm_initialize` validates attached atmospheric fields, allocates LCM-owned
+`lcm_initialize` validates supplied atmospheric fields, allocates LCM-owned
 storage, and records the fresh or restart initialization mode. If a host does
 not call `lcm_configure_runtime` explicitly, `lcm_initialize` calls it
 automatically.
@@ -54,7 +67,7 @@ restart lifecycle is implemented.
 | Print SAM-LCM initialization summary | Not yet assigned | Not implemented. If needed, this should become standalone diagnostics/logging rather than SAM-style `PRINT*` blocks. |
 | Create MPI datatype for legacy flat particle array | Future MPI particle exchange interface | Not implemented in #42. The standalone design uses cell-owned particles and will need explicit exchange buffers instead of the old flat particle datatype. |
 | Fill grid side/center arrays `gpxs`, `gpys`, `gpzs`, `gpxc`, `gpyc`, `gpzc` | `lcm_set_grid` | Covered. |
-| Allocate velocity and atmospheric working arrays | Future atmospheric/internal state refactor | Not implemented in #42. The standalone direction is to use attached host fields and only allocate LCM-owned derived state where needed. |
+| Allocate velocity and atmospheric working arrays | Future atmospheric/internal state refactor | Not implemented in #42. Host fields are copied into LCM-owned arrays by `lcm_set_fields`; subsequent calls reuse the allocated storage. |
 | Initialize output/history state | Future diagnostics/output work | Not implemented in #42. |
 | Choose fresh initialization vs restart read | `lcm_config_t` / `lcm_initialize` | Covered for lifecycle selection. Fresh initialization is the default; `config_state%start_from_restart` selects restart mode and stops with a clear error until restart lifecycle work exists. |
 | Host-independent setup readiness | `lcm_configure_runtime` / `lcm_runtime_is_configured` | Covered. This lets hosts with DALES-like setup order validate config/grid before atmospheric fields are available. |
@@ -101,7 +114,7 @@ Issue #42 introduces the explicit lifecycle boundary:
 
 - `lcm_configure_runtime` validates that config and grid have been supplied.
 - `lcm_initialize` calls `lcm_configure_runtime` automatically if needed, then validates
-  that required atmospheric fields have been attached.
+  that required atmospheric fields have been supplied.
 - `lcm_initialize` allocates LCM-owned cell particle containers with
   `config_state%np_xy` as the initial per-cell capacity.
 - `lcm_initialize` records expected local and global initial particle counts.

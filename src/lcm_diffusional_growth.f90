@@ -92,7 +92,7 @@ contains
       ! Legacy hosts use the density profile for both purposes. A host supplying
       ! moist-air density can attach dry-air density separately for mixing ratios.
       dry_air_density = air_density
-      if (field_state%dry_air_density_is_attached) then
+      if (field_state%dry_air_density_is_set) then
          dry_air_density = field_state%dry_air_density(i,j,k)
       endif
       cell_volume = real(grid_state%dV(k), real64)
