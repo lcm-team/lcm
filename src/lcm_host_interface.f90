@@ -8,7 +8,7 @@ module lcm_host_interface
    use lcm_initialization_state, only: lcm_configure_runtime, lcm_initialize, &
                                        lcm_pass_timer_routines
    use lcm_advance_mod, only: lcm_advance
-   use lcm_field_state, only: lcm_set_field, lcm_set_fields
+   use lcm_field_state, only: lcm_set_field
    use lcm_microphysics_state, only: lcm_set_thermodynamic_history
 
    use lcm_sgs_mixing, only: lcm_set_lem_environment
@@ -31,7 +31,6 @@ module lcm_host_interface
    public :: lcm_set_lem_environment
    public :: lcm_advance
    public :: lcm_set_field
-   public :: lcm_set_fields
    public :: lcm_set_thermodynamic_history
 
 end module lcm_host_interface

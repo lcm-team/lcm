@@ -6,7 +6,7 @@ module minimal_les_host
    use iso_fortran_env, only: real64
    use lcm_exchange_directions, only: lcm_exchange_x_phase, &
                                       lcm_exchange_y_phase
-   use lcm_host_interface, only: lcm_set_field, lcm_set_fields, &
+   use lcm_host_interface, only: lcm_set_field, &
                                  lcm_config_t, lcm_grid_t, lcm_init_config, &
                                  lcm_init_grid, lcm_initialize, &
                                  lcm_set_config, lcm_set_grid
@@ -106,11 +106,11 @@ contains
       call lcm_set_field("u", minimal_host_u)
       call lcm_set_field("v", minimal_host_v)
       call lcm_set_field("w", minimal_host_w)
-      call lcm_set_fields(static_energy=minimal_host_static_energy, &
-                             temperature=minimal_host_temperature, &
-                             qv=minimal_host_qv,                  &
-                             pressure=minimal_host_pressure,      &
-                             density=minimal_host_density)
+      call lcm_set_field("static_energy", minimal_host_static_energy)
+      call lcm_set_field("temperature", minimal_host_temperature)
+      call lcm_set_field("qv", minimal_host_qv)
+      call lcm_set_field("pressure", minimal_host_pressure)
+      call lcm_set_field("density", minimal_host_density)
    end subroutine supply_minimal_host_fields
 
    !> Run the particle transport stages used by integration fixtures,

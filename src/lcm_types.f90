@@ -183,8 +183,9 @@ module lcm_types
       real(real64), allocatable :: temperature(:,:,:)
       real(real64), allocatable :: qv(:,:,:)
       real(real64), allocatable :: cloud_liquid(:,:,:)
-      real(real64), allocatable :: pressure(:)
-      real(real64), allocatable :: density(:)
+      ! Vertical profiles use (nz,1,1), with physical height in the first index.
+      real(real64), allocatable :: pressure(:,:,:)
+      real(real64), allocatable :: density(:,:,:)
       ! Optional dry-air density for vapor mixing-ratio mass normalization.
       real(real64), allocatable :: dry_air_density(:,:,:)
 

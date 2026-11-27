@@ -1,6 +1,6 @@
 program test_initial_particle_population
    use iso_fortran_env, only: int64, real64
-   use lcm_host_interface, only: lcm_set_fields, lcm_config_t, lcm_grid_t, &
+   use lcm_host_interface, only: lcm_set_field, lcm_config_t, lcm_grid_t, &
                                  lcm_init_config, lcm_init_grid,             &
                                  lcm_initialize, lcm_set_config, lcm_set_grid
    use lcm_initialization_state, only: lcm_initial_particle_count_global, &
@@ -63,9 +63,14 @@ program test_initial_particle_population
    pressure = [100000.0_real64, 99000.0_real64, 98000.0_real64]
    density = [1.2_real64, 1.1_real64, 1.0_real64]
 
-   call lcm_set_fields(u=u, v=v, w=w, static_energy=static_energy, &
-                          temperature=temperature, qv=qv,             &
-                          pressure=pressure, density=density)
+   call lcm_set_field("u", u)
+   call lcm_set_field("v", v)
+   call lcm_set_field("w", w)
+   call lcm_set_field("static_energy", static_energy)
+   call lcm_set_field("temperature", temperature)
+   call lcm_set_field("qv", qv)
+   call lcm_set_field("pressure", pressure)
+   call lcm_set_field("density", density)
    call lcm_initialize()
 
    call assert_true(lcm_initial_particle_count_local == expected_count, &

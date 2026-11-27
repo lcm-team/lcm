@@ -77,7 +77,7 @@ contains
   ! Cells are not TARGETs; use direct cell access to keep storage ownership unchanged.
   Np=cell_particles(i,j,k)%count
   if(Np>=100000)error stop 'SAM LEM ordering supports fewer than 100000 particles per cell'
-  rho=field_state%density(k)
+  rho=field_state%density(k,1,1)
   if(field_state%dry_air_density_is_set)rho=field_state%dry_air_density(i,j,k)
   V=real(grid_state%dV(k),real64)
   if(.not.ieee_is_finite(rho).or..not.ieee_is_finite(V).or..not.ieee_is_finite(dt).or. &

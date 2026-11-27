@@ -87,8 +87,8 @@ contains
       endif
 
       temperature = cell_tabs_lcm(i, j, k)
-      pressure = field_state%pressure(k)
-      air_density = field_state%density(k)
+      pressure = field_state%pressure(k,1,1)
+      air_density = field_state%density(k,1,1)
       ! Legacy hosts use the density profile for both purposes. A host supplying
       ! moist-air density can attach dry-air density separately for mixing ratios.
       dry_air_density = air_density

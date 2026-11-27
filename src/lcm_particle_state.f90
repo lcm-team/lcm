@@ -1111,7 +1111,7 @@ contains
                else if (trim(config_state%unit_aero) == "1/kg") then
                   cell_particles(i,j,k)%particles(n)%weight = &
                      int(n_dummy * r_aero * dlogr * real(grid_state%dV(k), real64) * &
-                         field_state%density(k), int64)
+                         field_state%density(k,1,1), int64)
                else
                   error stop "LCM unknown aerosol initialization unit"
                endif
@@ -1344,7 +1344,7 @@ contains
                   (real(np_mode, real64) * &
                    (1.0_real64 - real(config_state%frac_ice, real64)))
       else if (trim(config_state%unit_aero) == "1/kg") then
-         weight = real(grid_state%dV(k), real64) * field_state%density(k) * &
+         weight = real(grid_state%dV(k), real64) * field_state%density(k,1,1) * &
                   real(config_state%n_aero(i_mode), real64) / &
                   (real(np_mode, real64) * &
                    (1.0_real64 - real(config_state%frac_ice, real64)))
@@ -1403,7 +1403,7 @@ contains
       ! initialization. The adjusted cell qv/T are local here because attached
       ! host fields are read-only in standalone LCM initialization.
       do nn = 1, 5
-         qsat = qsatw_liquid(cell_temperature, field_state%pressure(k))
+         qsat = qsatw_liquid(cell_temperature, field_state%pressure(k,1,1))
          ss_gb = (cell_qv - qsat) / qsat
          ss_gb = min(ss_gb, -0.01_real64)
 
@@ -1419,7 +1419,7 @@ contains
             dql = dql + cell_particles(i,j,k)%particles(n)%mass_water
          enddo
 
-         dql = dql / (real(grid_state%dV(k), real64) * field_state%density(k))
+         dql = dql / (real(grid_state%dV(k), real64) * field_state%density(k,1,1))
          cell_qv = cell_qv - dql
          cell_temperature = cell_temperature + fac_cond * dql
       enddo
@@ -1429,7 +1429,7 @@ contains
             cell_absolute_temperature(i, j, k, cell_temperature)
          cell_particles(i,j,k)%particles(n)%qv = cell_qv
          cell_particles(i,j,k)%particles(n)%eta = &
-            cell_qv - qsatw_liquid(cell_temperature, field_state%pressure(k))
+            cell_qv - qsatw_liquid(cell_temperature, field_state%pressure(k,1,1))
          cell_particles(i,j,k)%particles(n)%n_monomer = 1_int64
       enddo
    end subroutine initialize_equilibrium_liquid_state
@@ -1626,7 +1626,7 @@ contains
                    (real(config_state%np_xy, real64) * &
                     real(config_state%frac_ice, real64))
          if (trim(config_state%unit_aero) == "1/kg") then
-            n_dummy = n_dummy * field_state%density(k)
+            n_dummy = n_dummy * field_state%density(k,1,1)
          endif
 
          cell_particles(i,j,k)%particles(n)%mass_aero = &

@@ -6,7 +6,7 @@ program test_lcm_advance_particle_exchange_mpi
                       MPI_COMM_WORLD, MPI_INTEGER, MPI_INTEGER8, &
                       MPI_SUM, MPI_Comm, MPI_FINALIZE, MPI_INIT
    use lcm_host_interface, only: lcm_advance, lcm_set_field, &
-                                 lcm_set_fields, lcm_config_t, &
+                                 lcm_config_t, &
                                  lcm_grid_t, lcm_init_config, &
                                  lcm_init_grid, lcm_init_parallel, &
                                  lcm_initialize, lcm_parallel_t, &
@@ -136,9 +136,11 @@ contains
       call lcm_set_field('u', u)
       call lcm_set_field('v', v)
       call lcm_set_field('w', w)
-      call lcm_set_fields(static_energy=static_energy, &
-                             temperature=temperature, qv=qv, &
-                             pressure=pressure, density=density)
+      call lcm_set_field("static_energy", static_energy)
+      call lcm_set_field("temperature", temperature)
+      call lcm_set_field("qv", qv)
+      call lcm_set_field("pressure", pressure)
+      call lcm_set_field("density", density)
       mix_D=0;mix_L=1;mix_qt=qv;mix_hl=static_energy;mix_Ts=0;mix_qs=0
       call lcm_set_lem_environment(mix_D,mix_L,mix_qt,mix_hl,mix_Ts,mix_qs)
    end subroutine attach_host_fields

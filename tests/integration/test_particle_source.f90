@@ -1,7 +1,7 @@
 program test_particle_source
    use iso_fortran_env, only: int64, real64
    use lcm_host_interface, only: lcm_set_field, &
-                                 lcm_set_fields, lcm_config_t, lcm_grid_t, &
+                                 lcm_config_t, lcm_grid_t, &
                                  lcm_init_config, lcm_init_grid, lcm_initialize, &
                                  lcm_set_config, lcm_set_grid
    use lcm_particle_source, only: lcm_apply_particle_sources, nin_prof
@@ -161,9 +161,11 @@ contains
       call lcm_set_field("u", u)
       call lcm_set_field("v", v)
       call lcm_set_field("w", w)
-      call lcm_set_fields(static_energy=static_energy, &
-                             temperature=temperature, qv=qv, &
-                             pressure=pressure, density=density)
+      call lcm_set_field("static_energy", static_energy)
+      call lcm_set_field("temperature", temperature)
+      call lcm_set_field("qv", qv)
+      call lcm_set_field("pressure", pressure)
+      call lcm_set_field("density", density)
    end subroutine configure_grid_and_fields
 
    subroutine assert_aerosol_source()
