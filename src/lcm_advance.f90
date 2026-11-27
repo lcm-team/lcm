@@ -42,7 +42,6 @@ contains
    subroutine run_lcm_advance_sequence(time_step)
       real(real64), intent(in) :: time_step
 
-      call prepare_lcm_atmosphere()
       call advance_lcm_particles(time_step)
       call apply_lcm_particle_boundaries()
       call prepare_lcm_particle_migration()
@@ -79,10 +78,6 @@ contains
          error stop 'LCM must be initialized before lcm_advance'
       endif
    end subroutine validate_step_state
-
-   subroutine prepare_lcm_atmosphere()
-      ! Future preparation/validation step for attached host atmospheric fields.
-   end subroutine prepare_lcm_atmosphere
 
    subroutine advance_lcm_particles(time_step)
       real(real64), intent(in) :: time_step

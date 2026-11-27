@@ -7,7 +7,7 @@ program test_lem_sgs
  use lcm_types,only:lcm_particle_t
  implicit none
  real(real64)::old(3,12),new(3,12),before(3),m,carrier,rl,expected,Tsum,qsum,varold,varnew
- real(real64),target::D(2,2,2),L(2,2,2),rt(2,2,2),hl(2,2,2),Ts(2,2,2),qs(2,2,2)
+ real(real64)::D(2,2,2),L(2,2,2),rt(2,2,2),hl(2,2,2),Ts(2,2,2),qs(2,2,2)
  integer::idx(12),i,j,n,np,cas
  type(lcm_particle_t)::p
  ! Independent periodic stencil and triplet-map invariants.
@@ -28,7 +28,7 @@ program test_lem_sgs
  enddo
  call setup_minimal_les_host()
  D=0;L=100;rt=.010_real64;hl=300.0_real64;Ts=0;qs=0
- call lcm_attach_lem_environment(D,L,rt,hl,Ts,qs)
+ call lcm_set_lem_environment(D,L,rt,hl,Ts,qs)
  do cas=1,5
   call lcm_reset_particle_cells()
   select case(cas)
@@ -58,7 +58,11 @@ program test_lem_sgs
    endif
    call lcm_add_particle(1,1,1,p)
   enddo
+  call lcm_set_lem_environment(D,L,rt,hl,Ts,qs)
+  ! Host changes after copying must not alter the SGS environment in LCM.
+  D=-D;Ts=-Ts;qs=-qs;rt=-rt;hl=-hl;L=-L
   call lcm_apply_sgs_mixing(.5_real64)
+  D=-D;Ts=-Ts;qs=-qs;rt=-rt;hl=-hl;L=-L
   Tsum=0;qsum=0;varnew=0
   do n=1,np
    p=cell_particles(1,1,1)%particles(n)

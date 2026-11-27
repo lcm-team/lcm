@@ -37,7 +37,7 @@ domain data, but it does not implement LCM communication loops.
 
 - the MPI communicator already used for its horizontal decomposition;
 - local and global grid geometry;
-- attached atmospheric fields;
+- copied atmospheric fields;
 - LCM configuration; and
 - the timestep used by the host advance sequence.
 

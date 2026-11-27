@@ -11,17 +11,18 @@ module lcm_sgs_mixing
  use lcm_random,only:lcm_random_uniform
  implicit none
  private
- public::lcm_attach_lem_environment,lcm_validate_lem_environment,lcm_apply_sgs_mixing
+ public::lcm_set_lem_environment,lcm_validate_lem_environment,lcm_apply_sgs_mixing
  public::lem_diffuse_periodic,lem_triplet_map
- real(real64),pointer:: diffusivity(:,:,:)=>null(),mixing_length(:,:,:)=>null()
- real(real64),pointer:: total_water(:,:,:)=>null(),liquid_static_energy(:,:,:)=>null()
- real(real64),pointer:: temperature_tendency(:,:,:)=>null(),vapor_tendency(:,:,:)=>null()
+ real(real64),allocatable:: diffusivity(:,:,:),mixing_length(:,:,:)
+ real(real64),allocatable:: total_water(:,:,:),liquid_static_energy(:,:,:)
+ real(real64),allocatable:: temperature_tendency(:,:,:),vapor_tendency(:,:,:)
 contains
- subroutine lcm_attach_lem_environment(eddy_diffusivity,eddy_length,total_water_dry, &
+ !> Copy the SGS environment; the host supplies updated values before each advance.
+ subroutine lcm_set_lem_environment(eddy_diffusivity,eddy_length,total_water_dry, &
    liquid_static_temperature,static_temperature_tendency,vapor_mixing_ratio_tendency)
-  real(real64),intent(in),target::eddy_diffusivity(:,:,:),eddy_length(:,:,:),total_water_dry(:,:,:)
-  real(real64),intent(in),target::liquid_static_temperature(:,:,:)
-  real(real64),intent(in),target::static_temperature_tendency(:,:,:),vapor_mixing_ratio_tendency(:,:,:)
+  real(real64),intent(in)::eddy_diffusivity(:,:,:),eddy_length(:,:,:),total_water_dry(:,:,:)
+  real(real64),intent(in)::liquid_static_temperature(:,:,:)
+  real(real64),intent(in)::static_temperature_tendency(:,:,:),vapor_mixing_ratio_tendency(:,:,:)
   integer::shape_expected(3)
   if(.not.grid_state%is_set)error stop 'LEM environment requires grid setup'
   shape_expected=[grid_state%grid%nx_local,grid_state%grid%ny_local,grid_state%grid%nz]
@@ -29,12 +30,20 @@ contains
     any(shape(total_water_dry)/=shape_expected).or.any(shape(liquid_static_temperature)/=shape_expected).or. &
     any(shape(static_temperature_tendency)/=shape_expected).or. &
     any(shape(vapor_mixing_ratio_tendency)/=shape_expected))error stop 'LEM environment shape mismatch'
-  diffusivity=>eddy_diffusivity;mixing_length=>eddy_length
-  total_water=>total_water_dry;liquid_static_energy=>liquid_static_temperature
-  temperature_tendency=>static_temperature_tendency;vapor_tendency=>vapor_mixing_ratio_tendency
+  if(.not.allocated(diffusivity))then
+   allocate(diffusivity,mold=eddy_diffusivity)
+   allocate(mixing_length,mold=eddy_length)
+   allocate(total_water,mold=total_water_dry)
+   allocate(liquid_static_energy,mold=liquid_static_temperature)
+   allocate(temperature_tendency,mold=static_temperature_tendency)
+   allocate(vapor_tendency,mold=vapor_mixing_ratio_tendency)
+  endif
+  diffusivity=eddy_diffusivity;mixing_length=eddy_length
+  total_water=total_water_dry;liquid_static_energy=liquid_static_temperature
+  temperature_tendency=static_temperature_tendency;vapor_tendency=vapor_mixing_ratio_tendency
  end subroutine
  subroutine lcm_validate_lem_environment()
-  if(.not.associated(diffusivity))error stop 'LEM advance requires attached SGS environment'
+  if(.not.allocated(diffusivity))error stop 'LEM advance requires supplied SGS environment'
   if(.not.all(ieee_is_finite(diffusivity)).or..not.all(ieee_is_finite(mixing_length)).or. &
      .not.all(ieee_is_finite(total_water)).or..not.all(ieee_is_finite(liquid_static_energy)).or. &
      .not.all(ieee_is_finite(temperature_tendency)).or..not.all(ieee_is_finite(vapor_tendency))) &
@@ -68,8 +77,8 @@ contains
   ! Cells are not TARGETs; use direct cell access to keep storage ownership unchanged.
   Np=cell_particles(i,j,k)%count
   if(Np>=100000)error stop 'SAM LEM ordering supports fewer than 100000 particles per cell'
-  rho=field_state%density(k)
-  if(field_state%dry_air_density_is_attached)rho=field_state%dry_air_density(i,j,k)
+  rho=field_state%density(k,1,1)
+  if(field_state%dry_air_density_is_set)rho=field_state%dry_air_density(i,j,k)
   V=real(grid_state%dV(k),real64)
   if(.not.ieee_is_finite(rho).or..not.ieee_is_finite(V).or..not.ieee_is_finite(dt).or. &
      rho<=0.or.V<=0.or.dt<=0)error stop 'Invalid LEM mixing geometry or timestep'

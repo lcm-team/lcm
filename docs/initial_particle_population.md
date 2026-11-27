@@ -177,8 +177,8 @@ first-slice mapping from SAM-LCM `micro_place_particle` and
 | `var(iM)` | `mass_water` | Set by the five-iteration equilibrium liquid initialization after aerosol mass is known. |
 | `var(iN)` | `mass_aero` | Set by the aerosol distribution initializer. |
 | `var(iWsedi)` | `w_sedi` | Set explicitly to zero, matching `micro_place_particle`. |
-| `var(iT)` | `temperature` | Read from the attached host temperature field at `(i,j,k)`. |
-| `var(iq)` | `qv` | Read from the attached host water-vapor field at `(i,j,k)`. |
+| `var(iT)` | `temperature` | Read from the LCM-owned temperature copy at `(i,j,k)`. |
+| `var(iq)` | `qv` | Read from the LCM-owned water-vapor copy at `(i,j,k)`. |
 | `ivar(iLEM)` | `cell_particle_index` | Set to the cell-local particle number `n`, matching the old within-cell tag. |
 | `ivar(iilst:iklst)` | `last_i`, `last_j`, `last_k` | Set from the grid cell indices. |
 | `ivar(iSPR)` | `spray_marker` | Set to the SAM-LCM default unsprayed marker `-999`. |
@@ -253,7 +253,7 @@ initialization path close to SAM-LCM `micro_init_particles(i,j,k)`.
 | `particle(n)%var(in_startind+1:in_startind+4)` | `cell_particles(i,j,k)%particles(n)%in_surface_area` |
 | `particle(n)%var(iTFZ)` | `cell_particles(i,j,k)%particles(n)%freezing_temperature` |
 | `dV(k)` | `grid_state%dV(k)` |
-| `rho_air(k)` | `field_state%density(k)` |
+| `rho_air(k)` | `field_state%density(k,1,1)` |
 | aerosol namelist state | fields of `config_state` |
 
 ### Ported Liquid-Only Branches
@@ -307,7 +307,7 @@ These differences are intentional and should remain visible during review:
   is ported for particle initialization. SAM-LCM mutates its internal
   `micro_field(i,j,k,imv)` and `tabs_LCM(i,j,k)` working fields; standalone LCM
   keeps the same local relaxation but stores the adjusted qv/T only on the
-  initialized particles because attached host fields are read-only in this
+  initialized particles because supplied host fields are copied in this
   lifecycle.
 - SAM-LCM's default `micro_user_init_particles(i,j,k)` hook is empty but is
   called after standard particle initialization. Standalone LCM preserves this
@@ -391,7 +391,7 @@ ice-nucleating particle assignment, and a local thermodynamic adjustment.
 | For IN-containing particles, sample IN species and IN size, store IN surface area, and compute freezing temperature `iTFZ`. | Ported with IN surface area mapped to `lcm_particle_t%in_surface_area` and freezing temperature mapped to `freezing_temperature`. |
 | For non-IN particles, zero IN surface area and set `iTFZ=233.15`. | Ported for the initial population path. |
 | Iterate five times to compute equilibrium liquid mass from supersaturation. | Ported for particle initialization, preserving the SAM-LCM relaxation loop. |
-| Update `micro_field(i,j,k,imv)` and `tabs_LCM(i,j,k)` during equilibrium adjustment. | Ported as local `cell_qv` and `cell_temperature` relaxation. Standalone LCM does not mutate attached host fields during initialization. |
+| Update `micro_field(i,j,k,imv)` and `tabs_LCM(i,j,k)` during equilibrium adjustment. | Ported as local `cell_qv` and `cell_temperature` relaxation. Standalone LCM does not mutate host fields during initialization. |
 | Initialize particle liquid mass `var(iM)`. | Mapped to `lcm_particle_t%mass_water` after the five-iteration equilibrium relaxation. |
 | Initialize particle temperature `var(iT)` from adjusted cell temperature plus `gamaz(k)`. | Mapped to `lcm_particle_t%temperature` from the locally adjusted cell temperature. |
 | Initialize particle vapor `var(iq)`. | Mapped to `lcm_particle_t%qv` from the locally adjusted cell qv. |
@@ -416,8 +416,8 @@ the generic `var(:)` and `ivar(:)` indexing.
 | Liquid water mass | `lcm_particle_t%mass_water` | Required for `var(iM)`. |
 | Aerosol mass | `lcm_particle_t%mass_aero` | Required for `var(iN)`. |
 | Sedimentation velocity | `lcm_particle_t%w_sedi` | Required for the first baseline and initialized to zero, matching `micro_place_particle`. |
-| Particle temperature | `lcm_particle_t%temperature` | Required for the first baseline. It should come from attached host fields through `lcm_field_state`. |
-| Particle vapor mixing ratio | `lcm_particle_t%qv` | Required for the first baseline. It should come from attached host fields through `lcm_field_state`. |
+| Particle temperature | `lcm_particle_t%temperature` | Required for the first baseline. It should come from host fields copied through `lcm_field_state`. |
+| Particle vapor mixing ratio | `lcm_particle_t%qv` | Required for the first baseline. It should come from host fields copied through `lcm_field_state`. |
 | Absolute supersaturation / excess vapor | `eta` | Required for `var(ieta)`. |
 | Ice axis fields | `axis_a`, `axis_c` | Keep existing fields. They are not required for a liquid-only first baseline. |
 | Particle density | `density` | Keep existing field. It is not required for the first placement/count baseline. |

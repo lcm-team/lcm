@@ -12,7 +12,7 @@ module lcm_microphysics_state
    private
 
    public :: lcm_initialize_microphysics_state
-   public :: lcm_attach_thermodynamic_history
+   public :: lcm_set_thermodynamic_history
    public :: lcm_get_cell_mean_history
    public :: lcm_save_cell_mean_history
    public :: lcm_reset_condensation_diagnostics
@@ -20,9 +20,9 @@ module lcm_microphysics_state
 
    real(real64), allocatable :: previous_temperature(:,:,:)
    real(real64), allocatable :: previous_pressure(:,:,:)
-   real(real64), pointer :: transported_temperature(:,:,:) => null()
-   real(real64), pointer :: transported_pressure(:,:,:) => null()
-   real(real64), pointer :: transported_qv(:,:,:) => null()
+   real(real64), allocatable :: transported_temperature(:,:,:)
+   real(real64), allocatable :: transported_pressure(:,:,:)
+   real(real64), allocatable :: transported_qv(:,:,:)
 
    ! Raw per-step increments, retained for a future diagnostics/output reader.
    real(real64), allocatable :: condensation_mass(:,:,:)
@@ -32,23 +32,26 @@ module lcm_microphysics_state
 
 contains
 
-   !> Attach read-only host tracers containing the transported previous state.
+   !> Copy host tracers containing the transported previous state.
    !! Temperature is in K, pressure in Pa, and vapor in the same units as qv.
-   !! The host keeps these targets alive and updates them in place.
-   subroutine lcm_attach_thermodynamic_history(temperature, pressure, qv)
-      real(real64), intent(in), target :: temperature(:,:,:), pressure(:,:,:), qv(:,:,:)
+   !! Supply the advected history again before each advance.
+   subroutine lcm_set_thermodynamic_history(temperature, pressure, qv)
+      real(real64), intent(in) :: temperature(:,:,:), pressure(:,:,:), qv(:,:,:)
       integer :: local_shape(3)
 
-      if (.not. grid_state%is_set) error stop 'LCM grid must be set before attaching history'
+      if (.not. grid_state%is_set) error stop 'LCM grid must be set before setting history'
       local_shape = [grid_state%grid%nx_local, grid_state%grid%ny_local, grid_state%grid%nz]
       if (any(shape(temperature) /= local_shape) .or. any(shape(pressure) /= local_shape) .or. &
           any(shape(qv) /= local_shape)) then
          error stop 'LCM thermodynamic history field shape does not match the grid'
       endif
-      transported_temperature => temperature
-      transported_pressure => pressure
-      transported_qv => qv
-   end subroutine lcm_attach_thermodynamic_history
+      if (.not. allocated(transported_temperature)) allocate(transported_temperature, mold=temperature)
+      transported_temperature = temperature
+      if (.not. allocated(transported_pressure)) allocate(transported_pressure, mold=pressure)
+      transported_pressure = pressure
+      if (.not. allocated(transported_qv)) allocate(transported_qv, mold=qv)
+      transported_qv = qv
+   end subroutine lcm_set_thermodynamic_history
 
    !> Allocate process history and diagnostic accumulators during LCM init.
    subroutine lcm_initialize_microphysics_state()
@@ -61,7 +64,7 @@ contains
       nx = grid_state%grid%nx_local
       ny = grid_state%grid%ny_local
       nz = grid_state%grid%nz
-      if (.not. associated(transported_temperature)) then
+      if (.not. allocated(transported_temperature)) then
          allocate(previous_temperature(nx,ny,nz), previous_pressure(nx,ny,nz))
          call initialize_cell_mean_history()
       endif
@@ -77,7 +80,7 @@ contains
          do j = 1, size(previous_temperature,2)
             do i = 1, size(previous_temperature,1)
                previous_temperature(i,j,k) = field_state%temperature(i,j,k)
-               previous_pressure(i,j,k) = field_state%pressure(k)
+               previous_pressure(i,j,k) = field_state%pressure(k,1,1)
             enddo
          enddo
       enddo
@@ -88,7 +91,7 @@ contains
       integer, intent(in) :: i, j, k
       real(real64), intent(out) :: temperature, pressure, qv
 
-      if (associated(transported_temperature)) then
+      if (allocated(transported_temperature)) then
          temperature = transported_temperature(i,j,k)
          pressure = transported_pressure(i,j,k)
          qv = transported_qv(i,j,k)
@@ -112,7 +115,7 @@ contains
    subroutine lcm_save_cell_mean_history(i, j, k)
       integer, intent(in) :: i, j, k
 
-      if (associated(transported_temperature)) return
+      if (allocated(transported_temperature)) return
       if (.not. allocated(previous_temperature)) then
          error stop 'LCM physical-process history has not been initialized'
       endif
@@ -122,7 +125,7 @@ contains
          error stop 'LCM physical-process history index is outside the local grid'
       endif
       previous_temperature(i,j,k) = field_state%temperature(i,j,k)
-      previous_pressure(i,j,k) = field_state%pressure(k)
+      previous_pressure(i,j,k) = field_state%pressure(k,1,1)
    end subroutine lcm_save_cell_mean_history
 
 

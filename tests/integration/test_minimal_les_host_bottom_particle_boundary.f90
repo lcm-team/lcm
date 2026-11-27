@@ -11,7 +11,7 @@ program test_minimal_les_host_bottom_particle_boundary
    use lcm_types, only: lcm_particle_t
    use minimal_les_host, only: minimal_host_dx, minimal_host_dy, &
                                minimal_host_u, minimal_host_v, minimal_host_w, &
-                               setup_minimal_les_host
+                               setup_minimal_les_host, supply_minimal_host_fields
 
    implicit none
 
@@ -30,6 +30,7 @@ program test_minimal_les_host_bottom_particle_boundary
    call add_deleted_particle()
    call add_threshold_particle()
 
+   call supply_minimal_host_fields()
    call lcm_advance(1.0_real64)
 
    call assert_true(cell_particles(1,1,1)%count == 2, &

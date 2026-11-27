@@ -8,8 +8,12 @@ The simplest host call order is:
 ```fortran
 call lcm_set_config(...)
 call lcm_set_grid(...)
-call lcm_attach_fields(...)
+call lcm_set_field("temperature", temperature)
+! Supply each remaining input through its own lcm_set_field call.
 call lcm_initialize()
+! Before every advance, copy the current host fields again.
+call lcm_set_field("temperature", temperature)
+! Supply each remaining input through its own lcm_set_field call.
 call lcm_advance(dt)
 ```
 
@@ -23,13 +27,47 @@ call lcm_set_grid(...)
 call lcm_configure_runtime()
 
 ! later, after the host has computed/provided atmospheric fields
-call lcm_attach_fields(...)
+call lcm_set_field("temperature", temperature)
+! Supply each remaining input through its own lcm_set_field call.
 call lcm_initialize()
+! Before every advance, copy the current host fields again.
+call lcm_set_field("temperature", temperature)
+! Supply each remaining input through its own lcm_set_field call.
 call lcm_advance(dt)
 ```
 
+The `lcm_set_field(name, values)` call copies one field at a time; LCM does not retain
+host pointers. Host arrays need no `TARGET` attribute and may be temporary or
+noncontiguous sections. Updating one field leaves all other fields unchanged.
+If used, call `lcm_set_thermodynamic_history` with the transported history and
+`lcm_set_lem_environment` with the current SGS inputs before each advance too.
+These setters replace the former `lcm_attach_*` APIs; existing host adapters
+must replace attachment at initialization and explicitly send updates each step.
+Units, velocity staggering and physical local-domain shapes are unchanged.
+
+All atmospheric input arrays in LCM use rank-3 storage. Volume fields use
+`(nx,ny,nz)`, with the extra face retained on each staggered velocity axis.
+Vertical profiles (`pressure`, `density`) use `(nz,1,1)`: the first index is
+height and the other two indices are singleton storage dimensions. LCM reads
+these as `field_state%pressure(k,1,1)` and `field_state%density(k,1,1)`.
+The public setter accepts only 3D arrays. The host explicitly reshapes any
+1D profile before supplying it:
+
+```fortran
+! Host pressure has shape (nz).
+call lcm_set_field("pressure", reshape(pressure, [nz,1,1]))
+```
+
+A zero-sized second or third dimension would contain no values and is rejected.
+Output dimensions must describe the physical field, rather than its storage
+rank: pressure and density remain vertical profiles, with only `z` (and `time`
+when recorded over time). A writer should use `pressure(:,1,1)` for that profile;
+it must not interpret the singleton storage axes as horizontal coordinates.
+The planned metadata structure must retain this distinction. This change does
+not modify any output-file schema or implement the writer from PR #88.
+
 `lcm_configure_runtime` only validates config and grid state.
-`lcm_initialize` validates attached atmospheric fields, allocates LCM-owned
+`lcm_initialize` validates supplied atmospheric fields, allocates LCM-owned
 storage, and records the fresh or restart initialization mode. If a host does
 not call `lcm_configure_runtime` explicitly, `lcm_initialize` calls it
 automatically.
@@ -54,7 +92,7 @@ restart lifecycle is implemented.
 | Print SAM-LCM initialization summary | Not yet assigned | Not implemented. If needed, this should become standalone diagnostics/logging rather than SAM-style `PRINT*` blocks. |
 | Create MPI datatype for legacy flat particle array | Future MPI particle exchange interface | Not implemented in #42. The standalone design uses cell-owned particles and will need explicit exchange buffers instead of the old flat particle datatype. |
 | Fill grid side/center arrays `gpxs`, `gpys`, `gpzs`, `gpxc`, `gpyc`, `gpzc` | `lcm_set_grid` | Covered. |
-| Allocate velocity and atmospheric working arrays | Future atmospheric/internal state refactor | Not implemented in #42. The standalone direction is to use attached host fields and only allocate LCM-owned derived state where needed. |
+| Allocate velocity and atmospheric working arrays | Future atmospheric/internal state refactor | Not implemented in #42. Host fields are copied into LCM-owned arrays by `lcm_set_field`; subsequent calls reuse the allocated storage. |
 | Initialize output/history state | Future diagnostics/output work | Not implemented in #42. |
 | Choose fresh initialization vs restart read | `lcm_config_t` / `lcm_initialize` | Covered for lifecycle selection. Fresh initialization is the default; `config_state%start_from_restart` selects restart mode and stops with a clear error until restart lifecycle work exists. |
 | Host-independent setup readiness | `lcm_configure_runtime` / `lcm_runtime_is_configured` | Covered. This lets hosts with DALES-like setup order validate config/grid before atmospheric fields are available. |
@@ -101,7 +139,7 @@ Issue #42 introduces the explicit lifecycle boundary:
 
 - `lcm_configure_runtime` validates that config and grid have been supplied.
 - `lcm_initialize` calls `lcm_configure_runtime` automatically if needed, then validates
-  that required atmospheric fields have been attached.
+  that required atmospheric fields have been supplied.
 - `lcm_initialize` allocates LCM-owned cell particle containers with
   `config_state%np_xy` as the initial per-cell capacity.
 - `lcm_initialize` records expected local and global initial particle counts.
