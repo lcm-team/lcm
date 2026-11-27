@@ -164,8 +164,8 @@ contains
       call lcm_set_field("static_energy", static_energy)
       call lcm_set_field("temperature", temperature)
       call lcm_set_field("qv", qv)
-      call lcm_set_field("pressure", pressure)
-      call lcm_set_field("density", density)
+      call lcm_set_field("pressure", reshape(pressure, [size(pressure),1,1]))
+      call lcm_set_field("density", reshape(density, [size(density),1,1]))
    end subroutine configure_grid_and_fields
 
    subroutine assert_aerosol_source()

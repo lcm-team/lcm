@@ -109,8 +109,8 @@ contains
       call lcm_set_field("static_energy", minimal_host_static_energy)
       call lcm_set_field("temperature", minimal_host_temperature)
       call lcm_set_field("qv", minimal_host_qv)
-      call lcm_set_field("pressure", minimal_host_pressure)
-      call lcm_set_field("density", minimal_host_density)
+      call lcm_set_field("pressure", reshape(minimal_host_pressure, [size(minimal_host_pressure),1,1]))
+      call lcm_set_field("density", reshape(minimal_host_density, [size(minimal_host_density),1,1]))
    end subroutine supply_minimal_host_fields
 
    !> Run the particle transport stages used by integration fixtures,

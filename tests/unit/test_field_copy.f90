@@ -50,8 +50,8 @@ program test_field_copy
    dry_density = 1.0_real64
    static_energy = 300.0_real64
    liquid = 0.001_real64
-   call lcm_set_field("pressure", pressure)
-   call lcm_set_field("density", density)
+   call lcm_set_field("pressure", reshape(pressure, [size(pressure),1,1]))
+   call lcm_set_field("density", reshape(density, [size(density),1,1]))
    call assert_true(all(shape(field_state%pressure) == [2,1,1]), "pressure profile storage")
    call assert_true(all(shape(field_state%density) == [2,1,1]), "density profile storage")
    call lcm_set_field("dry_air_density", dry_density)
@@ -84,8 +84,8 @@ program test_field_copy
    call lcm_set_field("v", v_face)
    call lcm_set_field("w", w_face)
    call lcm_set_field("qv", qv)
-   call lcm_set_field("pressure", pressure)
-   call lcm_set_field("density", density)
+   call lcm_set_field("pressure", reshape(pressure, [size(pressure),1,1]))
+   call lcm_set_field("density", reshape(density, [size(density),1,1]))
    call assert_true(all(field_state%u == -1.0_real64), "u explicitly updated")
    call assert_true(all(field_state%v == -2.0_real64), "v explicitly updated")
    call assert_true(all(field_state%w == -3.0_real64), "w explicitly updated")
@@ -107,14 +107,14 @@ program test_field_copy
    call lcm_set_field("temperature", field_state%temperature + 1.0_real64)
    call assert_true(all(field_state%temperature == 283.0_real64), "temporary expression copied")
 
-   ! Both 1D and prepacked 3D inputs use the same profile storage convention.
+   ! Hosts explicitly pack profiles into the same rank-3 storage convention.
    pressure = [91000.0_real64, 90000.0_real64]
    call lcm_set_field("pressure", reshape(pressure, [2,1,1]))
    pressure = 0.0_real64
    call assert_true(all(field_state%pressure(:,1,1) == [91000.0_real64, 90000.0_real64]), &
                     "packed profile independent of host")
-   call lcm_set_field("pressure", pressure)
-   call assert_true(all(field_state%pressure == 0.0_real64), "1D profile updates same storage")
+   call lcm_set_field("pressure", reshape(pressure, [size(pressure),1,1]))
+   call assert_true(all(field_state%pressure == 0.0_real64), "reshaped profile updates same storage")
 
 contains
 

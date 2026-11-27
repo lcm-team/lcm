@@ -12,20 +12,16 @@ module lcm_field_state
 
    type(lcm_field_state_t), protected, save :: field_state
 
-   interface lcm_set_field
-      module procedure set_field_3d
-      module procedure set_field_profile
-   end interface lcm_set_field
-
 contains
 
    !> Copy one field into LCM-owned storage, reusing its existing allocation.
    !! The host supplies updated fields before initialization and each advance.
    !! Volume fields retain (x,y,z) ordering and the existing velocity staggering.
    !! Pressure and density are vertical profiles stored as (nz,1,1).
+   !! Hosts must reshape 1D profiles before calling this 3D-only interface.
    !! Vapor qv is kg vapor / kg dry air. Supplying dry_air_density gives
    !! condensation the matching mass basis; otherwise it uses density.
-   subroutine set_field_3d(name, field)
+   subroutine lcm_set_field(name, field)
       character(len=*), intent(in) :: name
       real(real64), intent(in) :: field(:,:,:)
       integer :: nx, ny, nz
@@ -71,21 +67,7 @@ contains
       case default
          error stop "LCM cannot set unknown field: " // trim(name)
       end select
-   end subroutine set_field_3d
-
-   !> Accept a host's 1D profile without changing its physical dimension.
-   !! Packing into (nz,1,1) only standardizes LCM storage; it adds no values.
-   subroutine set_field_profile(name, field)
-      character(len=*), intent(in) :: name
-      real(real64), intent(in) :: field(:)
-
-      select case (trim(name))
-      case ("pressure", "density")
-         call set_field_3d(name, reshape(field, [size(field),1,1]))
-      case default
-         error stop "LCM 1D input requires a vertical profile field: " // trim(name)
-      end select
-   end subroutine set_field_profile
+   end subroutine lcm_set_field
 
    subroutine copy_3d_field(field, values, is_set, name, expected_shape)
       real(real64), intent(in) :: field(:,:,:)

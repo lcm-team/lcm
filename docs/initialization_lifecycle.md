@@ -50,11 +50,11 @@ All atmospheric input arrays in LCM use rank-3 storage. Volume fields use
 Vertical profiles (`pressure`, `density`) use `(nz,1,1)`: the first index is
 height and the other two indices are singleton storage dimensions. LCM reads
 these as `field_state%pressure(k,1,1)` and `field_state%density(k,1,1)`.
-The public setter accepts either a 1D profile or its packed 3D representation:
+The public setter accepts only 3D arrays. The host explicitly reshapes any
+1D profile before supplying it:
 
 ```fortran
-call lcm_set_field("pressure", pressure) ! pressure(nz)
-! Equivalent explicit packing:
+! Host pressure has shape (nz).
 call lcm_set_field("pressure", reshape(pressure, [nz,1,1]))
 ```
 

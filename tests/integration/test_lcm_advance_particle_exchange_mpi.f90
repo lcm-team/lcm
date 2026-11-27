@@ -139,8 +139,8 @@ contains
       call lcm_set_field("static_energy", static_energy)
       call lcm_set_field("temperature", temperature)
       call lcm_set_field("qv", qv)
-      call lcm_set_field("pressure", pressure)
-      call lcm_set_field("density", density)
+      call lcm_set_field("pressure", reshape(pressure, [size(pressure),1,1]))
+      call lcm_set_field("density", reshape(density, [size(density),1,1]))
       mix_D=0;mix_L=1;mix_qt=qv;mix_hl=static_energy;mix_Ts=0;mix_qs=0
       call lcm_set_lem_environment(mix_D,mix_L,mix_qt,mix_hl,mix_Ts,mix_qs)
    end subroutine attach_host_fields

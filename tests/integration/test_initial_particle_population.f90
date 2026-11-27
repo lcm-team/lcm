@@ -69,8 +69,8 @@ program test_initial_particle_population
    call lcm_set_field("static_energy", static_energy)
    call lcm_set_field("temperature", temperature)
    call lcm_set_field("qv", qv)
-   call lcm_set_field("pressure", pressure)
-   call lcm_set_field("density", density)
+   call lcm_set_field("pressure", reshape(pressure, [size(pressure),1,1]))
+   call lcm_set_field("density", reshape(density, [size(density),1,1]))
    call lcm_initialize()
 
    call assert_true(lcm_initial_particle_count_local == expected_count, &
