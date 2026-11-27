@@ -7,7 +7,8 @@ module lcm_types
 
    public :: lcm_grid_t
    public :: lcm_config_t
-   public :: lcm_field_state_t
+   public :: lcm_variable_t
+   public :: lcm_fields_t
    public :: lcm_particle_t
    public :: liquid_no_in
    public :: liquid_with_in
@@ -175,31 +176,49 @@ module lcm_types
       character(len=8) :: icebreak_param = 'Phillips'
    end type lcm_config_t
 
-   type :: lcm_field_state_t
-      real(real64), allocatable :: u(:,:,:)
-      real(real64), allocatable :: v(:,:,:)
-      real(real64), allocatable :: w(:,:,:)
-      real(real64), allocatable :: static_energy(:,:,:)
-      real(real64), allocatable :: temperature(:,:,:)
-      real(real64), allocatable :: qv(:,:,:)
-      real(real64), allocatable :: cloud_liquid(:,:,:)
-      ! Vertical profiles use (nz,1,1), with physical height in the first index.
-      real(real64), allocatable :: pressure(:,:,:)
-      real(real64), allocatable :: density(:,:,:)
-      ! Optional dry-air density for vapor mixing-ratio mass normalization.
-      real(real64), allocatable :: dry_air_density(:,:,:)
+   !> Owned values with their physical output description.
+   type :: lcm_variable_t
+      real(real64), allocatable :: values(:,:,:)
+      character(len=64) :: var_name = ''
+      character(len=120) :: long_name = ''
+      character(len=32) :: units = ''
+      character(len=8) :: dimensions(3) = ''
+   end type lcm_variable_t
 
-      logical :: u_is_set = .false.
-      logical :: v_is_set = .false.
-      logical :: w_is_set = .false.
-      logical :: static_energy_is_set = .false.
-      logical :: temperature_is_set = .false.
-      logical :: qv_is_set = .false.
-      logical :: cloud_liquid_is_set = .false.
-      logical :: pressure_is_set = .false.
-      logical :: density_is_set = .false.
-      logical :: dry_air_density_is_set = .false.
-   end type lcm_field_state_t
+   !> Atmospheric inputs. Metadata is initialized once, independently of values.
+   !! Empty dimension names identify unused singleton storage axes.
+   type :: lcm_fields_t
+      type(lcm_variable_t) :: u = lcm_variable_t( &
+         var_name="u", long_name="Air velocity in x direction", units="m s-1", &
+         dimensions=[character(len=8) :: "x_face", "y", "z"])
+      type(lcm_variable_t) :: v = lcm_variable_t( &
+         var_name="v", long_name="Air velocity in y direction", units="m s-1", &
+         dimensions=[character(len=8) :: "x", "y_face", "z"])
+      type(lcm_variable_t) :: w = lcm_variable_t( &
+         var_name="w", long_name="Air velocity in z direction", units="m s-1", &
+         dimensions=[character(len=8) :: "x", "y", "z_face"])
+      type(lcm_variable_t) :: static_energy = lcm_variable_t( &
+         var_name="static_energy", long_name="Dry static energy in temperature units", units="K", &
+         dimensions=[character(len=8) :: "x", "y", "z"])
+      type(lcm_variable_t) :: temperature = lcm_variable_t( &
+         var_name="temperature", long_name="Air temperature", units="K", &
+         dimensions=[character(len=8) :: "x", "y", "z"])
+      type(lcm_variable_t) :: qv = lcm_variable_t( &
+         var_name="qv", long_name="Water vapor mixing ratio per unit dry-air mass", units="kg kg-1", &
+         dimensions=[character(len=8) :: "x", "y", "z"])
+      type(lcm_variable_t) :: cloud_liquid = lcm_variable_t( &
+         var_name="cloud_liquid", long_name="Cloud liquid water", units="kg kg-1", &
+         dimensions=[character(len=8) :: "x", "y", "z"])
+      type(lcm_variable_t) :: pressure = lcm_variable_t( &
+         var_name="pressure", long_name="Air pressure", units="Pa", &
+         dimensions=[character(len=8) :: "z", "", ""])
+      type(lcm_variable_t) :: density = lcm_variable_t( &
+         var_name="density", long_name="Air density", units="kg m-3", &
+         dimensions=[character(len=8) :: "z", "", ""])
+      type(lcm_variable_t) :: dry_air_density = lcm_variable_t( &
+         var_name="dry_air_density", long_name="Dry-air density", units="kg m-3", &
+         dimensions=[character(len=8) :: "x", "y", "z"])
+   end type lcm_fields_t
 
    type :: lcm_particle_t
       ! SAM-LCM ivar(iA), ivar(iID), and ivar(iTYPE).

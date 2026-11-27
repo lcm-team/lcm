@@ -1,6 +1,7 @@
 !> Public interface for host models coupled to LCM.
 module lcm_host_interface
-   use lcm_types, only: lcm_grid_t, lcm_config_t, lcm_init_grid, lcm_init_config
+   use lcm_types, only: lcm_grid_t, lcm_config_t, lcm_variable_t, lcm_fields_t, &
+                         lcm_init_grid, lcm_init_config
    use lcm_config_state, only: lcm_set_config
    use lcm_grid_state, only: lcm_set_grid
    use lcm_parallel_state, only: lcm_parallel_t, lcm_init_parallel, &
@@ -19,6 +20,8 @@ module lcm_host_interface
    public :: lcm_grid_t
    public :: lcm_parallel_t
    public :: lcm_config_t
+   public :: lcm_variable_t
+   public :: lcm_fields_t
    public :: lcm_init_grid
    public :: lcm_init_parallel
    public :: lcm_init_config

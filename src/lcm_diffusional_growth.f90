@@ -87,13 +87,13 @@ contains
       endif
 
       temperature = cell_tabs_lcm(i, j, k)
-      pressure = field_state%pressure(k,1,1)
-      air_density = field_state%density(k,1,1)
+      pressure = field_state%pressure%values(k,1,1)
+      air_density = field_state%density%values(k,1,1)
       ! Legacy hosts use the density profile for both purposes. A host supplying
       ! moist-air density can attach dry-air density separately for mixing ratios.
       dry_air_density = air_density
-      if (field_state%dry_air_density_is_set) then
-         dry_air_density = field_state%dry_air_density(i,j,k)
+      if (allocated(field_state%dry_air_density%values)) then
+         dry_air_density = field_state%dry_air_density%values(i,j,k)
       endif
       cell_volume = real(grid_state%dV(k), real64)
       call get_growth_coefficients(temperature, pressure, thermal_conductivity, &
@@ -168,7 +168,7 @@ contains
          pre_liq = a_liq_pre * 4.0_real64 * pi * c_liq_pre / &
                    (qsatw_pre * dry_air_density * cell_volume)
          tau = 1.0_real64 / (pre_liq * dsd_liq)
-         eta_dyn = field_state%qv(i,j,k) - qsatw_liquid(temperature, pressure)
+         eta_dyn = field_state%qv%values(i,j,k) - qsatw_liquid(temperature, pressure)
          eta_last = previous_qv - qsatw_liquid(previous_temperature, previous_pressure)
          forcing = (eta_dyn - eta_last) / time_step
          mean_absolute_supersaturation = mean_supersaturation( &

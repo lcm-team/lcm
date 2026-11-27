@@ -52,23 +52,23 @@ contains
 
       alpha = clamp_unit_interval((x - real(grid_state%gpxs(i), real64)) / &
                                   grid_state%grid%dx)
-      u = field_state%u(i, j, k) * (1.0_real64 - alpha) + &
-          field_state%u(i + 1, j, k) * alpha
+      u = field_state%u%values(i, j, k) * (1.0_real64 - alpha) + &
+          field_state%u%values(i + 1, j, k) * alpha
 
       if (grid_state%grid%y_dimension == 1) then
          beta = clamp_unit_interval((y - real(grid_state%gpys(j), real64)) / &
                                     grid_state%grid%dy)
-         v = field_state%v(i, j, k) * (1.0_real64 - beta) + &
-             field_state%v(i, j + 1, k) * beta
+         v = field_state%v%values(i, j, k) * (1.0_real64 - beta) + &
+             field_state%v%values(i, j + 1, k) * beta
       else
-         v = field_state%v(i, j, k)
+         v = field_state%v%values(i, j, k)
       endif
 
       gamma = clamp_unit_interval((z - grid_state%grid%z_face(k)) / &
                                   (grid_state%grid%z_face(k + 1) - &
                                    grid_state%grid%z_face(k)))
-      w = field_state%w(i, j, k) * (1.0_real64 - gamma) + &
-          field_state%w(i, j, k + 1) * gamma
+      w = field_state%w%values(i, j, k) * (1.0_real64 - gamma) + &
+          field_state%w%values(i, j, k + 1) * gamma
    end subroutine lcm_interpolate_particle_velocity
 
    real(real64) function clamp_unit_interval(value) result(clamped)
@@ -81,13 +81,13 @@ contains
       if (.not. grid_state%is_set) then
          error stop "LCM grid must be initialized before interpolating velocity"
       endif
-      if (.not. field_state%u_is_set) then
+      if (.not. allocated(field_state%u%values)) then
          error stop "LCM u field must be supplied before interpolating velocity"
       endif
-      if (.not. field_state%v_is_set) then
+      if (.not. allocated(field_state%v%values)) then
          error stop "LCM v field must be supplied before interpolating velocity"
       endif
-      if (.not. field_state%w_is_set) then
+      if (.not. allocated(field_state%w%values)) then
          error stop "LCM w field must be supplied before interpolating velocity"
       endif
    end subroutine require_velocity_fields_supplied

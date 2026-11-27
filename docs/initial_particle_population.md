@@ -253,7 +253,7 @@ initialization path close to SAM-LCM `micro_init_particles(i,j,k)`.
 | `particle(n)%var(in_startind+1:in_startind+4)` | `cell_particles(i,j,k)%particles(n)%in_surface_area` |
 | `particle(n)%var(iTFZ)` | `cell_particles(i,j,k)%particles(n)%freezing_temperature` |
 | `dV(k)` | `grid_state%dV(k)` |
-| `rho_air(k)` | `field_state%density(k,1,1)` |
+| `rho_air(k)` | `field_state%density%values(k,1,1)` |
 | aerosol namelist state | fields of `config_state` |
 
 ### Ported Liquid-Only Branches

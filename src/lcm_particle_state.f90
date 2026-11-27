@@ -892,7 +892,7 @@ contains
       particle%w_sedi = 0.0_real64
       particle%temperature = cell_absolute_temperature(i, j, k, &
                                                        cell_tabs_lcm(i, j, k))
-      particle%qv = field_state%qv(i,j,k)
+      particle%qv = field_state%qv%values(i,j,k)
    end subroutine init_particle_properties
 
    subroutine set_particle_position(i, j, k, seed_id, particle)
@@ -1111,7 +1111,7 @@ contains
                else if (trim(config_state%unit_aero) == "1/kg") then
                   cell_particles(i,j,k)%particles(n)%weight = &
                      int(n_dummy * r_aero * dlogr * real(grid_state%dV(k), real64) * &
-                         field_state%density(k,1,1), int64)
+                         field_state%density%values(k,1,1), int64)
                else
                   error stop "LCM unknown aerosol initialization unit"
                endif
@@ -1344,7 +1344,7 @@ contains
                   (real(np_mode, real64) * &
                    (1.0_real64 - real(config_state%frac_ice, real64)))
       else if (trim(config_state%unit_aero) == "1/kg") then
-         weight = real(grid_state%dV(k), real64) * field_state%density(k,1,1) * &
+         weight = real(grid_state%dV(k), real64) * field_state%density%values(k,1,1) * &
                   real(config_state%n_aero(i_mode), real64) / &
                   (real(np_mode, real64) * &
                    (1.0_real64 - real(config_state%frac_ice, real64)))
@@ -1396,14 +1396,14 @@ contains
       real(real64) :: r_aero
       real(real64) :: ss_gb
 
-      cell_qv = field_state%qv(i,j,k)
+      cell_qv = field_state%qv%values(i,j,k)
       cell_temperature = cell_tabs_lcm(i, j, k)
 
       ! Port of SAM-LCM micro_init_particles' five-iteration equilibrium
       ! initialization. The adjusted cell qv/T are local here because attached
       ! host fields are read-only in standalone LCM initialization.
       do nn = 1, 5
-         qsat = qsatw_liquid(cell_temperature, field_state%pressure(k,1,1))
+         qsat = qsatw_liquid(cell_temperature, field_state%pressure%values(k,1,1))
          ss_gb = (cell_qv - qsat) / qsat
          ss_gb = min(ss_gb, -0.01_real64)
 
@@ -1419,7 +1419,7 @@ contains
             dql = dql + cell_particles(i,j,k)%particles(n)%mass_water
          enddo
 
-         dql = dql / (real(grid_state%dV(k), real64) * field_state%density(k,1,1))
+         dql = dql / (real(grid_state%dV(k), real64) * field_state%density%values(k,1,1))
          cell_qv = cell_qv - dql
          cell_temperature = cell_temperature + fac_cond * dql
       enddo
@@ -1429,7 +1429,7 @@ contains
             cell_absolute_temperature(i, j, k, cell_temperature)
          cell_particles(i,j,k)%particles(n)%qv = cell_qv
          cell_particles(i,j,k)%particles(n)%eta = &
-            cell_qv - qsatw_liquid(cell_temperature, field_state%pressure(k,1,1))
+            cell_qv - qsatw_liquid(cell_temperature, field_state%pressure%values(k,1,1))
          cell_particles(i,j,k)%particles(n)%n_monomer = 1_int64
       enddo
    end subroutine initialize_equilibrium_liquid_state
@@ -1440,7 +1440,7 @@ contains
       integer, intent(in) :: k
 
       ! SAM-LCM diagnoses tabs_LCM as liquid-water static energy minus gamaz.
-      tabs_lcm = field_state%static_energy(i,j,k) - cell_gamaz(k)
+      tabs_lcm = field_state%static_energy%values(i,j,k) - cell_gamaz(k)
    end function cell_tabs_lcm
 
    real(real64) function cell_absolute_temperature(i, j, k, tabs_lcm) result(temperature)
@@ -1626,7 +1626,7 @@ contains
                    (real(config_state%np_xy, real64) * &
                     real(config_state%frac_ice, real64))
          if (trim(config_state%unit_aero) == "1/kg") then
-            n_dummy = n_dummy * field_state%density(k,1,1)
+            n_dummy = n_dummy * field_state%density%values(k,1,1)
          endif
 
          cell_particles(i,j,k)%particles(n)%mass_aero = &
